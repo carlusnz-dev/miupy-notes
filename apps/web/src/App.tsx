@@ -1,6 +1,8 @@
-import { useEffect, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
+import NotesPage from "./NotesPage";
+import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 
 const sections = [
@@ -33,12 +35,6 @@ function ArrowIcon() {
       <path d="M4 12 12 4M5.5 4H12v6.5" fill="none" stroke="currentColor" strokeWidth="1.25" />
     </svg>
   );
-}
-
-function usePageTitle(title: string) {
-  useEffect(() => {
-    document.title = `${title} · miupy notes`;
-  }, [title]);
 }
 
 function Home() {
@@ -110,7 +106,8 @@ export default function App() {
           <div className="page-content">
             <Routes>
               <Route path="/" element={<Home />} />
-              {sections.map((section) => <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />)}
+              <Route path="/notes" element={<NotesPage />} />
+              {sections.filter((section) => section.path !== "/notes").map((section) => <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />)}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
