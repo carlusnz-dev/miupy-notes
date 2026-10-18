@@ -22,6 +22,15 @@ const theme = {
   "--color-focus": tokens.colors.focus,
 } as CSSProperties;
 
+// As fontes locais não têm "↗"; o SVG evita fallback para fonte do sistema.
+function ArrowIcon() {
+  return (
+    <svg className="arrow-icon" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+      <path d="M4 12 12 4M5.5 4H12v6.5" fill="none" stroke="currentColor" strokeWidth="1.25" />
+    </svg>
+  );
+}
+
 function Home() {
   return (
     <>
@@ -33,7 +42,7 @@ function Home() {
         {sections.map((section, index) => (
           <NavLink className="section-card" to={section.path} key={section.path}>
             <span className="card-index">0{index + 1}</span>
-            <span className="card-bottom"><strong>{section.label}</strong><span aria-hidden="true">↗</span></span>
+            <span className="card-bottom"><strong>{section.label}</strong><ArrowIcon /></span>
             <small>{section.description}</small>
           </NavLink>
         ))}
@@ -49,7 +58,7 @@ function Feature({ label, description }: { label: string; description: string })
       <h1>{label}<em>.</em></h1>
       <p className="lead">{description}</p>
       <p className="muted">Este espaço ainda não armazena dados. O primeiro fluxo será conectado à API após definir a autenticação.</p>
-      <NavLink className="text-link" to="/">Voltar ao início <span aria-hidden="true">↗</span></NavLink>
+      <NavLink className="text-link" to="/">Voltar ao início <ArrowIcon /></NavLink>
     </div>
   );
 }
@@ -60,7 +69,7 @@ function NotFound() {
       <div className="eyebrow">CAMINHO NÃO ENCONTRADO</div>
       <h1>404<em>.</em></h1>
       <p className="lead">Esta página não existe neste espaço.</p>
-      <NavLink className="text-link" to="/">Voltar ao início <span aria-hidden="true">↗</span></NavLink>
+      <NavLink className="text-link" to="/">Voltar ao início <ArrowIcon /></NavLink>
     </div>
   );
 }

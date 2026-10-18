@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-@font-face { font-family: Inter; src: url("./assets/fonts/inter-latin.woff2") format("woff2"); font-style: normal; font-weight: 400 600; font-display: swap; }
+@font-face { font-family: Inter; src: url("./assets/fonts/inter-latin.woff2") format("woff2"); font-style: normal; font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Instrument Serif"; src: url("./assets/fonts/instrument-serif-latin.woff2") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Instrument Serif"; src: url("./assets/fonts/instrument-serif-latin-italic.woff2") format("woff2"); font-style: italic; font-weight: 400; font-display: swap; }
 
 * { box-sizing: border-box; }
 html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
@@ -39,11 +40,11 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
 .card-index { color: var(--color-muted); }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: auto; font-size: 24px; }
 .card-bottom strong { font-weight: 500; letter-spacing: -.045em; }
-.card-bottom > span { color: var(--color-muted); font-size: 20px; }
+.arrow-icon { flex: none; color: var(--color-muted); }
 .section-card small { margin-top: 3px; color: var(--color-muted); font-size: 12px; }
 .feature-page { min-height: 50vh; }
 .feature-page .muted { max-width: 465px; margin-top: 32px; color: var(--color-muted); }
-.text-link { display: inline-flex; gap: 18px; margin-top: 34px; padding-bottom: 5px; border-bottom: 1px solid var(--color-text); }
+.text-link { display: inline-flex; align-items: center; gap: 18px; margin-top: 34px; padding-bottom: 5px; border-bottom: 1px solid var(--color-text); }
 .app-footer { display: flex; justify-content: space-between; gap: 12px; padding: 24px clamp(26px, 6vw, 100px); color: var(--color-muted); border-top: 1px solid var(--color-border); }
 :is(a, button):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 
