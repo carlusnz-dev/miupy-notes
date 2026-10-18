@@ -81,6 +81,11 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+/** Avisa fora do React (por exemplo, para limpar o cache ao sair). */
+export function subscribeAuth(listener: (state: AuthState) => void) {
+  return subscribe(() => listener(state));
+}
+
 export function useAuth(): AuthState {
   return useSyncExternalStore(subscribe, () => state);
 }
