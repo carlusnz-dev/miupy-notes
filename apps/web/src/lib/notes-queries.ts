@@ -19,18 +19,18 @@ function useSignedIn() {
 }
 
 /** Lista paginada para a tela de notas ("Carregar mais" chama `fetchNextPage`). */
-export function useNotesList() {
+export function useNotesList(enabled = true) {
   return useInfiniteQuery({
     queryKey: noteKeys.list(),
     queryFn: ({ pageParam, signal }) => listNotes({ cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    enabled: useSignedIn(),
+    enabled: useSignedIn() && enabled,
   });
 }
 
 /** Todas as notas (até o teto), para métricas e gráficos. `truncated` indica que o teto foi atingido. */
-export function useAllNotes() {
+export function useAllNotes(enabled = true) {
   return useQuery({
     queryKey: noteKeys.everything(),
     queryFn: async ({ signal }) => {
@@ -44,7 +44,10 @@ export function useAllNotes() {
       }
       return { items, truncated: true };
     },
-    enabled: useSignedIn(),
+    enabled: useSignedIn() && enabled,
+    // A consulta pode fazer até 50 requisições sequenciais; evite refazê-la a cada foco.
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
