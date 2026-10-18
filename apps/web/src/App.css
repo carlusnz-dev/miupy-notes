@@ -47,7 +47,7 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
 .feature-page .muted { max-width: 465px; margin-top: 32px; color: var(--color-muted); }
 .text-link { display: inline-flex; align-items: center; gap: 18px; margin-top: 34px; padding-bottom: 5px; border-bottom: 1px solid var(--color-text); }
 .app-footer { display: flex; justify-content: space-between; gap: 12px; padding: 24px clamp(26px, 6vw, 100px); color: var(--color-muted); border-top: 1px solid var(--color-border); }
-:is(a, button):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+:is(a, button, input, textarea):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; border: 1px solid var(--color-accent); border-radius: var(--radius-small); color: var(--color-accent-text); background: var(--color-accent); font: 500 13px/1 Inter, system-ui, sans-serif; letter-spacing: normal; text-transform: none; cursor: pointer; transition: background var(--duration), border-color var(--duration), color var(--duration); }
@@ -55,8 +55,7 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
 .button-secondary { border-color: var(--color-border-strong); color: var(--color-text); background: transparent; }
 .button-secondary:hover:not(:disabled) { background: var(--color-surface-raised); }
 
-.local-notice { display: flex; gap: 10px; max-width: 640px; margin: 36px 0 0; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-small); color: var(--color-muted); background: var(--color-surface); font-size: 13px; }
-.notice-dot { flex: none; width: 7px; height: 7px; margin-top: 7px; border: 1px solid var(--color-border-strong); border-radius: 50%; }
+.notes-state { margin-top: 48px; }
 .notes-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 48px 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); color: var(--color-muted); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
 .state-panel { display: grid; gap: 8px; justify-items: start; padding: 28px 24px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-medium); }
 .state-panel strong { font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
@@ -73,6 +72,15 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
 .note-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; color: var(--color-muted); font-size: 12px; }
 .tag { padding: 2px 8px; border: 1px solid var(--color-border); border-radius: 999px; }
 .load-more { margin-top: 16px; }
+.note-form { display: grid; gap: 8px; justify-items: start; margin: 0 0 24px; padding: 20px 18px; border: 1px solid var(--color-border); border-radius: var(--radius-medium); background: var(--color-surface); }
+.note-form h2 { margin: 0 0 8px; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
+.note-form label { margin-top: 4px; font-size: 12px; font-weight: 500; }
+.label-hint { color: var(--color-muted); font-weight: 400; }
+.note-form :is(input, textarea) { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); color: var(--color-text); background: var(--color-background); font: inherit; }
+.note-form textarea { min-height: 120px; resize: vertical; }
+.note-form .button { margin-top: 8px; }
+.form-error { display: grid; gap: 4px; margin: 0; color: var(--color-text); }
+.form-error p { margin: 0; }
 
 @media (max-width: 760px) {
   .app-shell { display: block; }
