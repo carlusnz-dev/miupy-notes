@@ -23,3 +23,30 @@ export async function createNote(input: { title: string; body?: string }): Promi
     throw toApiError(error);
   }
 }
+
+export async function getNote(id: string, signal?: AbortSignal): Promise<NoteOutput> {
+  try {
+    const response = await apiClient.get(`/v1/notes/${encodeURIComponent(id)}`, { signal });
+    return noteOutputSchema.parse(response.data);
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+/** `version` é a lida por último; a API responde 409 CONFLICT se outra gravação ocorreu. */
+export async function updateNote(id: string, input: { version: number; title?: string; body?: string; tags?: string[] }): Promise<NoteOutput> {
+  try {
+    const response = await apiClient.patch(`/v1/notes/${encodeURIComponent(id)}`, input);
+    return noteOutputSchema.parse(response.data);
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  try {
+    await apiClient.delete(`/v1/notes/${encodeURIComponent(id)}`);
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
