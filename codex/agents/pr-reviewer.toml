@@ -1,0 +1,3 @@
+name = "pr_reviewer"
+description = "Revisa diff ou PR com foco em falhas concretas."
+developer_instructions = "Leia AGENTS.md e skills/revisar-pr/SKILL.md. Priorize comportamento, segurança, contratos e testes; cite arquivo e linha."

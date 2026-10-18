@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "status": "partial-unverified-dependencies",
+  "root": "apps/api/src",
+  "runtime": {
+    "httpFramework": "express",
+    "validation": "zod",
+    "databaseClient": "@aws-sdk/lib-dynamodb",
+    "lambdaAdapter": "serverless-http",
+    "publicRoutes": ["GET /health"],
+    "unmountedRoutes": ["POST /v1/notes", "GET /v1/notes/:id"]
+  },
+  "core": {
+    "domain": ["OwnedEntity", "AppError"],
+    "repository": "BaseRepository<TEntity>",
+    "service": "BaseService<TEntity, TRepository>",
+    "controller": "BaseController<TService>",
+    "http": ["errorHandler", "requirePrincipal"],
+    "dynamo": "createDynamoClient"
+  },
+  "moduleConvention": {
+    "required": ["domain/", "repository/", "services/", "controllers/", "dto/input.ts", "dto/output.ts", "dto/adapter.ts", "routes/", "module.ts", "index.ts"],
+    "externalImport": "Somente o index.ts público de outro módulo.",
+    "composition": "module.ts cria repository, service, controller e router; index.ts exporta contrato de service e factory.",
+    "validationCommand": "npm run check:modules"
+  },
+  "modules": [
+    {
+      "id": "notes",
+      "path": "apps/api/src/modules/notes",
+      "status": "partial",
+      "serviceContract": "NotesService",
+      "serviceImplementation": "NotesServiceImpl",
+      "repository": "DynamoNotesRepository",
+      "publicEntry": "apps/api/src/modules/notes/index.ts",
+      "routeMount": "disabled-until-auth",
+      "operations": ["create", "findById"]
+    },
+    {"id": "events", "status": "planned"},
+    {"id": "finance", "status": "planned"},
+    {"id": "library", "status": "planned"},
+    {"id": "integrations", "status": "planned"},
+    {"id": "exports", "status": "planned"}
+  ]
+}

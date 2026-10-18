@@ -1,0 +1,22 @@
+{
+  "name": "miupy-notes",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev:web",
+    "dev:web": "npm run dev --workspace @miupy-notes/web",
+    "dev:api": "npm run dev --workspace @miupy-notes/api",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "npm run build --workspace @miupy-notes/web",
+    "build:api": "npm run build --workspace @miupy-notes/api",
+    "test:api": "npm run test --workspace @miupy-notes/api",
+    "check:modules": "npm run check:modules --workspace @miupy-notes/api",
+    "preview": "npm run preview --workspace @miupy-notes/web",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

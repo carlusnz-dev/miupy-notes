@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "status": "provisional-researched",
+  "intent": "Ambiente editorial calmo para leitura, escrita e revisão de dados pessoais; preto, branco e tons de cinza.",
+  "principles": [
+    "Conteúdo antes de decoração.",
+    "Distinguir dados próprios de importados e mostrar a última sincronização.",
+    "Tornar exportação, exclusão e desconexão fáceis de encontrar.",
+    "Usar hierarquia consistente entre notas, finanças, agenda e biblioteca cultural.",
+    "Suportar teclado, contraste e preferência por movimento reduzido."
+  ],
+  "references": [
+    {
+      "name": "Geist Design System — Typography",
+      "url": "https://vercel.com/geist/typography",
+      "observed": "Escala de títulos, cópia e rótulos com hierarquia explícita.",
+      "application": "Separar título editorial serif de textos funcionais sans; manter rótulos pequenos legíveis."
+    },
+    {
+      "name": "Geist Design System — Colors",
+      "url": "https://vercel.com/geist/colors",
+      "observed": "Superfícies e escalas de cinza organizadas por função.",
+      "application": "Usar poucos níveis de superfície e bordas discretas."
+    },
+    {
+      "name": "Linear — A calmer interface for a product in motion",
+      "url": "https://linear.app/now/behind-the-latest-design-refresh",
+      "observed": "Hierarquia visual reduz peso de itens secundários em telas densas.",
+      "application": "Priorizar conteúdo e ação atual, com navegação lateral quieta."
+    },
+    {
+      "name": "Notion — Docs",
+      "url": "https://www.notion.com/en-GB/product/docs",
+      "observed": "Conteúdo escrito é o centro da experiência.",
+      "application": "Reservar largura e respiro para notas, sem painéis decorativos em excesso."
+    }
+  ],
+  "fontSources": [
+    "https://fonts.google.com/specimen/Instrument+Serif",
+    "https://fonts.google.com/specimen/Inter"
+  ],
+  "openQuestions": ["Nome final", "Confirmar identidade visual", "Tema claro futuro"]
+}

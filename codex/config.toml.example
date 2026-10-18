@@ -1,0 +1,8 @@
+# Modelo para .codex/config.toml quando a pasta for gravável.
+[agents.design_researcher]
+description = "Pesquisa e valida referências visuais do miupy-notes."
+config_file = "./agents/design-researcher.toml"
+
+[agents.pr_reviewer]
+description = "Revisa mudanças do miupy-notes antes de merge."
+config_file = "./agents/pr-reviewer.toml"
