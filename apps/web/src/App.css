@@ -54,8 +54,9 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
   .sidebar { min-height: 0; padding: 14px 20px 10px; border-right: 0; border-bottom: 1px solid var(--color-border); }
   .brand { padding: 0; }
   .nav-caption, .sidebar-footer { display: none; }
-  .sidebar nav { display: flex; gap: 4px; overflow-x: auto; margin-top: 12px; }
-  .sidebar nav a { flex: 0 0 auto; padding: 8px 10px; font-size: 12px; }
+  /* Quebra em vez de rolar: nenhum item fica escondido na borda em telas estreitas. */
+  .sidebar nav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+  .sidebar nav a { flex: 0 0 auto; padding: 8px 7px; font-size: 12px; }
   .topbar { padding-top: 20px; padding-bottom: 20px; }
   .topbar span:last-child { display: none; }
   .page-content { padding-top: 75px; }
