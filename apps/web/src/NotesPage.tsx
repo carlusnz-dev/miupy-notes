@@ -62,21 +62,93 @@ function SignedInNotes({ preview }: { preview: PreviewNotes | null }) {
     }
   }
 
-  return <>
-    <div className="notes-toolbar">
-      <div className="notes-toolbar-status">
-        <span>{view.status === "ready" ? `${view.items.length} ${view.items.length === 1 ? "nota" : "notas"}${view.nextCursor ? " carregadas" : ""}` : "Suas notas"}</span>
-        {view.status === "ready" && !isPreview && query.isFetching && !query.isFetchingNextPage && <span className="refresh-status" role="status">Atualizando…</span>}
+  const countLabel = view.status === "ready"
+    ? `${view.items.length} ${view.items.length === 1 ? "nota" : "notas"}${view.nextCursor ? " carregadas" : ""}`
+    : "Suas notas";
+
+  return (
+    <>
+      <div className="notes-toolbar">
+        <div className="notes-toolbar-status">
+          <span>{countLabel}</span>
+          {view.status === "ready" && !isPreview && query.isFetching && !query.isFetchingNextPage && (
+            <span className="refresh-status" role="status">Atualizando…</span>
+          )}
+        </div>
+        <button type="button" className="button button-secondary" onClick={() => void signOut()} disabled={isPreview}>Sair</button>
       </div>
-      <button type="button" className="button button-secondary" onClick={() => void signOut()} disabled={isPreview}>Sair</button>
-    </div>
-    <form className="note-form" onSubmit={submit} aria-labelledby="note-form-title"><h2 id="note-form-title">Nova nota</h2><div className="note-form-fields"><label htmlFor="note-title">Título</label><input id="note-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={200} autoComplete="off" aria-describedby={formError ? "note-form-error" : undefined} /><button type="submit" className="button" disabled={create.isPending || isPreview}>{create.isPending ? "Criando…" : "Criar e abrir"}</button></div>{formError && <div className="form-error" id="note-form-error" role="alert"><p>{typeof formError === "string" ? formError : errorMessage(formError)}</p>{typeof formError !== "string" && <RequestId error={formError} />}</div>}</form>
-    <section aria-busy={view.status === "loading"}>
-      {view.status === "loading" && <SkeletonBody label="Carregando notas…" cards={4} cardHeight={54} />}
-      {view.status === "error" && <StatePanel title="Não foi possível carregar as notas"><p>{errorMessage(view.error)}</p><RequestId error={view.error} /><button type="button" className="button button-secondary" onClick={() => void query.refetch()} disabled={isPreview}>Tentar de novo</button></StatePanel>}
-      {view.status === "ready" && <>{view.items.length === 0 ? <StatePanel title="Nenhuma nota ainda"><p>Crie a primeira nota acima; ela aparece aqui com título, tags e data de edição.</p></StatePanel> : <ul className="note-list">{view.items.map((note) => <li key={note.id}><Link className="note-row" to={`/notes/${note.id}`}><strong>{note.title}</strong><span className="note-meta">{note.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}<time dateTime={note.updatedAt}>{dateFormat.format(new Date(note.updatedAt))}</time></span></Link></li>)}</ul>}{moreError && <div className="form-error" role="alert"><p>{errorMessage(moreError)}</p><RequestId error={moreError} /></div>}{view.nextCursor && <button type="button" className="button button-secondary load-more" onClick={() => void query.fetchNextPage()} disabled={query.isFetchingNextPage || isPreview}>{query.isFetchingNextPage ? "Carregando…" : moreError ? "Tentar de novo" : "Carregar mais"}</button>}</>}
-    </section>
-  </>;
+
+      <form className="note-form" onSubmit={submit} aria-labelledby="note-form-title">
+        <h2 id="note-form-title">Nova nota</h2>
+        <div className="note-form-fields">
+          <label htmlFor="note-title">Título</label>
+          <input
+            id="note-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            required
+            maxLength={200}
+            autoComplete="off"
+            aria-describedby={formError ? "note-form-error" : undefined}
+          />
+          <button type="submit" className="button" disabled={create.isPending || isPreview}>{create.isPending ? "Criando…" : "Criar e abrir"}</button>
+        </div>
+        {formError && (
+          <div className="form-error" id="note-form-error" role="alert">
+            <p>{typeof formError === "string" ? formError : errorMessage(formError)}</p>
+            {typeof formError !== "string" && <RequestId error={formError} />}
+          </div>
+        )}
+      </form>
+
+      <section aria-busy={view.status === "loading"}>
+        {view.status === "loading" && <SkeletonBody label="Carregando notas…" cards={4} cardHeight={54} />}
+
+        {view.status === "error" && (
+          <StatePanel title="Não foi possível carregar as notas">
+            <p>{errorMessage(view.error)}</p>
+            <RequestId error={view.error} />
+            <button type="button" className="button button-secondary" onClick={() => void query.refetch()} disabled={isPreview}>Tentar de novo</button>
+          </StatePanel>
+        )}
+
+        {view.status === "ready" && view.items.length === 0 && (
+          <StatePanel title="Nenhuma nota ainda">
+            <p>Crie a primeira nota acima; ela aparece aqui com título, tags e data de edição.</p>
+          </StatePanel>
+        )}
+
+        {view.status === "ready" && view.items.length > 0 && (
+          <ul className="note-list">
+            {view.items.map((note) => (
+              <li key={note.id}>
+                <Link className="note-row" to={`/notes/${note.id}`}>
+                  <strong>{note.title}</strong>
+                  <span className="note-meta">
+                    {note.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+                    <time dateTime={note.updatedAt}>{dateFormat.format(new Date(note.updatedAt))}</time>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {view.status === "ready" && moreError && (
+          <div className="form-error" role="alert">
+            <p>{errorMessage(moreError)}</p>
+            <RequestId error={moreError} />
+          </div>
+        )}
+
+        {view.status === "ready" && view.nextCursor && (
+          <button type="button" className="button button-secondary load-more" onClick={() => void query.fetchNextPage()} disabled={query.isFetchingNextPage || isPreview}>
+            {query.isFetchingNextPage ? "Carregando…" : moreError ? "Tentar de novo" : "Carregar mais"}
+          </button>
+        )}
+      </section>
+    </>
+  );
 }
 
 export default function NotesPage() {
@@ -85,10 +157,40 @@ export default function NotesPage() {
   const preview = previewState(searchParams.get("estado"));
   const auth = useAuth();
   const status = preview?.auth ?? auth.status;
-  return <div className="feature-page notes-page"><div className="eyebrow">ACERVO PESSOAL</div><h1>Notas<em>.</em></h1><p className="lead">Ideias, páginas e conexões em um lugar.</p>
-    {status === "checking" && <div className="notes-state"><SkeletonBody label="Verificando a conta…" lines={2} cards={1} cardHeight={120} /></div>}
-    {status === "unsupported" && <div className="notes-state"><StatePanel title="Login só no app desktop"><p>Abra o miupy notes no app desktop para entrar com Google e ver suas notas. Neste navegador, a tela não conversa com a API.</p></StatePanel></div>}
-    {status === "signed-out" && <div className="notes-state"><StatePanel title="Conta não conectada"><p>Entre com sua conta Google para ver e criar notas. O login abre o navegador do sistema.</p>{!preview && auth.error && <p className="form-error" role="alert">{auth.error}</p>}<button type="button" className="button" onClick={() => { if (!preview) void signIn(); }} disabled={auth.signingIn || !!preview}>{auth.signingIn ? "Aguardando o navegador…" : "Entrar com Google"}</button></StatePanel></div>}
-    {status === "signed-in" && <SignedInNotes preview={preview?.notes ?? null} />}
-  </div>;
+
+  return (
+    <div className="feature-page notes-page">
+      <div className="eyebrow">ACERVO PESSOAL</div>
+      <h1>Notas<em>.</em></h1>
+      <p className="lead">Ideias, páginas e conexões em um lugar.</p>
+
+      {status === "checking" && (
+        <div className="notes-state">
+          <SkeletonBody label="Verificando a conta…" lines={2} cards={1} cardHeight={120} />
+        </div>
+      )}
+
+      {status === "unsupported" && (
+        <div className="notes-state">
+          <StatePanel title="Login só no app desktop">
+            <p>Abra o miupy notes no app desktop para entrar com Google e ver suas notas. Neste navegador, a tela não conversa com a API.</p>
+          </StatePanel>
+        </div>
+      )}
+
+      {status === "signed-out" && (
+        <div className="notes-state">
+          <StatePanel title="Conta não conectada">
+            <p>Entre com sua conta Google para ver e criar notas. O login abre o navegador do sistema.</p>
+            {!preview && auth.error && <p className="form-error" role="alert">{auth.error}</p>}
+            <button type="button" className="button" onClick={() => { if (!preview) void signIn(); }} disabled={auth.signingIn || !!preview}>
+              {auth.signingIn ? "Aguardando o navegador…" : "Entrar com Google"}
+            </button>
+          </StatePanel>
+        </div>
+      )}
+
+      {status === "signed-in" && <SignedInNotes preview={preview?.notes ?? null} />}
+    </div>
+  );
 }
