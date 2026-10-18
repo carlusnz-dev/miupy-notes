@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, type CSSProperties } from "react";
+import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
 import "./App.css";
 
@@ -35,7 +35,14 @@ function ArrowIcon() {
   );
 }
 
+function usePageTitle(title: string) {
+  useEffect(() => {
+    document.title = `${title} · miupy notes`;
+  }, [title]);
+}
+
 function Home() {
+  usePageTitle("Visão geral");
   return (
     <>
       <div className="eyebrow">SEU ESPAÇO PESSOAL</div>
@@ -56,6 +63,7 @@ function Home() {
 }
 
 function Feature({ label, description }: { label: string; description: string }) {
+  usePageTitle(label);
   return (
     <div className="feature-page">
       <div className="eyebrow">EM PREPARAÇÃO</div>
@@ -68,11 +76,13 @@ function Feature({ label, description }: { label: string; description: string })
 }
 
 function NotFound() {
+  const { pathname } = useLocation();
+  usePageTitle("Página não encontrada");
   return (
     <div className="feature-page">
       <div className="eyebrow">CAMINHO NÃO ENCONTRADO</div>
       <h1>404<em>.</em></h1>
-      <p className="lead">Esta página não existe neste espaço.</p>
+      <p className="lead">Nenhuma página corresponde a <code>{pathname}</code> neste espaço.</p>
       <NavLink className="text-link" to="/">Voltar ao início <ArrowIcon /></NavLink>
     </div>
   );

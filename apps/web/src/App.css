@@ -43,6 +43,7 @@ h1 em { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; lette
 .arrow-icon { flex: none; color: var(--color-muted); }
 .section-card small { margin-top: 3px; color: var(--color-muted); font-size: 12px; }
 .feature-page { min-height: 50vh; }
+.lead code { padding: 2px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-small); color: var(--color-text); font: 500 .85em/1 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .feature-page .muted { max-width: 465px; margin-top: 32px; color: var(--color-muted); }
 .text-link { display: inline-flex; align-items: center; gap: 18px; margin-top: 34px; padding-bottom: 5px; border-bottom: 1px solid var(--color-text); }
 .app-footer { display: flex; justify-content: space-between; gap: 12px; padding: 24px clamp(26px, 6vw, 100px); color: var(--color-muted); border-top: 1px solid var(--color-border); }
