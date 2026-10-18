@@ -5,7 +5,7 @@ import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(() => ({
+export default defineConfig(({ isPreview }) => ({
   plugins: [react(), tailwindcss()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -24,6 +24,8 @@ export default defineConfig(() => ({
           port: 1421,
         }
       : undefined,
+    // Só no dev server (`vite preview` herdaria server.proxy): a baseURL relativa chega à API local.
+    proxy: isPreview ? undefined : { "/v1": "http://127.0.0.1:4000" },
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**", "**/apps/api/**"],
