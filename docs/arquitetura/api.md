@@ -1,6 +1,6 @@
 # Contrato HTTP
 
-**Estado em 2026-10-18:** o app público (`createApp`) expõe apenas `GET /health` (`200 {"status":"ok"}`); todo `/v1/notes` responde `404 NOT_FOUND` até existir verificação real de token ([decisão de identidade](../decisoes/2026-10-18_identidade.md), não implementada). As rotas de notas abaixo estão **implementadas no módulo e verificadas em testes** que montam o router com um principal falso (`apps/api/src/modules/notes/routes/notes.routes.test.ts`); não há tabela, Lambda nem API Gateway implantados. Base: `/v1`. JSON UTF-8. Cliente: `apps/web/src/lib/api-client.ts`.
+**Estado em 2026-10-18:** o app público (`createApp`) expõe apenas `GET /health` (`200 {"status":"ok"}`); todo `/v1/notes` responde `404 NOT_FOUND` até existir verificação real de token ([decisão de identidade](../decisoes/2026-10-18_identidade.md), não implementada). As rotas de notas abaixo estão **implementadas no módulo e verificadas em testes** que montam o router com um principal falso (`apps/api/src/modules/notes/routes/notes.routes.test.ts`); não há tabela, Lambda nem API Gateway implantados. Base: `/v1`. JSON UTF-8. Cliente: `apps/web/src/lib/api-client.ts` (rejeita requisições enquanto não houver provedor de token) e `apps/web/src/lib/notes-api.ts`, tipado pelos schemas de `apps/api/src/modules/notes/contract.ts`.
 
 ## Identidade
 

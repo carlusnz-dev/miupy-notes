@@ -35,6 +35,7 @@
       "serviceImplementation": "NotesServiceImpl",
       "repository": "DynamoNotesRepository",
       "publicEntry": "apps/api/src/modules/notes/index.ts",
+      "httpContract": "apps/api/src/modules/notes/contract.ts (schemas Zod de saída; importado pelo cliente web; só depende de zod)",
       "routeMount": "disabled-until-auth",
       "operations": ["list", "create", "findById", "update", "delete"],
       "testRepository": "MemoryNotesRepository",
