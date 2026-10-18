@@ -23,6 +23,8 @@ const KEYRING_SERVICE: &str = "com.miupy.notes";
 const KEYRING_USER: &str = "google-refresh-token";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+/// Navegadores abrem conexões especulativas sem enviar nada; sem limite, uma delas prenderia o loop.
+const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Margem mínima de validade para devolver o ID token em memória sem refresh.
 const EXPIRY_MARGIN_SECS: u64 = 60;
 
@@ -338,7 +340,12 @@ async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<S
         let Ok((mut stream, _)) = listener.accept().await else {
             continue;
         };
-        let line = read_request_line(&mut stream).await.unwrap_or_default();
+        let Ok(line) =
+            tokio::time::timeout(CALLBACK_READ_TIMEOUT, read_request_line(&mut stream)).await
+        else {
+            continue;
+        };
+        let line = line.unwrap_or_default();
         match parse_callback(&line, expected_state) {
             Callback::Code(code) => {
                 respond(&mut stream, "200 OK", SUCCESS_PAGE).await;
