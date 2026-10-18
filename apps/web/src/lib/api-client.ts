@@ -6,7 +6,7 @@ const env = z.object({ VITE_API_BASE_URL: z.url().optional() }).parse(import.met
 type AccessTokenProvider = () => Promise<string>;
 let accessTokenProvider: AccessTokenProvider | null = null;
 
-/** Será chamado pelo fluxo de login (Google OIDC, ainda não implementado). */
+/** Definido por `lib/auth.ts` ao entrar (ID token do Google via comando Tauri) e zerado ao sair. */
 export function setAccessTokenProvider(provider: AccessTokenProvider | null) {
   accessTokenProvider = provider;
 }
@@ -34,7 +34,7 @@ export const apiClient = axios.create({
 // Sem provedor de token, nenhuma requisição sai do app: dados pessoais só trafegam autenticados.
 apiClient.interceptors.request.use(async (config) => {
   if (!accessTokenProvider) {
-    throw new ApiError("AUTH_NOT_CONFIGURED", "A autenticação ainda não foi configurada. Nenhuma requisição foi enviada.");
+    throw new ApiError("AUTH_NOT_CONFIGURED", "Nenhuma conta conectada. Nenhuma requisição foi enviada.");
   }
   config.headers.Authorization = `Bearer ${await accessTokenProvider()}`;
   return config;
