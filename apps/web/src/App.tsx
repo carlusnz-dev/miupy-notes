@@ -1,7 +1,10 @@
-import type { CSSProperties } from "react";
+import { lazy, Suspense, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
 import NotesPage from "./NotesPage";
+
+// O editor (CodeMirror + prévia Markdown) só carrega ao abrir uma nota.
+const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 
@@ -107,6 +110,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/notes" element={<NotesPage />} />
+              <Route path="/notes/:id" element={<Suspense fallback={<div className="note-skeleton" role="status" aria-label="Carregando editor…" />}><NoteEditorPage /></Suspense>} />
               {sections.filter((section) => section.path !== "/notes").map((section) => <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />)}
               <Route path="*" element={<NotFound />} />
             </Routes>

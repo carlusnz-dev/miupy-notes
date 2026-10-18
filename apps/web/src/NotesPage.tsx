@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "./lib/api-client";
 import { expireSession, signIn, signOut, useAuth, type AuthStatus } from "./lib/auth";
 import { createNote, listNotes, type NoteOutput } from "./lib/notes-api";
@@ -57,8 +57,8 @@ function SignedInNotes({ preview }: { preview: State | null }) {
   const isPreview = preview !== null;
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const navigate = useNavigate();
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<ApiError | string | null>(null);
 
@@ -96,13 +96,10 @@ function SignedInNotes({ preview }: { preview: State | null }) {
     setSaving(true);
     setFormError(null);
     try {
-      const note = await createNote({ title: trimmed, body: body || undefined });
-      setState((current) => (current.status === "ready" ? { ...current, items: [note, ...current.items] } : current));
-      setTitle("");
-      setBody("");
+      const note = await createNote({ title: trimmed });
+      navigate(`/notes/${note.id}`);
     } catch (error) {
       fail(error as ApiError, setFormError);
-    } finally {
       setSaving(false);
     }
   }
@@ -120,15 +117,13 @@ function SignedInNotes({ preview }: { preview: State | null }) {
         <h2 id="note-form-title">Nova nota</h2>
         <label htmlFor="note-title">Título</label>
         <input id="note-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={200} autoComplete="off" aria-describedby={formError ? "note-form-error" : undefined} />
-        <label htmlFor="note-body">Corpo <span className="label-hint">(Markdown, opcional)</span></label>
-        <textarea id="note-body" value={body} onChange={(event) => setBody(event.target.value)} rows={5} />
         {formError && (
           <div className="form-error" id="note-form-error" role="alert">
             <p>{typeof formError === "string" ? formError : errorMessage(formError)}</p>
             {typeof formError !== "string" && <RequestId error={formError} />}
           </div>
         )}
-        <button type="submit" className="button" disabled={saving || isPreview}>{saving ? "Salvando…" : "Salvar"}</button>
+        <button type="submit" className="button" disabled={saving || isPreview}>{saving ? "Criando…" : "Criar e abrir no editor"}</button>
       </form>
 
       <section aria-live="polite" aria-busy={view.status === "loading"}>
@@ -157,12 +152,14 @@ function SignedInNotes({ preview }: { preview: State | null }) {
           <>
             <ul className="note-list">
               {view.items.map((note) => (
-                <li key={note.id} className="note-row">
-                  <strong>{note.title}</strong>
-                  <span className="note-meta">
-                    {note.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
-                    <time dateTime={note.updatedAt}>{dateFormat.format(new Date(note.updatedAt))}</time>
-                  </span>
+                <li key={note.id}>
+                  <Link className="note-row" to={`/notes/${note.id}`}>
+                    <strong>{note.title}</strong>
+                    <span className="note-meta">
+                      {note.tags.map((tag) => <span className="tag" key={tag}>{tag}</span>)}
+                      <time dateTime={note.updatedAt}>{dateFormat.format(new Date(note.updatedAt))}</time>
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
