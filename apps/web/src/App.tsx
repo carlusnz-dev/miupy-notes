@@ -17,9 +17,13 @@ const theme = {
   "--color-text": tokens.colors.text,
   "--color-muted": tokens.colors.textMuted,
   "--color-border": tokens.colors.border,
+  "--color-border-strong": tokens.colors.borderStrong,
   "--color-accent": tokens.colors.accent,
   "--color-accent-text": tokens.colors.accentText,
   "--color-focus": tokens.colors.focus,
+  "--radius-small": `${tokens.radiusPx.small}px`,
+  "--radius-medium": `${tokens.radiusPx.medium}px`,
+  "--duration": `${tokens.motion.defaultDurationMs}ms`,
 } as CSSProperties;
 
 // As fontes locais não têm "↗"; o SVG evita fallback para fonte do sistema.

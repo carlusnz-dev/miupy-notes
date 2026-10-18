@@ -1,9 +1,10 @@
 {
   "version": 1,
-  "status": "provisional-researched",
-  "intent": "Ambiente editorial calmo para leitura, escrita e revisão de dados pessoais; preto, branco e tons de cinza.",
+  "status": "provisional-verified",
+  "intent": "Ambiente SaaS flat e editorial para leitura, escrita e revisão de dados pessoais; preto, branco e tons de cinza, sem sombras nem relevo.",
   "principles": [
     "Conteúdo antes de decoração.",
+    "Flat: superfícies sólidas, sem sombra ou deslocamento no hover; estado muda por fundo e borda.",
     "Distinguir dados próprios de importados e mostrar a última sincronização.",
     "Tornar exportação, exclusão e desconexão fáceis de encontrar.",
     "Usar hierarquia consistente entre notas, finanças, agenda e biblioteca cultural.",
@@ -19,25 +20,44 @@
     {
       "name": "Geist Design System — Colors",
       "url": "https://vercel.com/geist/colors",
-      "observed": "Superfícies e escalas de cinza organizadas por função.",
+      "observed": "Background 1/2 por função; cinzas 100–300 para fundos de componente, 400–600 para bordas e 900–1000 para texto.",
       "application": "Usar poucos níveis de superfície e bordas discretas."
     },
     {
       "name": "Linear — A calmer interface for a product in motion",
       "url": "https://linear.app/now/behind-the-latest-design-refresh",
-      "observed": "Hierarquia visual reduz peso de itens secundários em telas densas.",
-      "application": "Priorizar conteúdo e ação atual, com navegação lateral quieta."
+      "observed": "Post de 12/03/2026: navegação lateral esmaecida, ícones reduzidos, bordas e separadores suavizados; cinza mais quente e menos saturado.",
+      "application": "Sidebar quieta, bordas discretas e cinzas levemente quentes (#F5F5F2, #A6A6A2) em vez de cinza azulado."
     },
     {
       "name": "Notion — Docs",
       "url": "https://www.notion.com/en-GB/product/docs",
-      "observed": "Conteúdo escrito é o centro da experiência.",
+      "observed": "Página de produto \"Docs | Notion\": notas e wikis como centro do produto.",
       "application": "Reservar largura e respiro para notas, sem painéis decorativos em excesso."
+    },
+    {
+      "name": "Radix Colors — Understanding the scale",
+      "url": "https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale",
+      "observed": "Escala de 12 passos: 1–2 fundos de app, 3–5 componentes (normal, hover, seleção), 6–8 bordas (sutil, interativa, forte/foco), 11–12 texto.",
+      "application": "Tokens por função: background, surface, surfaceRaised, border (sutil), borderStrong (interativa), textMuted e text."
+    },
+    {
+      "name": "WCAG 2.2 — Understanding SC 1.4.11 Non-text Contrast",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+      "observed": "Limites de componentes e indicadores de foco exigem 3:1 quando são a única pista visual; gráficos decorativos são isentos.",
+      "application": "borderStrong (3,84:1) e focus (13,62:1) contra o fundo; border sutil fica restrita a separadores decorativos ou cartões identificados por texto."
     }
   ],
   "fontSources": [
     "https://fonts.google.com/specimen/Instrument+Serif",
-    "https://fonts.google.com/specimen/Inter"
+    "https://fonts.google.com/specimen/Inter",
+    "https://cdn.jsdelivr.net/npm/@fontsource/instrument-serif@5.2.8/files/instrument-serif-latin-400-italic.woff2"
   ],
-  "openQuestions": ["Nome final", "Confirmar identidade visual", "Tema claro futuro"]
+  "openQuestions": [
+    "Nome final",
+    "Confirmar identidade visual",
+    "Tema claro futuro",
+    "Manter ou remover o mesh decorativo no visual flat"
+  ],
+  "verifiedAt": "2026-10-18"
 }
