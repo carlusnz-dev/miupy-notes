@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev:web",
     "dev:web": "npm run dev --workspace @miupy-notes/web",
@@ -17,7 +19,9 @@
     "check:modules": "npm run check:modules --workspace @miupy-notes/api",
     "preview": "npm run preview --workspace @miupy-notes/web",
     "tauri": "tauri",
-    "tauri:dev:wayland": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev"
+    "tauri:dev:wayland": "__NV_DISABLE_EXPLICIT_SYNC=1 tauri dev",
+    "tauri:dev:software": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev",
+    "test:web": "npm run test --workspace @miupy-notes/web"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
