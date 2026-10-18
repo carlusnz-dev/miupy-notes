@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file=.env.development --env-file-if-exists=../../.env.local src/server.ts",
     "build": "tsc --noEmit",
     "check:modules": "node scripts/check-modules.mjs",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "db:create-table": "node --env-file=.env.development --env-file-if-exists=../../.env.local scripts/create-local-table.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1152.0",

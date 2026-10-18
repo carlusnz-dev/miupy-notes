@@ -8,6 +8,8 @@
     "dev": "npm run dev:web",
     "dev:web": "npm run dev --workspace @miupy-notes/web",
     "dev:api": "npm run dev --workspace @miupy-notes/api",
+    "dev:db": "docker run --rm -d --name miupy-dynamodb -p 127.0.0.1:8000:8000 -v miupy-dynamodb:/home/dynamodblocal/data amazon/dynamodb-local:3.3.1 -jar DynamoDBLocal.jar -sharedDb -dbPath ./data",
+    "db:create-table": "npm run db:create-table --workspace @miupy-notes/api",
     "build": "npm run build:web && npm run build:api",
     "build:web": "npm run build --workspace @miupy-notes/web",
     "build:api": "npm run build --workspace @miupy-notes/api",
