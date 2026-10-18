@@ -2,7 +2,14 @@
 
 ## Identidade
 
-Decidido em [`../decisoes/2026-10-18_identidade.md`](../decisoes/2026-10-18_identidade.md) (não implementado): Google OIDC com PKCE e loopback no navegador do sistema, JWT authorizer no API Gateway e lista de `sub` permitidos no backend. `ownerId` = `sub`. Toda consulta e chave de objeto são derivadas da identidade validada. Rotas pessoais não são públicas.
+Decidido em [`../decisoes/2026-10-18_identidade.md`](../decisoes/2026-10-18_identidade.md); **implementado localmente na sessão 05** (sem AWS):
+
+- **Desktop (`src-tauri/src/auth.rs`):** authorization code + PKCE S256 + `state`, navegador do sistema, loopback `127.0.0.1` com porta efêmera (um callback por login, leitura limitada a 5 s por conexão, timeout de 5 min). Só o refresh token vai para o cofre do sistema (crate `keyring`; no Linux, Secret Service; entrada `google-refresh-token@com.miupy.notes`). O ID token fica em memória no Rust e chega ao JS só pelo comando `auth_id_token`, a cada requisição do Axios; nunca em `localStorage`, estado React ou log. `invalid_grant` no refresh apaga o cofre. Sair revoga o refresh token (melhor esforço).
+- **Configuração:** `GOOGLE_CLIENT_ID` e, se o Google exigir, `GOOGLE_CLIENT_SECRET` são lidos em runtime do ambiente; em build de debug, de `.env.local` na raiz (ignorado pelo Git). Nada é compilado no binário nem vai para o bundle web (verificado por `grep` em `apps/web/dist`). Distribuição em release ainda sem solução de configuração.
+- **API:** valida o ID token (`jose`, RS256, `iss`, `aud`, `exp`) e aplica `ALLOWED_SUBS`; `sub` fora da lista → `403`. `ownerId` = `sub`. O `sub` do proprietário fica **só** em `ALLOWED_SUBS` no `.env.local` da raiz; nenhum arquivo versionado o contém.
+- **Diagnóstico:** `MIUPY_DEBUG_IDENTITY=1` em build de debug imprime `iss` e `sub` no stderr após o login; não usar em sessões gravadas.
+
+Toda consulta e chave de objeto são derivadas da identidade validada. Rotas pessoais não são públicas.
 
 ## Google
 

@@ -1,15 +1,51 @@
 {
   "project": "miupy-notes",
   "updatedAt": "2026-10-18",
-  "statusValues": ["planned", "template", "partial", "implemented", "verified"],
+  "statusValues": [
+    "planned",
+    "template",
+    "partial",
+    "implemented",
+    "verified"
+  ],
   "description": "Sistema pessoal Tauri + React com API serverless planejada.",
   "modules": [
-    {"id": "frontend", "path": "apps/web", "status": "partial", "role": "Interface React com rotas em HashRouter (início, quatro seções, 404 com título por rota), tokens flat monocromáticos, logo SVG e fontes WOFF2 locais; dependências instaladas, build verificado e telas validadas em Chromium headless (1440 e 390 px). Tela de notas com estados carregando, vazio, erro, conta não conectada e lista, tipada pelo contract.ts da API; o cliente Axios central rejeita toda requisição sem provedor de token, então nenhuma chamada sai do app (verificado no navegador e no bundle de produção). Navegação móvel quebra linha em vez de cortar itens."},
-    {"id": "tauri", "path": "src-tauri", "status": "template", "role": "Casca desktop apontando para apps/web; cargo check passa. tauri dev (2026-10-18, Hyprland/Wayland, Intel+NVIDIA): a janela só abre com WEBKIT_DISABLE_DMABUF_RENDERER=1 (sem ela, Gdk Error 71); início e rota Notas renderizam; 404 não verificada na janela nativa; título da janela fixo em miupy-notes."},
-    {"id": "api", "path": "apps/api", "status": "partial", "role": "Express/TypeScript com core, módulo notes (list com cursor, create, findById, update com versão e 409, delete) e handler Lambda; build, 18 testes e check:modules passam. Rotas de notas verificadas só em teste, com principal falso e repositório em memória ou cliente DynamoDB falso. App público: GET /health 200 e /v1/notes 404 até haver verificação de token. Sem DynamoDB real."},
-    {"id": "integrations", "path": "apps/api/src/modules/integrations", "status": "planned", "role": "Conectores externos e sincronização."},
-    {"id": "mcp", "path": "mcp", "status": "planned", "role": "Ferramentas limitadas para LLMs."},
-    {"id": "infrastructure", "path": "infra", "status": "planned", "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."}
+    {
+      "id": "frontend",
+      "path": "apps/web",
+      "status": "partial",
+      "role": "Interface React com rotas em HashRouter, tokens flat monocromáticos e fontes locais. Login pelo estado de auth (lib/auth.ts) com comandos Tauri; o Axios só envia com provedor de token (ID token obtido do Rust a cada requisição). Notas: lista, criar (só título) e editor Markdown em #/notes/:id carregado sob demanda (CodeMirror 6 + react-markdown/remark-gfm; autosave por PATCH com version, 409, exclusão). Validado em Chromium headless (1440 e 390 px) nos estados de prévia; editor ainda não validado visualmente (Vite com React duplicado após instalar dependências). Bundle inicial 409 kB (130 kB gzip); chunk do editor 783 kB (261 kB gzip)."
+    },
+    {
+      "id": "tauri",
+      "path": "src-tauri",
+      "status": "partial",
+      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev (Hyprland/Wayland) só abre com WEBKIT_DISABLE_DMABUF_RENDERER=1 (npm run tauri:dev:wayland). Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth."
+    },
+    {
+      "id": "api",
+      "path": "apps/api",
+      "status": "partial",
+      "role": "Express/TypeScript com core (incl. autenticação jose + lista de sub), módulo notes montado em /v1/notes atrás do middleware, handler Lambda com claims do authorizer (não implantado). API local com DynamoDB Local; 28 testes, build e check:modules passam. Sem DynamoDB real nem AWS."
+    },
+    {
+      "id": "integrations",
+      "path": "apps/api/src/modules/integrations",
+      "status": "planned",
+      "role": "Conectores externos e sincronização."
+    },
+    {
+      "id": "mcp",
+      "path": "mcp",
+      "status": "planned",
+      "role": "Ferramentas limitadas para LLMs."
+    },
+    {
+      "id": "infrastructure",
+      "path": "infra",
+      "status": "planned",
+      "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."
+    }
   ],
   "contracts": {
     "http": "docs/arquitetura/api.md",
@@ -20,6 +56,8 @@
     "style": "styles/tokens.json"
   },
   "openDecisions": "docs/decisoes/pendencias.md",
-  "acceptedDecisions": ["docs/decisoes/2026-10-18_identidade.md"],
+  "acceptedDecisions": [
+    "docs/decisoes/2026-10-18_identidade.md"
+  ],
   "deployedResources": []
 }

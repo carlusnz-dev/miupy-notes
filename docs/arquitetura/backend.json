@@ -7,21 +7,69 @@
     "validation": "zod",
     "databaseClient": "@aws-sdk/lib-dynamodb",
     "lambdaAdapter": "serverless-http",
-    "publicRoutes": ["GET /health"],
-    "unmountedRoutes": ["GET /v1/notes", "POST /v1/notes", "GET /v1/notes/:id", "PATCH /v1/notes/:id", "DELETE /v1/notes/:id"],
-    "errorCodes": {"400": "VALIDATION_ERROR", "401": "UNAUTHORIZED", "404": "NOT_FOUND", "409": "CONFLICT", "413": "PAYLOAD_TOO_LARGE", "500": "INTERNAL_ERROR"},
-    "testCommand": "npm run test:api"
+    "publicRoutes": [
+      "GET /health"
+    ],
+    "errorCodes": {
+      "400": "VALIDATION_ERROR",
+      "401": "UNAUTHORIZED",
+      "403": "FORBIDDEN",
+      "404": "NOT_FOUND",
+      "409": "CONFLICT",
+      "413": "PAYLOAD_TOO_LARGE",
+      "500": "INTERNAL_ERROR"
+    },
+    "testCommand": "npm run test:api",
+    "authenticatedRoutes": [
+      "GET /v1/notes",
+      "POST /v1/notes",
+      "GET /v1/notes/:id",
+      "PATCH /v1/notes/:id",
+      "DELETE /v1/notes/:id"
+    ],
+    "authentication": {
+      "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
+      "lambda": "lambdaAuthorizerClaims: requestContext.authorizer.jwt.claims (não implantado)",
+      "authorization": "principalFromClaims: ownerId = sub; ALLOWED_SUBS fora do Git; vazio nega todos",
+      "source": "apps/api/src/core/http/authenticate.ts"
+    },
+    "localRun": {
+      "api": "npm run dev:api (127.0.0.1:4000; exige DYNAMODB_ENDPOINT em loopback)",
+      "db": "npm run dev:db (amazon/dynamodb-local:3.3.1, volume miupy-dynamodb) + npm run db:create-table",
+      "env": "apps/api/.env.development (versionado, sem segredo) + .env.local (ignorado)"
+    }
   },
   "core": {
-    "domain": ["OwnedEntity", "AppError"],
+    "domain": [
+      "OwnedEntity",
+      "AppError"
+    ],
     "repository": "BaseRepository<TEntity>",
     "service": "BaseService<TEntity, TRepository>",
     "controller": "BaseController<TService>",
-    "http": ["errorHandler", "requirePrincipal"],
+    "http": [
+      "errorHandler",
+      "requirePrincipal",
+      "authenticate",
+      "bearerTokenClaims",
+      "lambdaAuthorizerClaims",
+      "principalFromClaims"
+    ],
     "dynamo": "createDynamoClient"
   },
   "moduleConvention": {
-    "required": ["domain/", "repository/", "services/", "controllers/", "dto/input.ts", "dto/output.ts", "dto/adapter.ts", "routes/", "module.ts", "index.ts"],
+    "required": [
+      "domain/",
+      "repository/",
+      "services/",
+      "controllers/",
+      "dto/input.ts",
+      "dto/output.ts",
+      "dto/adapter.ts",
+      "routes/",
+      "module.ts",
+      "index.ts"
+    ],
     "externalImport": "Somente o index.ts público de outro módulo.",
     "composition": "module.ts cria repository, service, controller e router; index.ts exporta contrato de service e factory.",
     "validationCommand": "npm run check:modules"
@@ -36,16 +84,44 @@
       "repository": "DynamoNotesRepository",
       "publicEntry": "apps/api/src/modules/notes/index.ts",
       "httpContract": "apps/api/src/modules/notes/contract.ts (schemas Zod de saída; importado pelo cliente web; só depende de zod)",
-      "routeMount": "disabled-until-auth",
-      "operations": ["list", "create", "findById", "update", "delete"],
+      "routeMount": "authenticated",
+      "operations": [
+        "list",
+        "create",
+        "findById",
+        "update",
+        "delete"
+      ],
       "testRepository": "MemoryNotesRepository",
-      "persistence": {"table": "NOTES_TABLE_NAME (não criada)", "pk": "USER#<ownerId>", "sk": "NOTE#<id>", "list": "Query pk + begins_with(sk, NOTE#); cursor opaco com o último id", "concurrency": "PutCommand condicional em version", "delete": "DeleteCommand condicional em attribute_exists(pk)"},
-      "verification": "2026-10-18: 18 testes — rotas com principal falso (401, CRUD, 404, 409, 413, paginação, isolamento, Zod, formato de erro), repositório DynamoDB com cliente falso e service. Sem DynamoDB real."
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (local: miupy-notes-local no DynamoDB Local; AWS: não criada)",
+        "pk": "USER#<ownerId>",
+        "sk": "NOTE#<id>",
+        "list": "Query pk + begins_with(sk, NOTE#); cursor opaco com o último id",
+        "concurrency": "PutCommand condicional em version",
+        "delete": "DeleteCommand condicional em attribute_exists(pk)"
+      },
+      "verification": "2026-10-18 (sessão 05): 28 testes — rotas com principal falso, autenticação com chaves geradas no teste (401 sem token, malformado, outra chave, alg none, expirado, aud/iss errados; 403 sub fora da lista; acesso permitido com as duas formas de iss; claims do authorizer; JWKS indisponível não vira 401), repositório DynamoDB com cliente falso e service. Manual: curl na API local (401 sem token e com token inválido) e criação de nota pela janela Tauri com login Google real e DynamoDB Local. Sem DynamoDB real."
     },
-    {"id": "events", "status": "planned"},
-    {"id": "finance", "status": "planned"},
-    {"id": "library", "status": "planned"},
-    {"id": "integrations", "status": "planned"},
-    {"id": "exports", "status": "planned"}
+    {
+      "id": "events",
+      "status": "planned"
+    },
+    {
+      "id": "finance",
+      "status": "planned"
+    },
+    {
+      "id": "library",
+      "status": "planned"
+    },
+    {
+      "id": "integrations",
+      "status": "planned"
+    },
+    {
+      "id": "exports",
+      "status": "planned"
+    }
   ]
 }

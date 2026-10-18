@@ -1,6 +1,6 @@
 # API — template
 
-Express + TypeScript para Lambda via `serverless-http`. O servidor local responde apenas `GET /health`; o módulo `notes` implementa listar (cursor), criar, ler, atualizar (com `version` e `409`) e excluir, mas **não é montado** enquanto não houver verificação real de token. Contrato em `docs/arquitetura/api.md`. Não há tabela, Lambda ou API Gateway implantados.
+Express + TypeScript para Lambda via `serverless-http`. O servidor local responde `GET /health` e monta `/v1/notes` (listar com cursor, criar, ler, atualizar com `version` e `409`, excluir) atrás da verificação do ID token do Google (`core/http/authenticate.ts`) e da lista `ALLOWED_SUBS`. Contrato em `docs/arquitetura/api.md`. Não há tabela, Lambda ou API Gateway implantados.
 
 ```text
 src/
@@ -25,6 +25,6 @@ Classes concretas herdam contratos abstratos de `core/`. Outro módulo só impor
 
 ## Comandos
 
-Da raiz: `npm run dev:api`, `npm run build:api`, `npm run test:api` e `npm run check:modules`. A porta local padrão é 4000 e o listener usa `127.0.0.1`.
+Da raiz: `npm run dev:db` (DynamoDB Local em Docker, `127.0.0.1:8000`), `npm run db:create-table`, `npm run dev:api`, `npm run build:api`, `npm run test:api` e `npm run check:modules`. A porta local padrão é 4000 e o listener usa `127.0.0.1`. Variáveis: `apps/api/.env.development` (endpoint e tabela locais, versionado) e `.env.local` na raiz (ignorado): `GOOGLE_CLIENT_ID`, `ALLOWED_SUBS` (modelo em `.env.example`). `server.ts` recusa `DYNAMODB_ENDPOINT` fora de loopback e usa credenciais falsas.
 
-Antes de montar `/v1/notes`, converter as claims do JWT authorizer em `res.locals.principal` e aplicar a lista de `sub` permitidos (ver `docs/decisoes/2026-10-18_identidade.md`). Nunca aceitar `ownerId` do corpo HTTP como autoridade. Definir `NOTES_TABLE_NAME` e IAM mínimo ao compor a Lambda. O handler em `src/lambda.ts` ainda precisa de bundle para deployment; Terraform não o usa nesta etapa.
+A Lambda troca a fonte de claims por `lambdaAuthorizerClaims` (`requestContext.authorizer.jwt.claims`), mantendo a mesma lista de `sub`. Nunca aceitar `ownerId` do corpo HTTP como autoridade. Definir `NOTES_TABLE_NAME` e IAM mínimo ao compor a Lambda. O handler em `src/lambda.ts` ainda precisa de bundle para deployment; Terraform não o usa nesta etapa.

@@ -1,7 +1,7 @@
 # Identidade: Google OIDC direto, um único usuário
 
 - **Data:** 2026-10-18
-- **Estado:** aceita pelo proprietário; **não implementada**. Nenhum cliente OAuth, projeto Google Cloud ou recurso AWS foi criado.
+- **Estado:** aceita; **implementada localmente em 2026-10-18 (sessão 05)**: cliente OAuth *Desktop app* criado pelo proprietário (projeto `miupy-notes`, consentimento em *Testing*), login real feito, verificação na API local com `jose`. JWT authorizer e recursos AWS **não** criados.
 - **Resolve:** item 1 de [`pendencias.md`](pendencias.md).
 
 ## Contexto
@@ -33,9 +33,11 @@ App pessoal Tauri com API Gateway HTTP + Lambda. A API precisa negar requisiçõ
 - Em modo *Testing*, autorizações expiram em 7 dias, **exceto** quando só `openid`, `email` e `profile` são pedidos — o caso desta decisão.
 - Tokens no desktop devem ficar no cofre do sistema operacional, não em `localStorage` nem no bundle.
 
-## Pendente para implementar
+## Implementação (sessão 05)
 
-Criar projeto e cliente OAuth no Google Cloud (ação do proprietário); confirmar `iss` real; escolher biblioteca/plugin Tauri para loopback e armazenamento seguro; middleware que converte claims do authorizer em `Principal` com lista de `sub`; Terraform do authorizer. Cada passo exige autorização para tocar contas reais.
+- `iss` real emitido com a conta do proprietário: `https://accounts.google.com` (um valor; serve ao JWT authorizer). A API local aceita as duas formas documentadas.
+- Escolhas do proprietário: verificação no Express com `jose`; loopback próprio em Rust (sem plugin OAuth); cofre via crate `keyring` no Rust; `client_secret`, se exigido, lido em runtime pelo Rust, nunca no bundle.
+- Pendente: Terraform do authorizer; configuração de release do app; confirmar se o Google aceita a troca sem `client_secret` (não testado isoladamente: o login real rodou com `.env.local` do proprietário, cujo conteúdo não foi lido).
 
 ## Fontes (consultadas em 2026-10-18)
 
