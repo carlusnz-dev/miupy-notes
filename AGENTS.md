@@ -28,7 +28,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 
 ## Skills locais
 
-Leia a skill adequada em `skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge e `relatorio` ao encerrar trabalho. Claude encontra atalhos equivalentes em `.claude/skills/`.
+Leia a skill adequada em `skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge e `relatorio` ao encerrar trabalho. Claude encontra atalhos equivalentes em `.claude/skills/`; Codex descobre as mesmas skills por links em `.agents/skills/` e agentes em `.codex/agents/`.
 
 ## Fim de sessão
 

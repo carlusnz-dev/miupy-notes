@@ -8,4 +8,4 @@
 | [`validar-design`](validar-design/SKILL.md) | Ao conferir telas em navegador com MCP disponível. |
 | [`revisar-pr`](revisar-pr/SKILL.md) | Ao revisar um diff ou PR antes de merge. |
 
-Estas instruções adaptam práticas gerais observadas no `miupy` ao escopo deste projeto. Os atalhos em `.claude/skills/` apontam para esta fonte única. Codex lê `AGENTS.md` e pode abrir os arquivos daqui.
+Estas instruções adaptam práticas gerais observadas no `miupy` ao escopo deste projeto. Os atalhos em `.claude/skills/` apontam para esta fonte única; `.agents/skills/` tem links simbólicos para cá, descobertos pelo Codex.
