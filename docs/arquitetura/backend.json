@@ -8,7 +8,9 @@
     "databaseClient": "@aws-sdk/lib-dynamodb",
     "lambdaAdapter": "serverless-http",
     "publicRoutes": ["GET /health"],
-    "unmountedRoutes": ["POST /v1/notes", "GET /v1/notes/:id"]
+    "unmountedRoutes": ["GET /v1/notes", "POST /v1/notes", "GET /v1/notes/:id", "PATCH /v1/notes/:id", "DELETE /v1/notes/:id"],
+    "errorCodes": {"400": "VALIDATION_ERROR", "401": "UNAUTHORIZED", "404": "NOT_FOUND", "409": "CONFLICT", "413": "PAYLOAD_TOO_LARGE", "500": "INTERNAL_ERROR"},
+    "testCommand": "npm run test:api"
   },
   "core": {
     "domain": ["OwnedEntity", "AppError"],
@@ -34,7 +36,10 @@
       "repository": "DynamoNotesRepository",
       "publicEntry": "apps/api/src/modules/notes/index.ts",
       "routeMount": "disabled-until-auth",
-      "operations": ["create", "findById"]
+      "operations": ["list", "create", "findById", "update", "delete"],
+      "testRepository": "MemoryNotesRepository",
+      "persistence": {"table": "NOTES_TABLE_NAME (não criada)", "pk": "USER#<ownerId>", "sk": "NOTE#<id>", "list": "Query pk + begins_with(sk, NOTE#); cursor opaco com o último id", "concurrency": "PutCommand condicional em version", "delete": "DeleteCommand condicional em attribute_exists(pk)"},
+      "verification": "2026-10-18: 18 testes — rotas com principal falso (401, CRUD, 404, 409, 413, paginação, isolamento, Zod, formato de erro), repositório DynamoDB com cliente falso e service. Sem DynamoDB real."
     },
     {"id": "events", "status": "planned"},
     {"id": "finance", "status": "planned"},
