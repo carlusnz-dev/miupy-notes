@@ -2,7 +2,7 @@
 
 ## Identidade
 
-Decisão pendente: provedor de identidade e fluxo adequado ao desktop Tauri. Validar token no API Gateway ou Lambda e resolver o usuário no backend. Toda consulta e chave de objeto são derivadas da identidade validada. Rotas pessoais não são públicas.
+Decidido em [`../decisoes/2026-10-18_identidade.md`](../decisoes/2026-10-18_identidade.md) (não implementado): Google OIDC com PKCE e loopback no navegador do sistema, JWT authorizer no API Gateway e lista de `sub` permitidos no backend. `ownerId` = `sub`. Toda consulta e chave de objeto são derivadas da identidade validada. Rotas pessoais não são públicas.
 
 ## Google
 
