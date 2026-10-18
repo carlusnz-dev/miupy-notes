@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
     "check:modules": "node scripts/check-modules.mjs",
-    "test": "tsx --test src/app.test.ts src/modules/notes/services/notes.service.test.ts"
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1152.0",
