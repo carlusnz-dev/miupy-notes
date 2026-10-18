@@ -1,6 +1,6 @@
 # Contrato HTTP proposto
 
-**Estado:** rascunho para o primeiro fluxo vertical. Apenas `GET /health` existe no template Express; as rotas abaixo ainda não são montadas. Base planejada: `/v1`. JSON UTF-8. O cliente Axios está centralizado em `apps/web/src/lib/api-client.ts`; autenticação, cancelamento e tratamento de erro ainda serão implementados antes de usar dados reais.
+**Estado:** rascunho para o primeiro fluxo vertical. Apenas `GET /health` existe no template Express (verificado em servidor local em 2026-10-18: `200 {"status":"ok"}`); as rotas abaixo ainda não são montadas e respondem `404 NOT_FOUND`. Base planejada: `/v1`. JSON UTF-8. O cliente Axios está centralizado em `apps/web/src/lib/api-client.ts`; autenticação, cancelamento e tratamento de erro ainda serão implementados antes de usar dados reais.
 
 | Método | Caminho | Objetivo |
 |---|---|---|

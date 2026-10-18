@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "partial-unverified-dependencies",
+  "status": "partial-verified",
   "root": "apps/api/src",
   "runtime": {
     "httpFramework": "express",

@@ -4,9 +4,9 @@
   "statusValues": ["planned", "template", "partial", "implemented", "verified"],
   "description": "Sistema pessoal Tauri + React com API serverless planejada.",
   "modules": [
-    {"id": "frontend", "path": "apps/web", "status": "partial", "role": "Interface React, rotas e estilo base; dependências novas declaradas mas não instaladas nem compiladas."},
-    {"id": "tauri", "path": "src-tauri", "status": "template", "role": "Casca desktop apontando para apps/web; janela não verificada nesta sessão."},
-    {"id": "api", "path": "apps/api", "status": "partial", "role": "Template Express/TypeScript, core, módulo notes e handler Lambda; notas não montadas sem autenticação; dependências não instaladas."},
+    {"id": "frontend", "path": "apps/web", "status": "partial", "role": "Interface React com rotas em HashRouter (início, quatro seções, 404 com título por rota), tokens flat monocromáticos, logo SVG e fontes WOFF2 locais; dependências instaladas, build verificado e telas validadas em Chromium headless (1440 e 390 px). Sem dados nem chamadas à API."},
+    {"id": "tauri", "path": "src-tauri", "status": "template", "role": "Casca desktop apontando para apps/web; cargo check passa; janela (tauri dev) não verificada."},
+    {"id": "api", "path": "apps/api", "status": "partial", "role": "Template Express/TypeScript, core, módulo notes e handler Lambda; dependências instaladas; build, 3 testes e check:modules passam; servidor local responde GET /health 200 e rotas de notas 404 enquanto não há autenticação."},
     {"id": "integrations", "path": "apps/api/src/modules/integrations", "status": "planned", "role": "Conectores externos e sincronização."},
     {"id": "mcp", "path": "mcp", "status": "planned", "role": "Ferramentas limitadas para LLMs."},
     {"id": "infrastructure", "path": "infra", "status": "planned", "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."}
