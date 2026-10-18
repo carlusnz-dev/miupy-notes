@@ -2,11 +2,16 @@ import { lazy, Suspense, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
 import NotesPage from "./NotesPage";
+import { Settings, UserRound } from "lucide-react";
+import { SkeletonBody } from "./components/Skeleton";
 
 // O editor (CodeMirror + prévia Markdown) só carrega ao abrir uma nota.
 const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
+const SettingsPage = lazy(() => import("./SettingsPage"));
+const ProfilePage = lazy(() => import("./ProfilePage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
+import "./account-nav.css";
 
 const sections = [
   { path: "/notes", label: "Notas", description: "Ideias, páginas e conexões em um lugar." },
@@ -102,7 +107,7 @@ export default function App() {
             <NavLink end to="/">Visão geral</NavLink>
             {sections.map((section) => <NavLink key={section.path} to={section.path}>{section.label}</NavLink>)}
           </nav>
-          <div className="sidebar-footer">Um lugar para o que importa.</div>
+          <div className="sidebar-footer"><NavLink to="/profile"><UserRound size={16} /> Perfil</NavLink><NavLink to="/settings"><Settings size={16} /> Configurações</NavLink></div>
         </aside>
         <main className="main-content">
           <header className="topbar"><span>miupy / notes</span><span>ESTRUTURA INICIAL · 2026</span></header>
@@ -110,7 +115,9 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/notes" element={<NotesPage />} />
-              <Route path="/notes/:id" element={<Suspense fallback={<div className="note-skeleton" role="status" aria-label="Carregando editor…" />}><NoteEditorPage /></Suspense>} />
+              <Route path="/notes/:id" element={<Suspense fallback={<SkeletonBody label="Carregando editor" lines={4} cards={1} />}><NoteEditorPage /></Suspense>} />
+              <Route path="/settings" element={<Suspense fallback={<SkeletonBody label="Carregando configurações" lines={4} />}><SettingsPage /></Suspense>} />
+              <Route path="/profile" element={<Suspense fallback={<SkeletonBody label="Carregando perfil" cards={5} />}><ProfilePage /></Suspense>} />
               {sections.filter((section) => section.path !== "/notes").map((section) => <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />)}
               <Route path="*" element={<NotFound />} />
             </Routes>
