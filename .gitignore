@@ -34,3 +34,6 @@ override.tf.json
 *.njsproj
 *.sln
 *.sw?
+
+# Saída do Playwright MCP (capturas, snapshots, console)
+.playwright-mcp/
