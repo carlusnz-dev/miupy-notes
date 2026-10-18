@@ -5,8 +5,9 @@ import { errorHandler } from "./core/http/error-handler.js";
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "256kb" }));
+  // requestId antes do parser: erros de JSON também precisam dele na resposta.
   app.use((_req, res, next) => { res.locals.requestId = randomUUID(); next(); });
+  app.use(express.json({ limit: "256kb" }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 

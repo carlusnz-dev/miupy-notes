@@ -21,6 +21,14 @@ test("health responde sem acessar dados pessoais", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
 });
 
+test("JSON inválido responde 400 com requestId", async () => {
+  const response = await fetch(`${baseUrl}/health`, { method: "POST", headers: { "content-type": "application/json" }, body: "{" });
+  assert.equal(response.status, 400);
+  const body = await response.json() as { error: { code: string; requestId?: string } };
+  assert.equal(body.error.code, "VALIDATION_ERROR");
+  assert.equal(typeof body.error.requestId, "string");
+});
+
 test("notes não fica exposto antes de autenticação", async () => {
   const response = await fetch(`${baseUrl}/v1/notes`);
   assert.equal(response.status, 404);
