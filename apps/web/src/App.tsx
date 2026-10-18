@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, type CSSProperties } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
+import ArrowIcon from "./components/ArrowIcon";
 import PageTransition from "./components/PageTransition";
 import { SkeletonBody } from "./components/Skeleton";
 
@@ -34,15 +35,6 @@ const theme = {
   "--duration": `${tokens.motion.defaultDurationMs}ms`,
 } as CSSProperties;
 
-// As fontes locais não têm "↗"; o SVG evita fallback para fonte do sistema.
-function ArrowIcon() {
-  return (
-    <svg className="arrow-icon" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-      <path d="M4 12 12 4M5.5 4H12v6.5" fill="none" stroke="currentColor" strokeWidth="1.25" />
-    </svg>
-  );
-}
-
 function Feature({ label, description }: { label: string; description: string }) {
   usePageTitle(label);
   return (
@@ -72,35 +64,67 @@ function NotFound() {
 function Shell() {
   const { pathname } = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [pathname]);
-  const pageName = pathname === "/" ? "Visão geral" : pathname.startsWith("/notes/") ? "Editor de notas" : sections.find((section) => section.path === pathname)?.label ?? "Página não encontrada";
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [pathname]);
+  const pageName = pathname === "/"
+    ? "Visão geral"
+    : pathname.startsWith("/notes/")
+      ? "Editor de notas"
+      : sections.find((section) => section.path === pathname)?.label ?? "Página não encontrada";
 
-  return <div className="app-shell" style={theme}>
-    <div className="mesh" aria-hidden="true"><span /><span /></div>
-    <aside className="sidebar">
-      <NavLink className="brand" to="/" aria-label="miupy notes, início"><img src="/mark.svg" alt="" width="34" height="34" /><span>miupy<span className="brand-light"> / notes</span></span></NavLink>
-      <div className="nav-caption">ESPAÇOS</div>
-      <nav aria-label="Navegação principal"><NavLink end to="/">Visão geral</NavLink>{sections.map((section) => <NavLink key={section.path} to={section.path}>{section.label}</NavLink>)}</nav>
-      <div className="sidebar-footer">Um lugar para o que importa.</div>
-    </aside>
-    <main className="main-content">
-      <header className="topbar"><span>miupy / notes</span><span>{pageName}</span></header>
-      <div className={`page-scroll${pathname.startsWith("/notes/") ? " page-scroll-fill" : ""}`} ref={scrollRef}><div className={`page-content${pathname.startsWith("/notes/") ? " page-fill" : ""}`}>
-        <PageTransition pathname={pathname}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/notes" element={<NotesPage />} />
-            <Route path="/notes/:id" element={<Suspense fallback={<SkeletonBody label="Carregando editor…" lines={2} cards={1} cardHeight={380} />}><NoteEditorPage /></Suspense>} />
-            {sections.filter((section) => section.path !== "/notes").map((section) => <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />)}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </PageTransition>
-      </div></div>
-      <footer className="app-footer"><span>miupy notes</span><span>Seu acervo, seu tempo.</span></footer>
-    </main>
-  </div>;
+  return (
+    <div className="app-shell" style={theme}>
+      <div className="mesh" aria-hidden="true"><span /><span /></div>
+      <aside className="sidebar">
+        <NavLink className="brand" to="/" aria-label="miupy notes, início">
+          <img src="/mark.svg" alt="" width="34" height="34" />
+          <span>miupy<span className="brand-light"> / notes</span></span>
+        </NavLink>
+        <div className="nav-caption">ESPAÇOS</div>
+        <nav aria-label="Navegação principal">
+          <NavLink end to="/">Visão geral</NavLink>
+          {sections.map((section) => (
+            <NavLink key={section.path} to={section.path}>{section.label}</NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-footer">Um lugar para o que importa.</div>
+      </aside>
+      <main className="main-content">
+        <header className="topbar">
+          <span>miupy / notes</span>
+          <span>{pageName}</span>
+        </header>
+        <div className="page-scroll" ref={scrollRef}>
+          <div className="page-content">
+            <PageTransition pathname={pathname}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/notes" element={<NotesPage />} />
+                <Route path="/notes/:id" element={
+                  <Suspense fallback={<SkeletonBody label="Carregando editor…" lines={2} cards={1} cardHeight={380} />}>
+                    <NoteEditorPage />
+                  </Suspense>
+                } />
+                {sections.filter((section) => section.path !== "/notes").map((section) => (
+                  <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
+                ))}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </PageTransition>
+          </div>
+        </div>
+        <footer className="app-footer">
+          <span>miupy notes</span>
+          <span>Seu acervo, seu tempo.</span>
+        </footer>
+      </main>
+    </div>
+  );
 }
 
 export default function App() {
-  return <HashRouter><Shell /></HashRouter>;
+  return (
+    <HashRouter><Shell /></HashRouter>
+  );
 }

@@ -45,6 +45,9 @@ export function useAllNotes(enabled = true) {
       return { items, truncated: true };
     },
     enabled: useSignedIn() && enabled,
+    // A consulta pode fazer até 50 requisições sequenciais; evite refazê-la a cada foco.
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
