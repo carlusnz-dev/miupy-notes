@@ -9,6 +9,7 @@ export class NoteDtoAdapter {
       title: note.title,
       body: note.body,
       tags: note.tags,
+      folderId: note.folderId,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
       version: note.version,

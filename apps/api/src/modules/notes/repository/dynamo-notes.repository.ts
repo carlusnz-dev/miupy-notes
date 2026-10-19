@@ -11,6 +11,8 @@ const storedNoteSchema = z.object({
   title: z.string(),
   body: z.string(),
   tags: z.array(z.string()),
+  // Notas gravadas antes das pastas não têm o atributo: ficam na raiz.
+  folderId: z.uuid().nullable().default(null),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   version: z.int().positive(),
@@ -20,7 +22,7 @@ const cursorSchema = z.strictObject({ id: z.uuid() });
 
 function toNote(item: Record<string, unknown>): Note {
   const data = storedNoteSchema.parse(item);
-  return new Note(data.id, data.ownerId, data.title, data.body, data.tags, data.createdAt, data.updatedAt, data.version);
+  return new Note(data.id, data.ownerId, data.title, data.body, data.tags, data.folderId, data.createdAt, data.updatedAt, data.version);
 }
 
 function keyOf(ownerId: string, id: string) {

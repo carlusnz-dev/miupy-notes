@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
+import { Router } from "express";
 import { createLocalJWKSet, errors, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWTPayload } from "jose";
 import { createApp } from "../../../app.js";
 import { authenticate, bearerTokenClaims, lambdaAuthorizerClaims, parseAllowedSubs, principalFromClaims } from "../../../core/http/authenticate.js";
@@ -22,8 +23,8 @@ before(async () => {
   foreignKey = (await generateKeyPair("RS256")).privateKey;
   signingKey = google.privateKey;
   const jwks = createLocalJWKSet({ keys: [{ ...(await exportJWK(google.publicKey)), kid: "test-key", alg: "RS256" }] });
-  const notesRouter = createNotesRouter(new NotesController(new NotesServiceImpl(new MemoryNotesRepository())));
-  server = createServer(createApp({ authenticate: authenticate(bearerTokenClaims(jwks, audience), allowedSubs), notesRouter }));
+  const notesRouter = createNotesRouter(new NotesController(new NotesServiceImpl(new MemoryNotesRepository(), { exists: async () => false })));
+  server = createServer(createApp({ authenticate: authenticate(bearerTokenClaims(jwks, audience), allowedSubs), notesRouter, foldersRouter: Router() }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Porta de teste indisponível.");
