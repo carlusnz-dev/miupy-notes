@@ -17,3 +17,7 @@ Exportação JSON deve conter `schemaVersion`, `exportedAt`, `owner`, manifestos
 ## Finanças
 
 [Modelo de lançamentos e bancos](dados-finance.md): chaves por proprietário na mesma tabela, versão, centavos, moeda, logo limitado e nome histórico do banco. Verificado em DynamoDB Local; sem implantação AWS.
+
+## Pastas de notas
+
+Itens `FOLDER#<id>` na partição `USER#<ownerId>`, com nome, parentId, datas e version. Notas guardam folderId opcional no armazenamento (legado vira null na saída). Pai de pasta é imutável; só criação e renomeação. Limite de 500 pastas é verificado por leitura, sem contador atômico; criação concorrente pode ultrapassar esse limite. Profundidade máxima de oito níveis. Contrato e limites em [api.md](api.md).

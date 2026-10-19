@@ -14,7 +14,7 @@
       "id": "frontend",
       "path": "apps/web",
       "status": "partial",
-      "role": "Interface React em HashRouter, tokens monocromáticos e fontes locais. Identidade Tauri e Axios autenticado; notas com cache React Query, autosave versionado, perfil e preferências locais. Sidebar desktop recolhível (76 px), resize 200–380 px por pointer/teclado e perfil/configurações na base; mobile sem resize. ButtonGroup com indicador GSAP elastic e períodos do dashboard com power2.inOut. Shell validado via Playwright MCP em 1440/390 px, foco e movimento reduzido. Finanças: lista paginada até 50, totais globais por moeda, criação/edição modal, detalhe em rota própria, bancos com upload/URL e CSV. Fluxo validado por MCP com API/DynamoDB Local sintéticos. Novo editor/pastas ainda aguardam integração. Tauri/WebKit não repetido; chunks acima de 500 kB."
+      "role": "Interface React em HashRouter, tokens monocromáticos e fontes locais. Identidade Tauri e Axios autenticado; notas com cache React Query, autosave versionado, perfil e preferências locais. Sidebar desktop recolhível (76 px), resize 200–380 px por pointer/teclado e perfil/configurações na base; mobile sem resize. ButtonGroup com indicador GSAP elastic e períodos do dashboard com power2.inOut. Shell validado via Playwright MCP em 1440/390 px, foco e movimento reduzido. Finanças: lista paginada até 50, totais globais por moeda, criação/edição modal, detalhe em rota própria, bancos com upload/URL e CSV. Fluxo validado por MCP com API/DynamoDB Local sintéticos. Notas em árvore com pastas persistentes, criação direta e foco no título; Live Preview editável CodeMirror e fonte via ícone, toolbar flutuante, badges e tags. Fila de autosave por nota com recuperação em memória e proteção por sessão. Select, Modal GSAP, MoneyInput e DatePicker compartilhados; cartão aceita parcelas. Títulos usam serifa principal (Silvex apenas local ignorada; Instrument fallback; Bodoni Moda OFL opcional). Tauri/WebKit não repetido; chunks acima de 500 kB."
     },
     {
       "id": "tauri",
@@ -26,7 +26,7 @@
       "id": "api",
       "path": "apps/api",
       "status": "partial",
-      "role": "Express/TypeScript com autenticação jose + lista de sub, módulos notes e finance autenticados em /v1; handler Lambda não implantado. API usa DynamoDB Local. Finanças verificadas em tabela sintética real local e MCP (sem dados pessoais); CRUD/versionamento, bancos, summary e CSV global. Sem recursos AWS implantados."
+      "role": "Express/TypeScript com autenticação jose + lista de sub, módulos notes, folders e finance autenticados em /v1; handler Lambda não implantado. API usa DynamoDB Local. Finanças verificadas em tabela sintética real local e MCP (sem dados pessoais); CRUD/versionamento, bancos, summary e CSV global. Sem recursos AWS implantados."
     },
     {
       "id": "integrations",
@@ -56,7 +56,13 @@
       "id": "finance",
       "path": "apps/api/src/modules/finance",
       "status": "partial",
-      "role": "API e web de lançamentos e bancos, centavos/moeda explícita, dashboard e CSV global; persistência DynamoDB Local verificada. Contrato api-finance.md. Sem snapshot transacional, integrações bancárias ou AWS."
+      "role": "API e web de lançamentos e bancos, centavos/moeda explícita, dashboard e CSV global; persistência DynamoDB Local verificada. Contrato api-finance.md. Sem snapshot transacional, integrações bancárias ou AWS. Parcelas 1–120 somente para saída/cartão; null em legado. Valor total sem geração automática de parcelas futuras; detalhe e CSV exibem contagem."
+    },
+    {
+      "id": "folders",
+      "path": "apps/api/src/modules/folders",
+      "status": "partial",
+      "role": "Criar/listar/renomear pastas; pai imutável, sem exclusão nesta etapa para evitar ciclos/órfãos concorrentes. Notas podem mover entre pastas. Persistência e isolamento verificados em DynamoDB Local sintético."
     }
   ],
   "contracts": {

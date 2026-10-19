@@ -38,7 +38,10 @@
       "POST /v1/finance/banks",
       "GET /v1/finance/banks/:id",
       "PATCH /v1/finance/banks/:id",
-      "DELETE /v1/finance/banks/:id"
+      "DELETE /v1/finance/banks/:id",
+      "GET /v1/folders",
+      "POST /v1/folders",
+      "PATCH /v1/folders/:id"
     ],
     "authentication": {
       "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
@@ -155,6 +158,23 @@
     {
       "id": "exports",
       "status": "planned"
+    },
+    {
+      "id": "folders",
+      "status": "partial",
+      "path": "apps/api/src/modules/folders",
+      "publicEntry": "apps/api/src/modules/folders/index.ts",
+      "operations": [
+        "list",
+        "create",
+        "rename"
+      ],
+      "persistence": {
+        "pk": "USER#<ownerId>",
+        "sk": "FOLDER#<id>",
+        "parent": "imutável; sem exclusão; mesma tabela de notas"
+      },
+      "verification": "2026-10-19: testes de serviço, rotas e DynamoDB Local sintético aprovados; sem AWS."
     }
   ]
 }

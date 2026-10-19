@@ -3,9 +3,7 @@ import { apiClient, toApiError } from "./api-client";
 
 export type { NoteListOutput } from "../../../api/src/modules/notes/contract";
 
-// `folderId` é opcional no tipo só porque amostras de desenvolvimento de outras telas (Home, Perfil) ainda não o
-// declaram; a API sempre o devolve. Leia com `note.folderId ?? null`.
-export type NoteOutput = Omit<ContractNoteOutput, "folderId"> & { folderId?: string | null };
+export type NoteOutput = ContractNoteOutput;
 
 export async function listNotes(options: { cursor?: string; limit?: number; signal?: AbortSignal } = {}): Promise<NoteListOutput> {
   try {

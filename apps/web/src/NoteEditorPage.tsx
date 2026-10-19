@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { ArrowLeft, Save, Trash2, Settings, Type } from "lucide-react";
 import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
 import TagInput from "./components/TagInput";
+import Modal from "./components/Modal";
 import { SkeletonBody } from "./components/Skeleton";
 import type { ApiError } from "./lib/api-client";
 import { getAuthSessionVersion, useAuth } from "./lib/auth";
@@ -58,6 +59,7 @@ function NoteEditorSession() {
   const sample = useMemo(() => previewNote(searchParams.get("estado")), [searchParams]);
   const editorRef = useRef<LiveMarkdownEditorHandle>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const noteQuery = useNote(id);
   const deleteMutation = useDeleteNote();
   const preferences = useEditorPreferences();
@@ -258,23 +260,14 @@ function NoteEditorSession() {
         </div>
       </div>
 
-      {confirmDelete && (
-        <div className="state-panel editor-banner" role="alertdialog" aria-labelledby="delete-title">
-          <strong id="delete-title">Excluir esta nota?</strong>
-          <p>A exclusão é definitiva: ainda não há lixeira.</p>
-          <div className="editor-actions">
-            <button type="button" className="button" onClick={() => void remove()} disabled={deleting}>{deleting ? "Excluindo…" : "Excluir definitivamente"}</button>
-            <button type="button" className="button button-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancelar</button>
-          </div>
+      <Modal open={confirmDelete} title="Excluir esta nota?" onClose={() => setConfirmDelete(false)} busy={deleting} initialFocusRef={cancelDeleteRef}>
+        <p>A exclusão é definitiva: ainda não há lixeira.</p>
+        {deleteError && <p role="alert">{deleteError}</p>}
+        <div className="modal-actions">
+          <button ref={cancelDeleteRef} type="button" className="button button-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancelar</button>
+          <button type="button" className="button" onClick={() => void remove()} disabled={deleting}>{deleting ? "Excluindo…" : "Excluir definitivamente"}</button>
         </div>
-      )}
-
-      {deleteError && (
-        <div className="state-panel editor-banner" role="alert">
-          <strong>Não foi possível excluir a nota</strong>
-          <p>{deleteError}</p>
-        </div>
-      )}
+      </Modal>
 
       {recovered && (dirty || save.status !== "idle") && (
         <div className="state-panel editor-banner" role="status">
