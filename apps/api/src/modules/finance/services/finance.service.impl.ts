@@ -32,7 +32,7 @@ export class FinanceServiceImpl extends FinanceService {
   private async transactionData(ownerId: string, input: TransactionInput) {
     let bankTitle: string | null = null;
     if (input.bankId) bankTitle = (await this.findById(ownerId, input.bankId, "bank")).data.title;
-    return { ...input, bankTitle };
+    return { ...input, installmentCount: input.installmentCount ?? null, bankTitle };
   }
   async create(ownerId: string, kind: RecordKind, input: TransactionInput | BankInput) {
     const now = new Date().toISOString();
@@ -52,7 +52,11 @@ export class FinanceServiceImpl extends FinanceService {
       const transaction = input as TransactionInput;
       // Banco removido permanece como fotografia histórica quando o vínculo não muda.
       const bankTitle = current.data.kind === "transaction" && current.data.bankId === transaction.bankId ? current.data.bankTitle : (await this.transactionData(ownerId, transaction)).bankTitle;
-      data = { kind, ...transaction, bankTitle, ...metadata };
+      const isCard = transaction.direction === "expense" && transaction.paymentMethod === "card";
+      const previousCount = current.data.kind === "transaction" ? current.data.installmentCount ?? null : null;
+      const installmentCount = transaction.installmentCount !== undefined
+        ? transaction.installmentCount : isCard ? previousCount : null;
+      data = { kind, ...transaction, installmentCount, bankTitle, ...metadata };
     }
     const record = new FinanceRecord(ownerId, data);
     if (!await this.repository.update(record, input.version)) throw conflict();
@@ -83,7 +87,7 @@ export class FinanceServiceImpl extends FinanceService {
     return { currencies: [...totals.values()] };
   }
   async *csv(ownerId: string) {
-    yield "\uFEFF" + ["ID", "Título", "Valor (centavos)", "Moeda", "Entrada/saída", "Data", "Categoria", "Banco", "Tags", "Origem", "Vínculo", "Mês", "Método"].map(csvCell).join(",") + "\r\n";
-    for await (const t of this.allTransactions(ownerId)) yield [t.id,t.title,t.amountCents,t.currency,t.direction,t.date,t.category,t.bankTitle,t.tags.join("; "),t.source,t.link,t.linkedMonth,t.paymentMethod].map(csvCell).join(",") + "\r\n";
+    yield "\uFEFF" + ["ID", "Título", "Valor (centavos)", "Moeda", "Entrada/saída", "Data", "Categoria", "Banco", "Tags", "Origem", "Vínculo", "Mês", "Método", "Parcelas"].map(csvCell).join(",") + "\r\n";
+    for await (const t of this.allTransactions(ownerId)) yield [t.id,t.title,t.amountCents,t.currency,t.direction,t.date,t.category,t.bankTitle,t.tags.join("; "),t.source,t.link,t.linkedMonth,t.paymentMethod,t.installmentCount].map(csvCell).join(",") + "\r\n";
   }
 }

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { Router } from 'express';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
+import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { CreateTableCommand, DeleteTableCommand } from '@aws-sdk/client-dynamodb';
 import { createApp } from '../../../app.js';
 import { authenticate, bearerTokenClaims } from '../../../core/http/authenticate.js';
@@ -14,7 +15,7 @@ import { DynamoFinanceRepository } from '../repository/dynamo-finance.repository
 import { FinanceServiceImpl, csvCell } from '../services/finance.service.impl.js';
 import { FinanceController } from '../controllers/finance.controller.js';
 import { createFinanceRouter } from './finance.routes.js';
-import type { Transaction, Bank, TransactionInput } from '../contract.js';
+import { transactionOutputSchema, type Transaction, type Bank, type TransactionInput } from '../contract.js';
 
 class MemoryRepository extends FinanceRepository {
   readonly items = new Map<string, FinanceRecord>();
@@ -146,4 +147,81 @@ test('logos grandes respeitam 400 KiB e paginação continua no limite de 1 MiB 
   while (cursor) { const page = await repository.list('large-banks','bank',50,cursor); collected.push(...page.items); cursor=page.nextCursor; }
   assert.deepEqual(new Set(collected.map(record=>record.id)),ids);
   assert.deepEqual((await repository.list('alice','bank',50)).items,[]);
+});
+test('cartão aceita parcelas 3, 1, null ou omitidas sem dividir valor nem gerar lançamentos',async () => {
+  const before = await service.summary('alice');
+  const previous = before.currencies.find(total => total.currency === 'BRL')!;
+  for (const fields of [{installmentCount:3},{installmentCount:1},{installmentCount:null},{}]) {
+    const created = await create({...input,paymentMethod:'card',...fields});
+    assert.equal(created.installmentCount,'installmentCount' in fields ? fields.installmentCount : null);
+    assert.equal(created.amountCents,input.amountCents);
+    const read = await (await call('alice',`/transactions/${created.id}`)).json() as Transaction;
+    assert.equal(read.installmentCount,created.installmentCount);
+  }
+  const after = (await service.summary('alice')).currencies.find(total => total.currency === 'BRL')!;
+  assert.equal(after.count-previous.count,4);
+  assert.equal(after.expenseCents-previous.expenseCents,4*input.amountCents);
+});
+test('parcelas inválidas e número em não-cartão retornam 400, null explícito é aceito',async () => {
+  for (const installmentCount of [-1,0,1.5,121,'3',true]) {
+    await status('alice','/transactions','POST',{...input,paymentMethod:'card',installmentCount},400);
+  }
+  for (const paymentMethod of ['pix','cash','transfer','other']) {
+    await status('alice','/transactions','POST',{...input,paymentMethod,installmentCount:3},400);
+    const created = await create({...input,paymentMethod:paymentMethod as TransactionInput['paymentMethod'],installmentCount:null});
+    assert.equal(created.installmentCount,null);
+  }
+  await status('alice','/transactions','POST',{...input,direction:'income',paymentMethod:null,installmentCount:3},400);
+  assert.equal((await create({...input,direction:'income',paymentMethod:null,installmentCount:null})).installmentCount,null);
+});
+test('editar parcelas respeita versão, omissão preserva cartão e null explícito limpa',async () => {
+  const created = await create({...input,paymentMethod:'card',installmentCount:3});
+  const body = {...input,paymentMethod:'card'};
+  const update = async (version: number,fields: Record<string,unknown>) => {
+    const response = await call('alice',`/transactions/${created.id}`,'PATCH',{...body,...fields,version});
+    assert.equal(response.status,200); return await response.json() as Transaction;
+  };
+  assert.equal((await update(1,{installmentCount:6})).installmentCount,6);
+  await status('alice',`/transactions/${created.id}`,'PATCH',{...body,installmentCount:2,version:1},409);
+  const preserved = await update(2,{title:'Título revisado'}); assert.equal(preserved.installmentCount,6); assert.equal(preserved.version,3);
+  assert.equal((await update(3,{installmentCount:null})).installmentCount,null);
+  assert.equal((await update(4,{})).installmentCount,null);
+  await status('alice',`/transactions/${created.id}`,'PATCH',{...input,installmentCount:3,version:5},400);
+  await status('bob',`/transactions/${created.id}`,'PATCH',{...body,installmentCount:3,version:5},404);
+});
+test('trocar cartão para outros métodos ou entrada limpa parcelas quando omitidas',async () => {
+  for (const change of [{paymentMethod:'pix'},{paymentMethod:'cash'},{paymentMethod:'transfer'},{paymentMethod:'other'},{direction:'income',paymentMethod:null}]) {
+    const created = await create({...input,paymentMethod:'card',installmentCount:3});
+    const response = await call('alice',`/transactions/${created.id}`,'PATCH',{...input,...change,version:1});
+    assert.equal(response.status,200); const updated = await response.json() as Transaction;
+    assert.equal(updated.installmentCount,null); assert.equal(updated.amountCents,input.amountCents);
+  }
+});
+test('CSV acrescenta Parcelas ao final e mantém valores totais e segurança',async () => {
+  const created = await create({...input,title:'=FÓRMULA "parcelada"',paymentMethod:'card',installmentCount:120});
+  const response = await call('alice','/export.csv'); const csv = await response.text();
+  assert.ok(csv.split('\r\n')[0].endsWith(',"Método","Parcelas"'));
+  const line = csv.split('\r\n').find(row => row.startsWith(`"${created.id}",`))!;
+  assert.ok(line.includes('"\'=FÓRMULA ""parcelada"""'));
+  assert.ok(line.includes(`"${input.amountCents}"`)); assert.ok(line.endsWith(',"card","120"'));
+});
+
+test('registro legado sem campo retorna null em GET/lista e permite primeira edição',async () => {
+  const created = await create({...input,paymentMethod:'card'});
+  const {installmentCount,...legacy} = created;
+  assert.equal(installmentCount,null);
+  assert.equal('installmentCount' in legacy,false);
+  assert.equal(transactionOutputSchema.parse(legacy).installmentCount,null);
+  if (client) await client.send(new PutCommand({TableName:tableName,Item:{...legacy,pk:'USER#alice',sk:`FINANCE#transaction#${legacy.id}`,ownerId:'alice',kind:'transaction'}}));
+  const read = await (await call('alice',`/transactions/${created.id}`)).json() as Transaction;
+  assert.equal(read.installmentCount,null);
+  let cursor: string | null = null;
+  let found: Transaction | undefined;
+  do {
+    const page = await (await call('alice',`/transactions?limit=50${cursor ? '&cursor='+cursor : ''}`)).json() as {items:Transaction[];nextCursor:string|null};
+    found = page.items.find(item => item.id === legacy.id) ?? found; cursor=page.nextCursor;
+  } while (cursor);
+  assert.equal(found?.installmentCount,null);
+  const patched = await call('alice',`/transactions/${created.id}`,'PATCH',{...input,paymentMethod:'card',installmentCount:3,version:1});
+  assert.equal(patched.status,200); assert.equal((await patched.json() as Transaction).installmentCount,3);
 });
