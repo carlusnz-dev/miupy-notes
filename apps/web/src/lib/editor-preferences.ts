@@ -32,8 +32,8 @@ export function editorStyle(preferences: EditorPreferences): React.CSSProperties
   return {
     "--editor-width": ({ narrow: "620px", medium: "820px", wide: "1100px" } as const)[preferences.width],
     "--editor-padding": `${preferences.padding}px`,
-    "--heading-font": preferences.headingFont === "serif" ? '"Instrument Serif", Georgia, serif' : "Inter, system-ui, sans-serif",
-    "--editor-font": ({ mono: "ui-monospace, SFMono-Regular, Menlo, monospace", sans: "Inter, system-ui, sans-serif", serif: '"Instrument Serif", Georgia, serif' } as const)[preferences.editorFont],
+    "--heading-font": preferences.headingFont === "serif" ? "var(--font-serif)" : "var(--font-sans)",
+    "--editor-font": ({ mono: "var(--font-mono)", sans: "var(--font-sans)", serif: "var(--font-serif)" } as const)[preferences.editorFont],
     "--editor-size": `${preferences.fontSize}px`,
   } as React.CSSProperties;
 }

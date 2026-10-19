@@ -37,3 +37,6 @@ override.tf.json
 
 # Saída do Playwright MCP (capturas, snapshots, console)
 .playwright-mcp/
+
+# Fontes de licença restrita para teste pessoal; nunca versionar.
+apps/web/src/assets/fonts/local/
