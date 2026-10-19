@@ -1,35 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { markdown } from "@codemirror/lang-markdown";
-import { EditorSelection } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
-import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
-import { tags as syntaxTags } from "@lezer/highlight";
-import { ArrowLeft, Save, Trash2, Pencil, Columns2, Eye, Settings, Type, ChevronDown, ChevronRight, Bold, Italic, Strikethrough, Heading, List, ListOrdered, ListChecks, Quote, Code, SquareCode, Link as LinkIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Save, Trash2, Settings, Type } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
+import TagInput from "./components/TagInput";
+import { SkeletonBody } from "./components/Skeleton";
 import { ApiError } from "./lib/api-client";
 import { expireSession, useAuth } from "./lib/auth";
-import { getNote, updateNote, type NoteOutput } from "./lib/notes-api";
-import { useDeleteNote, useNote, cacheSavedNote } from "./lib/notes-queries";
 import { editorStyle, setEditorPreferences, useEditorPreferences } from "./lib/editor-preferences";
-import { SkeletonBody } from "./components/Skeleton";
-import "./editor.css";
+import { getNote, updateNote, type NoteOutput } from "./lib/notes-api";
+import { saveNote, toDraft, changes, MAX_BODY, MAX_TAG, MAX_TAGS, MAX_TITLE, type Draft } from "./lib/notes-autosave";
+import { detectEol, type Eol } from "./lib/notes-markdown";
+import { cacheSavedNote, useDeleteNote, useNote } from "./lib/notes-queries";
 import { usePageTitle } from "./lib/use-page-title";
+import "./editor.css";
 
-// Limites iguais aos do contrato (apps/api/src/modules/notes/dto/input.ts).
-const MAX_TITLE = 200;
-const MAX_BODY = 100_000;
-const MAX_TAGS = 20;
-const MAX_TAG = 40;
 const AUTOSAVE_DELAY_MS = 1200;
 
-type Draft = { title: string; body: string; tags: string[] };
-type Mode = "edit" | "split" | "preview";
 type SaveState =
   | { status: "idle" }
   | { status: "saving" }
@@ -40,138 +27,51 @@ type SaveState =
 const timeFormat = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" });
 const countFormat = new Intl.NumberFormat("pt-BR");
 
-
-// Só em desenvolvimento: `#/notes/<id>?estado=editor` abre uma nota de exemplo sem API nem login.
+// Só em desenvolvimento: `#/notes/<id>?estado=editor` abre uma nota de exemplo (`novo`: nota recém-criada)
+// sem API nem login. Nada é gravado.
 function previewNote(name: string | null): NoteOutput | null {
-  if (!import.meta.env.DEV || name !== "editor") return null;
+  if (!import.meta.env.DEV || (name !== "editor" && name !== "novo")) return null;
   const now = new Date().toISOString();
-  const body = "## Exemplo\n\nTexto com **negrito**, _itálico_ e [um link](https://example.com).\n\n- [ ] tarefa\n- [x] feita\n\n> citação\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```\ncódigo\n```\n";
-  return { id: "00000000-0000-4000-8000-000000000001", title: "Nota de exemplo", body, tags: ["exemplo"], createdAt: now, updatedAt: now, version: 1 };
-}
-
-function toDraft(note: NoteOutput): Draft {
-  return { title: note.title, body: note.body, tags: note.tags };
-}
-
-/** Só os campos alterados vão no PATCH; `null` quando não há o que salvar. */
-function changes(note: NoteOutput, draft: Draft) {
-  const title = draft.title.trim();
-  const tags = draft.tags;
-  const result: { title?: string; body?: string; tags?: string[] } = {};
-  if (title !== note.title) result.title = title;
-  if (draft.body !== note.body) result.body = draft.body;
-  if (tags.join("\u0000") !== note.tags.join("\u0000")) result.tags = tags;
-  return Object.keys(result).length ? result : null;
-}
-
-function validate(draft: Draft): string | null {
-  const title = draft.title.trim();
-  if (!title) return "Informe um título.";
-  if (title.length > MAX_TITLE) return `O título passa de ${MAX_TITLE} caracteres.`;
-  if (draft.body.length > MAX_BODY) return `O texto passa de ${countFormat.format(MAX_BODY)} caracteres.`;
-  const tags = draft.tags;
-  if (tags.length > MAX_TAGS) return `Use no máximo ${MAX_TAGS} tags.`;
-  if (tags.some((tag) => tag.length > MAX_TAG)) return `Cada tag pode ter até ${MAX_TAG} caracteres.`;
-  return null;
-}
-
-/** Envolve a seleção (ou insere o marcador vazio com o cursor no meio). */
-function wrap(view: EditorView, before: string, after = before, placeholder = "") {
-  view.dispatch(view.state.changeByRange((range) => {
-    const text = view.state.sliceDoc(range.from, range.to) || placeholder;
-    const insert = `${before}${text}${after}`;
-    return {
-      changes: { from: range.from, to: range.to, insert },
-      range: EditorSelection.range(range.from + before.length, range.from + before.length + text.length),
-    };
-  }));
-  view.focus();
-  return true;
-}
-
-/** Alterna um prefixo em cada linha da seleção (título, lista, citação, tarefa). */
-function prefixLines(view: EditorView, prefix: string) {
-  const { state } = view;
-  const lines = new Set<number>();
-  for (const range of state.selection.ranges) {
-    for (let line = state.doc.lineAt(range.from).number; line <= state.doc.lineAt(range.to).number; line++) lines.add(line);
-  }
-  const all = [...lines].map((number) => state.doc.line(number));
-  const remove = all.every((line) => line.text.startsWith(prefix));
-  view.dispatch({
-    changes: all.map((line) => (remove ? { from: line.from, to: line.from + prefix.length } : { from: line.from, insert: prefix })),
-  });
-  view.focus();
-  return true;
-}
-
-function insertLink(view: EditorView) {
-  return wrap(view, "[", "](https://)", "texto");
-}
-
-function insertCodeBlock(view: EditorView) {
-  return wrap(view, "```\n", "\n```", "código");
-}
-
-const tools: Array<{ label: string; hint: string; run: (view: EditorView) => boolean; icon: typeof Bold }> = [
-  { label: "Negrito", hint: "Ctrl+B", icon: Bold, run: (view) => wrap(view, "**", "**", "texto") },
-  { label: "Itálico", hint: "Ctrl+I", icon: Italic, run: (view) => wrap(view, "_", "_", "texto") },
-  { label: "Riscado", hint: "", icon: Strikethrough, run: (view) => wrap(view, "~~", "~~", "texto") },
-  { label: "Título", hint: "", icon: Heading, run: (view) => prefixLines(view, "## ") },
-  { label: "Lista", hint: "", icon: List, run: (view) => prefixLines(view, "- ") },
-  { label: "Lista numerada", hint: "", icon: ListOrdered, run: (view) => prefixLines(view, "1. ") },
-  { label: "Tarefa", hint: "", icon: ListChecks, run: (view) => prefixLines(view, "- [ ] ") },
-  { label: "Citação", hint: "", icon: Quote, run: (view) => prefixLines(view, "> ") },
-  { label: "Código", hint: "", icon: Code, run: (view) => wrap(view, "`", "`", "código") },
-  { label: "Bloco de código", hint: "", icon: SquareCode, run: insertCodeBlock },
-  { label: "Link", hint: "Ctrl+K", icon: LinkIcon, run: insertLink },
-];
-
-const editorTheme = EditorView.theme({
-  "&": { backgroundColor: "var(--color-background)", color: "var(--color-text)", fontSize: "var(--editor-size)", height: "100%" },
-  ".cm-content": { fontFamily: "var(--editor-font)", lineHeight: "1.7", padding: "16px 0", caretColor: "var(--color-text)" },
-  ".cm-line": { padding: "0 18px" },
-  ".cm-gutters": { display: "none" },
-  ".cm-activeLine": { backgroundColor: "transparent" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { overflow: "auto" },
-}, { dark: true });
-
-/** Links da prévia abrem no navegador do sistema; nunca navegam a janela do app. */
-function PreviewLink({ href, children }: { href?: string; children?: ReactNode }) {
-  const external = !!href && /^(https?:|mailto:)/i.test(href);
-  function open(event: MouseEvent<HTMLAnchorElement>) {
-    event.preventDefault();
-    if (!external || !href) return;
-    if (isTauri()) void openUrl(href);
-    else window.open(href, "_blank", "noopener,noreferrer");
-  }
-  return <a href={external ? href : undefined} onClick={open} rel="noopener noreferrer">{children}</a>;
+  const id = "00000000-0000-4000-8000-000000000001";
+  if (name === "novo") return { id, title: "Sem título", body: "", tags: [], folderId: null, createdAt: now, updatedAt: now, version: 1 };
+  const body = [
+    "# Nota de exemplo", "", "Texto com **negrito**, _itálico_, ~~riscado~~, `código` e [um link](https://example.com).", "",
+    "## Listas", "", "- primeiro item", "- segundo item", "1. passo um", "2. passo dois", "", "- [ ] tarefa pendente", "- [x] tarefa feita", "",
+    "> uma citação\n", "---", "", "```ts", "const soma = (a, b) => a + b;", "```", "", "| nome | valor | nota |", "|:-----|------:|:----:|", "| **a** | `1` | [site](https://example.com) |", "| b | 2 | |", "",
+    `![logo de exemplo](${location.origin}/vite.svg)`, "", "![imagem fora do ar](https://invalid.example/nao-existe.png)", "",
+  ].join("\n");
+  return { id, title: "Nota de exemplo", body, tags: ["exemplo", "markdown"], folderId: null, createdAt: now, updatedAt: now, version: 1 };
 }
 
 export default function NoteEditorPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
   const [searchParams] = useSearchParams();
   const sample = useMemo(() => previewNote(searchParams.get("estado")), [searchParams]);
-  const editorRef = useRef<ReactCodeMirrorRef>(null);
-  const previewRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<LiveMarkdownEditorHandle>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
   const noteQuery = useNote(id);
   const deleteMutation = useDeleteNote();
   const preferences = useEditorPreferences();
-  const [tagInput, setTagInput] = useState("");
   const [note, setNote] = useState<NoteOutput | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [save, setSave] = useState<SaveState>({ status: "idle" });
-  const [mode, setMode] = useState<Mode>(() => (window.matchMedia("(min-width: 1100px)").matches ? "split" : "edit"));
+  const [source, setSource] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const saving = useRef(false);
+  // ID da nota com PATCH em andamento: salvar a nota B não espera nem é bloqueado pela resposta da nota A.
+  const saving = useRef(new Set<string>());
   const initializedId = useRef("");
+  const eol = useRef<Eol>("\n");
   const latest = useRef({ note, draft });
   latest.current = { note, draft };
+  // Nota recém-criada: o foco vai para o título, não para o texto.
+  // Valor fixo desde a abertura: mudar `autoFocus` depois faria o editor roubar o foco do título.
+  const bodyAutoFocus = useRef(false);
+  const focusTitle = useRef((location.state as { focusTitle?: boolean } | null)?.focusTitle === true);
 
   usePageTitle(draft?.title.trim() || "Editor");
 
@@ -190,44 +90,58 @@ export default function NoteEditorPage() {
     }
     const loaded = sample ?? noteQuery.data;
     if (!loaded || (latest.current.note?.id === loaded.id && draft)) return;
+    eol.current = detectEol(loaded.body);
+    bodyAutoFocus.current = !focusTitle.current && !loaded.body;
     setNote(loaded);
     setDraft(toDraft(loaded));
     setSave({ status: "idle" });
   }, [id, sample, noteQuery.data, draft]);
 
-  /** Devolve `true` quando não resta nada a salvar. */
-  const persist = useCallback(async (): Promise<boolean> => {
+  const ready = !!note && !!draft;
+  useEffect(() => {
+    if (!ready || !focusTitle.current) return;
+    focusTitle.current = false;
+    titleRef.current?.focus();
+    titleRef.current?.select();
+    // Atualizar a página não deve devolver o foco ao título.
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+  }, [ready, navigate, location.pathname, location.search]);
+
+  /**
+   * Devolve `true` quando não resta nada a salvar. A regra de gravação (uma nota por vez, resposta obsoleta,
+   * salvar ao sair) vive em lib/notes-autosave.ts e tem testes; aqui só se aplica o resultado ao estado.
+   */
+  const persist = useCallback(async (leaving = false): Promise<boolean> => {
     const { note: current, draft: pending } = latest.current;
-    if (!current || !pending || saving.current || sample) return false;
-    const invalid = validate(pending);
-    if (invalid) {
-      setSave({ status: "invalid", message: invalid });
-      return false;
-    }
-    const patch = changes(current, pending);
-    if (!patch) {
-      setSave({ status: "idle" });
-      return true;
-    }
-    saving.current = true;
-    setSave({ status: "saving" });
-    try {
-      const updated = await updateNote(current.id, { version: current.version, ...patch });
-      latest.current = { note: updated, draft: latest.current.draft };
-      setNote(updated);
-      cacheSavedNote(client, updated);
-      setSave({ status: "idle" });
-      return changes(updated, latest.current.draft ?? pending) === null;
-    } catch (error) {
-      fail(error as ApiError);
-      return false;
-    } finally {
-      saving.current = false;
+    if (!current || !pending || sample) return false;
+    if (!leaving) setSave({ status: "saving" });
+    const result = await saveNote({
+      note: current, draft: pending, eol: eol.current, leaving, inFlight: saving.current, update: updateNote,
+      openNoteId: () => latest.current.note?.id, formatCount: countFormat.format,
+    });
+    switch (result.status) {
+      case "busy": return false;
+      case "clean": if (!leaving) setSave({ status: "idle" }); return true;
+      case "invalid": if (!leaving) setSave({ status: "invalid", message: result.message }); return false;
+      case "failed": if (!result.stale) fail(result.error); return false;
+      case "saved": {
+        // O cache da nota certa sempre recebe o resultado; o estado da tela só se ainda estamos nela.
+        cacheSavedNote(client, result.note);
+        if (result.stale) return true;
+        latest.current = { note: result.note, draft: latest.current.draft };
+        setNote(result.note);
+        setSave({ status: "idle" });
+        return changes(result.note, latest.current.draft ?? pending, eol.current) === null;
+      }
     }
   }, [fail, sample, client]);
 
-  const dirty = !!note && !!draft && changes(note, draft) !== null;
+  const dirty = !!note && !!draft && changes(note, draft, eol.current) !== null;
   const blocked = save.status === "conflict";
+  // Não gravar ao sair quando há conflito (atualizado a cada render) ou a nota acabou de ser excluída.
+  const conflictRef = useRef(false);
+  conflictRef.current = blocked;
+  const deletedRef = useRef(false);
 
   // Salva sozinho após uma pausa na digitação; ao terminar um envio, `note` muda e reavalia.
   useEffect(() => {
@@ -236,6 +150,12 @@ export default function NoteEditorPage() {
     return () => window.clearTimeout(timer);
   }, [draft, note, dirty, blocked, persist]);
 
+  // Ao trocar de nota (barra lateral) ou fechar a tela, o rascunho pendente é gravado em vez de perdido.
+  // O cleanup roda com o estado da nota que está saindo; em conflito nada é enviado.
+  useEffect(() => () => {
+    if (latest.current.note && !conflictRef.current && !deletedRef.current) void persist(true);
+  }, [id, persist]);
+
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -243,42 +163,15 @@ export default function NoteEditorPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const extensions = useMemo(() => [
-    markdown(),
-    syntaxHighlighting(HighlightStyle.define([{ tag: syntaxTags.heading, fontWeight: "700", color: "var(--color-text)" }])),
-    EditorView.scrollMargins.of(() => ({ bottom: Math.round((editorRef.current?.view?.scrollDOM.clientHeight ?? 300) * .35) })),
-    EditorView.updateListener.of((update) => { if (update.docChanged) syncPreview(update.view); }),
-    EditorView.lineWrapping,
-    editorTheme,
-    EditorView.contentAttributes.of({ "aria-label": "Texto da nota em Markdown" }),
-    keymap.of([
-      { key: "Mod-s", preventDefault: true, run: () => { void persist(); return true; } },
-      { key: "Mod-b", run: (view) => wrap(view, "**", "**", "texto") },
-      { key: "Mod-i", run: (view) => wrap(view, "_", "_", "texto") },
-      { key: "Mod-k", preventDefault: true, run: insertLink },
-    ]),
-  ], [persist]);
-
   function edit(next: Partial<Draft>) {
     setDraft((current) => (current ? { ...current, ...next } : current));
     if (save.status === "invalid" || save.status === "error") setSave({ status: "idle" });
   }
 
-  function syncPreview(view: EditorView) {
-    if (!previewRef.current) return;
-    const scroller = view.scrollDOM;
-    const ratio = scroller.scrollTop / Math.max(1, scroller.scrollHeight - scroller.clientHeight);
-    previewRef.current.scrollTop = ratio * (previewRef.current.scrollHeight - previewRef.current.clientHeight);
-  }
-
-  function runTool(run: (view: EditorView) => boolean) {
-    const view = editorRef.current?.view;
-    if (view) run(view);
-  }
-
   async function reloadSaved() {
     try {
       const fresh = await getNote(id);
+      eol.current = detectEol(fresh.body);
       setNote(fresh);
       setDraft(toDraft(fresh));
       setSave({ status: "idle" });
@@ -297,6 +190,7 @@ export default function NoteEditorPage() {
     setDeleting(true);
     try {
       await deleteMutation.mutateAsync(id);
+      deletedRef.current = true;
       navigate("/notes", { replace: true });
     } catch (error) {
       setDeleting(false);
@@ -349,7 +243,6 @@ export default function NoteEditorPage() {
         <span className={`save-status${save.status === "conflict" || save.status === "error" || save.status === "invalid" ? " save-status-alert" : ""}`} role="status" aria-live="polite">{status}</span>
         <div className="editor-actions" role="group" aria-label="Ações da nota">
           <button type="button" className="tool-button" aria-label="Salvar" title="Salvar (Ctrl+S)" onClick={() => void persist()} disabled={!dirty || save.status === "saving" || blocked}><Save size={18} /></button>
-          {([["edit", "Editar", Pencil], ["split", "Dividir", Columns2], ["preview", "Prévia", Eye]] as const).map(([value, label, Icon]) => <button key={value} type="button" className="tool-button mode-button" aria-label={label} title={label} aria-pressed={mode === value} onClick={() => setMode(value)}><Icon size={18} /></button>)}
           <button type="button" className="tool-button" aria-label="Alternar fonte dos títulos" title="Alternar fonte dos títulos" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
           <button type="button" className="tool-button" aria-label="Configurações" title="Configurações" onClick={() => navigate("/settings")}><Settings size={18} /></button>
           <button type="button" className="tool-button" aria-label="Excluir nota" title="Excluir nota" onClick={() => setConfirmDelete(true)} disabled={deleting}><Trash2 size={18} /></button>
@@ -376,41 +269,36 @@ export default function NoteEditorPage() {
       )}
 
       <label className="visually-hidden" htmlFor="editor-title">Título</label>
-      <input id="editor-title" className="editor-title" value={draft.title} onChange={(event) => edit({ title: event.target.value })} maxLength={MAX_TITLE} placeholder="Título" autoComplete="off" />
-      <div className="editor-meta">
-        <button type="button" className="tool-button editor-toggle" aria-expanded={preferences.toolbarExpanded} aria-controls="editor-extra" title="Expandir ou recolher formatação" onClick={() => setEditorPreferences({ toolbarExpanded: !preferences.toolbarExpanded })}>{preferences.toolbarExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Formatação e tags</button>
-        {preferences.toolbarExpanded && <div id="editor-extra" className="editor-extra">
-          <div className="editor-toolbar" role="toolbar" aria-label="Formatação Markdown"><div className="editor-tools">{tools.map((tool) => <button key={tool.label} type="button" className="tool-button" onClick={() => runTool(tool.run)} disabled={mode === "preview"} title={tool.hint ? `${tool.label} (${tool.hint})` : tool.label} aria-label={tool.label}><tool.icon size={17} /></button>)}</div></div>
-          {preferences.showTags && <div className="editor-tags"><span>Tags</span>{draft.tags.map((tag) => <span className="editor-chip" key={tag}>{tag}<button type="button" aria-label={`Remover tag ${tag}`} title={`Remover ${tag}`} onClick={() => edit({ tags: draft.tags.filter((item) => item !== tag) })}>×</button></span>)}<input aria-label="Adicionar tag" value={tagInput} maxLength={MAX_TAG} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); const tag = tagInput.trim(); if (tag && draft.tags.length < MAX_TAGS && !draft.tags.includes(tag)) edit({ tags: [...draft.tags, tag] }); setTagInput(""); } else if (event.key === "Backspace" && !tagInput && draft.tags.length) edit({ tags: draft.tags.slice(0, -1) }); }} placeholder="Adicionar tag…" autoComplete="off" /></div>}
-        </div>}
-      </div>
+      <input
+        ref={titleRef}
+        id="editor-title"
+        className="editor-title"
+        value={draft.title}
+        onChange={(event) => edit({ title: event.target.value })}
+        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); editorRef.current?.focus(); } }}
+        maxLength={MAX_TITLE}
+        placeholder="Título"
+        autoComplete="off"
+      />
+      {preferences.showTags && (
+        <div className="editor-meta">
+          <TagInput value={draft.tags} onChange={(tags) => edit({ tags })} maxTags={MAX_TAGS} maxLength={MAX_TAG} />
+        </div>
+      )}
 
-      <div className={`editor-panes editor-${mode}`}>
-        {mode !== "preview" && (
-          <div className="editor-pane">
-            <CodeMirror
-              ref={editorRef}
-              onCreateEditor={(view) => view.scrollDOM.addEventListener("scroll", () => syncPreview(view), { passive: true })}
-              value={draft.body}
-              onChange={(body) => edit({ body })}
-              extensions={extensions}
-              theme="dark"
-              basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false, highlightActiveLineGutter: false, autocompletion: false, searchKeymap: false, foldKeymap: false }}
-              placeholder="Escreva em Markdown…"
-              autoFocus={!draft.body}
-            />
-          </div>
-        )}
-        {mode !== "edit" && (
-          <article ref={previewRef} className="editor-pane markdown-preview" aria-label="Prévia">
-            {draft.body.trim() ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: PreviewLink }}>{draft.body}</ReactMarkdown> : <p className="muted-small">Nada para mostrar ainda.</p>}
-          </article>
-        )}
-      </div>
+      <LiveMarkdownEditor
+        ref={editorRef}
+        value={draft.body}
+        onChange={(body) => edit({ body })}
+        onSave={() => void persist()}
+        source={source}
+        onSourceChange={setSource}
+        autoFocus={bodyAutoFocus.current}
+      />
 
       <div className="editor-footer muted-small">
         <span>{countFormat.format(words)} {words === 1 ? "palavra" : "palavras"} · {countFormat.format(draft.body.length)} / {countFormat.format(MAX_BODY)} caracteres</span>
-        <span>Ctrl+S salva · versão {note.version}</span>
+        <span>Ctrl+S salva · Ctrl+Enter alterna tarefa · versão {note.version}</span>
       </div>
     </div>
   );
