@@ -18,3 +18,9 @@ Uploads ficam inline em base64, até 64 KiB binários (~87,4 KiB codificados) e 
 Limitações: sem backup/restauração, lixeira, política de retenção, idempotência, índices por data, filtros, materialização de totais ou snapshot transacional da exportação. DynamoDB Local não comprova criptografia/retention/IAM de produção; esses recursos permanecem planejados. Exportar CSV permite leitura independente do app, mas não é backup restaurável.
 
 Validação local: a suíte em `routes/finance.routes.test.ts` usa memória por padrão; `DYNAMODB_FINANCE_TEST_ENDPOINT=http://127.0.0.1:8000 npx tsx --test apps/api/src/modules/finance/routes/finance.routes.test.ts` cria tabela sintética única e a exclui ao final. Endpoint fora de loopback é recusado. Nenhuma consulta às tabelas pessoais é necessária.
+
+## Parcelas de cartão
+
+Lançamentos podem armazenar `installmentCount` como inteiro 1..120 ou null, apenas com número não-nulo em despesa por cartão. Ausência em itens legados é normalizada para null pelo schema de leitura do repositório; não há migração ou varredura de dados existentes. Novas gravações guardam o atributo explicitamente. Omissão no PATCH preserva o valor em cartão e limpa quando muda tipo/método; null explícito sempre limpa, sem alterar o controle de versão.
+
+O atributo é informativo: 1 = à vista, 2..120 = parcelado, null = não informado. O total em centavos continua integral no mesmo lançamento; não há criação de itens futuros, divisão de valores ou mudança de agregações. A coluna `Parcelas` é acrescentada ao fim do CSV, vazia para null, com o mesmo percurso paginado e isolamento.
