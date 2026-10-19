@@ -1,7 +1,11 @@
-import { noteListOutputSchema, noteOutputSchema, type NoteListOutput, type NoteOutput } from "../../../api/src/modules/notes/contract";
+import { noteListOutputSchema, noteOutputSchema, type NoteListOutput, type NoteOutput as ContractNoteOutput } from "../../../api/src/modules/notes/contract";
 import { apiClient, toApiError } from "./api-client";
 
-export type { NoteListOutput, NoteOutput } from "../../../api/src/modules/notes/contract";
+export type { NoteListOutput } from "../../../api/src/modules/notes/contract";
+
+// `folderId` é opcional no tipo só porque amostras de desenvolvimento de outras telas (Home, Perfil) ainda não o
+// declaram; a API sempre o devolve. Leia com `note.folderId ?? null`.
+export type NoteOutput = Omit<ContractNoteOutput, "folderId"> & { folderId?: string | null };
 
 export async function listNotes(options: { cursor?: string; limit?: number; signal?: AbortSignal } = {}): Promise<NoteListOutput> {
   try {
@@ -15,7 +19,7 @@ export async function listNotes(options: { cursor?: string; limit?: number; sign
   }
 }
 
-export async function createNote(input: { title: string; body?: string }): Promise<NoteOutput> {
+export async function createNote(input: { title: string; body?: string; tags?: string[]; folderId?: string | null }): Promise<NoteOutput> {
   try {
     const response = await apiClient.post("/v1/notes", input);
     return noteOutputSchema.parse(response.data);
@@ -34,7 +38,7 @@ export async function getNote(id: string, signal?: AbortSignal): Promise<NoteOut
 }
 
 /** `version` é a lida por último; a API responde 409 CONFLICT se outra gravação ocorreu. */
-export async function updateNote(id: string, input: { version: number; title?: string; body?: string; tags?: string[] }): Promise<NoteOutput> {
+export async function updateNote(id: string, input: { version: number; title?: string; body?: string; tags?: string[]; folderId?: string | null }): Promise<NoteOutput> {
   try {
     const response = await apiClient.patch(`/v1/notes/${encodeURIComponent(id)}`, input);
     return noteOutputSchema.parse(response.data);

@@ -21,6 +21,10 @@ function messageFor(code: unknown): string {
 }
 
 let state: AuthState = { status: isTauri() ? "checking" : "unsupported", signingIn: false, error: null };
+let sessionVersion = 0;
+/** Identifica a sessão da operação; respostas de uma sessão encerrada não podem repovoar o cache. */
+export function getAuthSessionVersion() { return sessionVersion; }
+export function isCurrentAuthSession(version: number) { return state.status === "signed-in" && version === sessionVersion; }
 const listeners = new Set<() => void>();
 
 // O token só existe dentro desta chamada: o Rust o guarda no chaveiro e faz o refresh.
@@ -37,6 +41,7 @@ async function idTokenProvider(): Promise<string> {
 }
 
 function update(next: Partial<AuthState>) {
+  if (next.status !== undefined && next.status !== state.status) sessionVersion++;
   state = { ...state, ...next };
   setAccessTokenProvider(state.status === "signed-in" ? idTokenProvider : null);
   listeners.forEach((listener) => listener());

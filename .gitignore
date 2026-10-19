@@ -37,3 +37,9 @@ override.tf.json
 
 # Saída do Playwright MCP (capturas, snapshots, console)
 .playwright-mcp/
+
+# Fontes de licença restrita para teste pessoal; nunca versionar.
+apps/web/src/assets/fonts/local/
+
+# Exports CSV gerados pela janela de finanças (dados pessoais); só esta pasta, fixtures de outros diretórios continuam versionáveis.
+/src-tauri/financas*.csv

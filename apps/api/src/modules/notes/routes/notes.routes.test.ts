@@ -9,6 +9,8 @@ import { MemoryNotesRepository } from "../repository/memory-notes.repository.js"
 import { NotesServiceImpl } from "../services/notes.service.impl.js";
 import { createNotesRouter } from "./notes.routes.js";
 
+const knownFolder = "0b5d6f7e-1c2a-4b3d-8e9f-a0b1c2d3e4f5";
+
 // Principal falso, só no teste: o app público não monta /v1/notes até existir verificação real de token.
 function createTestApp() {
   const app = express();
@@ -19,7 +21,7 @@ function createTestApp() {
     next();
   });
   app.use(express.json({ limit: "256kb" }));
-  app.use("/v1/notes", createNotesRouter(new NotesController(new NotesServiceImpl(new MemoryNotesRepository()))));
+  app.use("/v1/notes", createNotesRouter(new NotesController(new NotesServiceImpl(new MemoryNotesRepository(), { exists: async (owner, id) => owner === "alice" && id === knownFolder }))));
   app.use(errorHandler);
   return app;
 }
@@ -37,7 +39,7 @@ before(async () => {
 after(async () => { await new Promise<void>((resolve) => server.close(() => resolve())); });
 
 type ErrorBody = { error: { code: string; message: string; requestId: string } };
-type NoteBody = { id: string; title: string; body: string; tags: string[]; version: number; createdAt: string; updatedAt: string };
+type NoteBody = { id: string; title: string; body: string; tags: string[]; folderId: string | null; version: number; createdAt: string; updatedAt: string };
 type PageBody = { items: NoteBody[]; nextCursor: string | null };
 
 function call(owner: string | null, path = "", init: { method?: string; body?: unknown; raw?: string } = {}) {
@@ -139,4 +141,24 @@ test("validação Zod e erros de corpo respondem no formato padrão", async () =
     ["", { method: "POST", body: { title: "x", body: "a".repeat(300_000) } }, 413, "PAYLOAD_TOO_LARGE"],
   ];
   for (const [path, init, status, code] of cases) await expectError(await call("validacao", path, init), status, code);
+});
+
+test("folderId: cria em pasta, move, volta à raiz e rejeita pasta alheia ou inválida", async () => {
+  const created = await call("alice", "", { method: "POST", body: { title: "Em pasta", folderId: knownFolder } });
+  assert.equal(created.status, 201);
+  const note = await created.json() as NoteBody;
+  assert.equal(note.folderId, knownFolder);
+
+  const root = await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: null, version: 1 } });
+  const movedRoot = await root.json() as NoteBody;
+  assert.equal(movedRoot.folderId, null);
+  assert.equal(movedRoot.version, 2);
+  const back = await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: knownFolder, version: 2 } });
+  assert.equal(((await back.json()) as NoteBody).folderId, knownFolder);
+
+  await expectError(await call("bob", "", { method: "POST", body: { title: "x", folderId: knownFolder } }), 400, "VALIDATION_ERROR");
+  await expectError(await call("alice", "", { method: "POST", body: { title: "x", folderId: "nao-uuid" } }), 400, "VALIDATION_ERROR");
+  await expectError(await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: randomUUID(), version: 3 } }), 400, "VALIDATION_ERROR");
+  const plain = await (await call("alice", "", { method: "POST", body: { title: "Sem pasta" } })).json() as NoteBody;
+  assert.equal(plain.folderId, null);
 });
