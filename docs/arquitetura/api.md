@@ -13,17 +13,35 @@ Toda rota de `/v1` exige `Authorization: Bearer <ID token do Google>`. A API loc
 | Método | Caminho | Corpo / query | Sucesso | Erros |
 |---|---|---|---|---|
 | `GET` | `/notes` | `?limit=1..100` (padrão 20) `&cursor=` | `200` lista | `400`, `401`, `403` |
-| `POST` | `/notes` | `{ title, body?, tags? }` | `201` nota | `400`, `401`, `403`, `413` |
+| `POST` | `/notes` | `{ title, body?, tags?, folderId? }` | `201` nota | `400`, `401`, `403`, `413` |
 | `GET` | `/notes/{id}` | — | `200` nota | `400` ID não-UUID, `401`, `403`, `404` |
-| `PATCH` | `/notes/{id}` | `{ version, title?, body?, tags? }` (pelo menos um campo além de `version`) | `200` nota com `version + 1` | `400`, `401`, `403`, `404`, `409`, `413` |
+| `PATCH` | `/notes/{id}` | `{ version, title?, body?, tags?, folderId? }` (pelo menos um campo além de `version`) | `200` nota com `version + 1` | `400`, `401`, `403`, `404`, `409`, `413` |
 | `DELETE` | `/notes/{id}` | — | `204` sem corpo | `400`, `401`, `403`, `404` |
 
 - **Campos:** `title` 1–200 caracteres após `trim`; `body` Markdown até 100 000 caracteres (padrão `""`); `tags` até 20 itens de 1–40 caracteres (padrão `[]`). Corpo HTTP até 256 kB.
-- **Nota:** `{ id, title, body, tags, createdAt, updatedAt, version }`. `id` UUID; datas ISO 8601 UTC; `version` inteiro ≥ 1. `ownerId` nunca aparece na resposta.
+- **Pasta da nota:** `folderId` é o UUID de uma pasta do próprio proprietário ou `null` (raiz, padrão). No `PATCH`, `null` move para a raiz e omitir mantém a pasta; mover incrementa `version`. Pasta inexistente ou de outro proprietário responde `400 VALIDATION_ERROR` ("Pasta inválida."), sem revelar a diferença. Notas gravadas antes das pastas não têm o atributo e leem como `folderId: null`.
+- **Nota:** `{ id, title, body, tags, folderId, createdAt, updatedAt, version }`. `id` UUID; datas ISO 8601 UTC; `version` inteiro ≥ 1. `ownerId` nunca aparece na resposta.
 - **Lista:** `{ "items": [...], "nextCursor": "..." | null }`. O cursor é opaco; repita a chamada com ele até `nextCursor` ser `null`. A ordem é estável por ID, **não cronológica** (sem índice por data ainda). A última página pode vir vazia.
 - **Concorrência:** `PATCH` envia a `version` lida. Se outra gravação ocorreu, responde `409 CONFLICT`; o cliente deve recarregar a nota. A verificação é atômica no DynamoDB (escrita condicional).
+- **Corpo:** devolvido exatamente como gravado (sem `trim`, sem normalizar quebras de linha). O editor web converte `\r\n` para `\n` ao editar e restaura o estilo original ao gravar.
 - **Exclusão:** física. Ainda não há lixeira nem política de retenção em backup.
 - **Ainda não suportado:** links entre notas (parte do RF-01), idempotência de `POST` (repetir a requisição cria outra nota), busca e filtro por tag.
+
+## Pastas
+
+Organizam as notas em árvore (RF-01). Mesma autenticação e isolamento das notas; ficam na mesma tabela (`sk = FOLDER#<id>`). Cliente: `apps/web/src/lib/notes-folders-api.ts`, tipado por `apps/api/src/modules/folders/contract.ts`.
+
+| Método | Caminho | Corpo | Sucesso | Erros |
+|---|---|---|---|---|
+| `GET` | `/folders` | — | `200 { items: [...] }` (todas, por nome) | `401`, `403` |
+| `POST` | `/folders` | `{ name, parentId? }` | `201` pasta | `400`, `401`, `403`, `413` |
+| `PATCH` | `/folders/{id}` | `{ version, name }` | `200` pasta com `version + 1` | `400`, `401`, `403`, `404`, `409` |
+
+- **Pasta:** `{ id, name, parentId, createdAt, updatedAt, version }`; `name` 1–100 caracteres após `trim`; `parentId` UUID ou `null` (raiz), fixado na criação.
+- **Limites:** até 500 pastas por proprietário e 8 níveis (`400 VALIDATION_ERROR`). Pai inexistente ou de outro proprietário é `400`.
+- **Sem mover nem excluir pastas (decisão desta etapa):** `PATCH` aceita só `name` (`parentId` é campo desconhecido → `400`) e não existe `DELETE`. Assim o pai nunca muda e a pasta nunca some: não há ciclo, órfã nem corrida entre "pasta vazia" e criação de nota/subpasta. Mover/excluir exigem transação (hoje o DynamoDB não garante, entre a checagem e a escrita, que ninguém criou nota ou subpasta): desenho previsto é um item de versão da árvore por proprietário mais contador de notas por pasta, gravados com `TransactWriteItems`. Até lá, pasta criada por engano só pode ser renomeada.
+- **Notas entre pastas:** mover nota (`PATCH /notes/{id}` com `folderId`) é seguro porque pastas não são excluídas; ele valida a pasta do próprio proprietário e incrementa `version` da nota.
+- **Concorrência:** `version` como nas notas (`409` se divergir; gravação condicional). Nomes duplicados entre irmãs são aceitos.
 
 ## Erros
 

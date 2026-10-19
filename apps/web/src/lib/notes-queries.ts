@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useAuth } from "./auth";
+import { getAuthSessionVersion, isCurrentAuthSession, useAuth } from "./auth";
 import { createNote, deleteNote, getNote, listNotes, updateNote, type NoteOutput } from "./notes-api";
 
 // Toda leitura de notas passa por estas chaves; mutações invalidam a raiz `notes`.
@@ -70,7 +70,8 @@ export function useCreateNote() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: createNote,
-    onSuccess: (note) => cacheSavedNote(client, note),
+    onMutate: () => getAuthSessionVersion(),
+    onSuccess: (note, _input, session) => { if (isCurrentAuthSession(session)) cacheSavedNote(client, note); },
   });
 }
 
@@ -78,7 +79,8 @@ export function useUpdateNote() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof updateNote>[1]) => updateNote(id, input),
-    onSuccess: (note) => cacheSavedNote(client, note),
+    onMutate: () => getAuthSessionVersion(),
+    onSuccess: (note, _input, session) => { if (isCurrentAuthSession(session)) cacheSavedNote(client, note); },
   });
 }
 
@@ -86,7 +88,9 @@ export function useDeleteNote() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: deleteNote,
-    onSuccess: (_, id) => {
+    onMutate: () => getAuthSessionVersion(),
+    onSuccess: (_, id, session) => {
+      if (!isCurrentAuthSession(session)) return;
       client.removeQueries({ queryKey: noteKeys.detail(id) });
       void client.invalidateQueries({ queryKey: noteKeys.all });
     },

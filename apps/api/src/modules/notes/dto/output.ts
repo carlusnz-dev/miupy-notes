@@ -5,6 +5,7 @@ export const noteOutputSchema = z.object({
   title: z.string(),
   body: z.string(),
   tags: z.array(z.string()),
+  folderId: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   version: z.int().positive(),

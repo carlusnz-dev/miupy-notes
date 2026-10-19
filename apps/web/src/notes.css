@@ -1,0 +1,4 @@
+.notes-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.notes-new { gap: 8px; }
+.notes-error { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); }
+.notes-truncated { margin-top: 12px; color: var(--color-muted); }
