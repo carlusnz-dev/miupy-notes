@@ -20,7 +20,7 @@
       "id": "tauri",
       "path": "src-tauri",
       "status": "partial",
-      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev (Hyprland/Wayland) só abre com WEBKIT_DISABLE_DMABUF_RENDERER=1 (npm run tauri:dev:wayland). Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth."
+      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev no Hyprland/Wayland com NVIDIA: npm run tauri:dev:wayland (__NV_DISABLE_EXPLICIT_SYNC=1, mantém DMABUF/GPU); npm run tauri:dev:software (WEBKIT_DISABLE_DMABUF_RENDERER=1) fica como fallback lento, por software. Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth."
     },
     {
       "id": "api",
