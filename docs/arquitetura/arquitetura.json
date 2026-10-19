@@ -1,6 +1,6 @@
 {
   "project": "miupy-notes",
-  "updatedAt": "2026-10-18",
+  "updatedAt": "2026-10-19",
   "statusValues": [
     "planned",
     "template",
@@ -14,7 +14,7 @@
       "id": "frontend",
       "path": "apps/web",
       "status": "partial",
-      "role": "Interface React com rotas em HashRouter, tokens flat monocromáticos e fontes locais. Login pelo estado de auth (lib/auth.ts) com comandos Tauri; o Axios só envia com provedor de token (ID token obtido do Rust a cada requisição). Notas: lista, criar (só título) e editor Markdown em #/notes/:id carregado sob demanda (CodeMirror 6 + react-markdown/remark-gfm; autosave por PATCH com version, 409, exclusão). Validado em Chromium headless (1440 e 390 px) nos estados de prévia; editor ainda não validado visualmente (Vite com React duplicado após instalar dependências). Bundle inicial 409 kB (130 kB gzip); chunk do editor 783 kB (261 kB gzip)."
+      "role": "Interface React em HashRouter, tokens monocromáticos e fontes locais. Identidade Tauri e Axios autenticado; notas com cache React Query, autosave versionado, perfil e preferências locais. Sidebar desktop recolhível (76 px), resize 200–380 px por pointer/teclado e perfil/configurações na base; mobile sem resize. ButtonGroup com indicador GSAP elastic e períodos do dashboard com power2.inOut. Shell validado via Playwright MCP em 1440/390 px, foco e movimento reduzido. Finanças: lista paginada até 50, totais globais por moeda, criação/edição modal, detalhe em rota própria, bancos com upload/URL e CSV. Fluxo validado por MCP com API/DynamoDB Local sintéticos. Novo editor/pastas ainda aguardam integração. Tauri/WebKit não repetido; chunks acima de 500 kB."
     },
     {
       "id": "tauri",
@@ -26,7 +26,7 @@
       "id": "api",
       "path": "apps/api",
       "status": "partial",
-      "role": "Express/TypeScript com core (incl. autenticação jose + lista de sub), módulo notes montado em /v1/notes atrás do middleware, handler Lambda com claims do authorizer (não implantado). API local com DynamoDB Local; 28 testes, build e check:modules passam. Sem DynamoDB real nem AWS."
+      "role": "Express/TypeScript com autenticação jose + lista de sub, módulos notes e finance autenticados em /v1; handler Lambda não implantado. API usa DynamoDB Local. Finanças verificadas em tabela sintética real local e MCP (sem dados pessoais); CRUD/versionamento, bancos, summary e CSV global. Sem recursos AWS implantados."
     },
     {
       "id": "integrations",
@@ -45,6 +45,18 @@
       "path": "infra",
       "status": "planned",
       "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."
+    },
+    {
+      "id": "ci",
+      "path": ".github/workflows/ci.yml",
+      "status": "verified",
+      "role": "GitHub Actions: npm ci, checagem de módulos, testes API/web, build e artifact web por sete dias. Runs de PR aprovados em 2026-10-19. main/develop protegidas por PR e check CI / verificar estrito, inclusive admins. Sem deploy AWS nem release Tauri."
+    },
+    {
+      "id": "finance",
+      "path": "apps/api/src/modules/finance",
+      "status": "partial",
+      "role": "API e web de lançamentos e bancos, centavos/moeda explícita, dashboard e CSV global; persistência DynamoDB Local verificada. Contrato api-finance.md. Sem snapshot transacional, integrações bancárias ou AWS."
     }
   ],
   "contracts": {
@@ -57,7 +69,8 @@
   },
   "openDecisions": "docs/decisoes/pendencias.md",
   "acceptedDecisions": [
-    "docs/decisoes/2026-10-18_identidade.md"
+    "docs/decisoes/2026-10-18_identidade.md",
+    "docs/decisoes/2026-10-19_fluxo-git-e-interface.md"
   ],
   "deployedResources": []
 }

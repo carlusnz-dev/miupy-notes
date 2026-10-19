@@ -17,7 +17,8 @@
       "404": "NOT_FOUND",
       "409": "CONFLICT",
       "413": "PAYLOAD_TOO_LARGE",
-      "500": "INTERNAL_ERROR"
+      "500": "INTERNAL_ERROR",
+      "422": "TOTAL_OVERFLOW"
     },
     "testCommand": "npm run test:api",
     "authenticatedRoutes": [
@@ -25,7 +26,19 @@
       "POST /v1/notes",
       "GET /v1/notes/:id",
       "PATCH /v1/notes/:id",
-      "DELETE /v1/notes/:id"
+      "DELETE /v1/notes/:id",
+      "GET /v1/finance/summary",
+      "GET /v1/finance/export.csv",
+      "GET /v1/finance/transactions",
+      "POST /v1/finance/transactions",
+      "GET /v1/finance/transactions/:id",
+      "PATCH /v1/finance/transactions/:id",
+      "DELETE /v1/finance/transactions/:id",
+      "GET /v1/finance/banks",
+      "POST /v1/finance/banks",
+      "GET /v1/finance/banks/:id",
+      "PATCH /v1/finance/banks/:id",
+      "DELETE /v1/finance/banks/:id"
     ],
     "authentication": {
       "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
@@ -109,7 +122,27 @@
     },
     {
       "id": "finance",
-      "status": "planned"
+      "status": "partial",
+      "path": "apps/api/src/modules/finance",
+      "publicEntry": "apps/api/src/modules/finance/index.ts",
+      "serviceContract": "FinanceService",
+      "repository": "DynamoFinanceRepository",
+      "routeMount": "authenticated",
+      "operations": [
+        "transactions CRUD",
+        "banks CRUD",
+        "summary",
+        "export.csv"
+      ],
+      "httpContract": "docs/arquitetura/api-finance.md",
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (DynamoDB Local verificado; AWS não criada)",
+        "pk": "USER#<ownerId>",
+        "sk": "FINANCE#transaction#<id> ou FINANCE#bank#<id>",
+        "concurrency": "versão condicional em edição/exclusão",
+        "logo": "URL raster HTTP(S) ou base64 PNG/JPEG/WebP até 64 KiB"
+      },
+      "verification": "2026-10-19: 8 grupos de finanças aprovados também em tabela sintética do DynamoDB Local, criada e excluída. Isolamento JWT, CRUD, concorrência 200/409, 54 lançamentos, CSV global e paginação de bancos acima de 1 MiB. Playwright MCP desktop/mobile com API e JWT sintéticos, sem login real. Sem AWS."
     },
     {
       "id": "library",

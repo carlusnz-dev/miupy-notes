@@ -43,7 +43,7 @@ export default function ProfilePage() {
         {query.data?.truncated && <p className="muted-small">Métricas limitadas às primeiras 5.000 notas.</p>}
         <div className="profile-stats">{[["Notas", stats.total], ["Palavras", stats.words], ["Caracteres", details.characters], ["Tags distintas", stats.tags.length], ["Média de palavras", details.averageWords], ["Primeira nota", date(details.first)], ["Última nota", date(details.last)]].map(([label, value]) => <div className="profile-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
         <div className="profile-charts"><Chart title="Notas criadas por dia" summary={`${stats.createdInWindow} notas criadas nos últimos 30 dias.`} data={stats.createdPerDay} x="date" /><Chart title="Tags mais usadas" summary={`${stats.tags.length} tags distintas; até oito exibidas.`} data={stats.tags.slice(0, 8).map(({ tag, count }) => ({ tag, count }))} x="tag" horizontal /><Chart title="Palavras por nota" summary={`Até dez notas com mais palavras; média de ${details.averageWords} palavras.`} data={details.topNotes.map(({ title, words }) => ({ title, count: words }))} x="title" horizontal /></div>
-        <div className="profile-future">{["Agenda", "Finanças", "Biblioteca"].map((label) => <div key={label} className="profile-stat"><span>{label}</span><strong>0</strong><small>Em preparação</small></div>)}</div>
+        <div className="profile-future">{["Agenda", "Biblioteca"].map((label) => <div key={label} className="profile-stat"><span>{label}</span><strong>0</strong><small>Em preparação</small></div>)}</div>
       </>}
     </>}
   </div>;
