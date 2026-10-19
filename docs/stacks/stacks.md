@@ -2,10 +2,11 @@
 
 | Camada | Escolha | Estado | Motivo |
 |---|---|---|---|
-| Desktop | Tauri 2 + Rust | Template presente | Distribuição nativa e casca pequena; medir binário real. |
-| Interface | React + TypeScript + Vite | Base de interface em `apps/web`; dependências novas pendentes de instalação | UI tipada e fluxo já iniciado no repositório. |
-| HTTP client | Axios | Declarado, não instalado | Cliente único com autenticação, timeout, erros e cancelamento padronizados. |
-| API | Express + TypeScript + Zod + AWS SDK + adaptador Lambda | Template em `apps/api`; dependências pendentes de instalação | Fronteiras por módulo e rota pública de saúde. |
+| Desktop | Tauri 2 + Rust | Login Google próprio (PKCE, loopback) com `keyring` 4, `reqwest` 0.13 (rustls), `tokio` | Distribuição nativa e casca pequena; medir binário real. |
+| Editor | CodeMirror 6 (`@uiw/react-codemirror`, `@codemirror/lang-markdown`) + `react-markdown`/`remark-gfm` | Em uso, carregado sob demanda | Markdown puro (exportável), atalhos e prévia sem HTML bruto. |
+| Interface | React + TypeScript + Vite | Base de interface em `apps/web`; instalada e compilada | UI tipada e fluxo já iniciado no repositório. |
+| HTTP client | Axios | Instalado; cliente central sem chamadas reais | Cliente único com autenticação, timeout, erros e cancelamento padronizados. |
+| API | Express + TypeScript + Zod + AWS SDK + `jose` + adaptador Lambda | Template em `apps/api`; instalado, compilado e testado | Fronteiras por módulo e rota pública de saúde. |
 | API Gateway HTTP + Lambda | AWS | Planejado | Entrada HTTP e execução sob demanda. |
 | Dados | DynamoDB | Planejado | Metadados e entidades; índices só após consultas reais. |
 | Objetos | S3 | Planejado | Anexos, exportações e backups com regras distintas. |
@@ -14,6 +15,6 @@
 | Integrações | Google Calendar/Gmail | Planejado | OAuth com consentimento e sincronização por provedor. |
 | Integração | Google Keep | Condicional | API oficial tem foco empresarial; verificar conta e permissões. |
 | LLM | MCP | Futuro | Ferramentas sobre dados autorizados e com auditoria. |
-| Movimento e CSS | GSAP + Tailwind CSS 4 | Declarados, não instalados | GSAP para interações futuras; base atual usa animação CSS com movimento reduzido. |
+| Movimento e CSS | GSAP + Tailwind CSS 4 | Instalados; Tailwind ativo no build, GSAP ainda sem uso | GSAP para interações futuras; base atual usa animação CSS com movimento reduzido. |
 
 Não fixar versões de provider, runtime Lambda, autenticação ou região até o primeiro módulo concreto e a decisão em `docs/decisoes/pendencias.md`.

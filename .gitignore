@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+*.tsbuildinfo
 *.local
 .claude/settings.local.json
 .terraform/
@@ -33,3 +34,6 @@ override.tf.json
 *.njsproj
 *.sln
 *.sw?
+
+# Saída do Playwright MCP (capturas, snapshots, console)
+.playwright-mcp/

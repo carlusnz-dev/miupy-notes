@@ -2,7 +2,7 @@
 
 Estas respostas são necessárias antes de implementar ou implantar os respectivos fluxos. O trabalho de estruturação não depende delas.
 
-1. **Identidade:** app estritamente pessoal com um usuário ou possibilidade de vários usuários? Qual provedor de login para a API e o fluxo OAuth do desktop?
+1. ~~**Identidade:**~~ decidido em [`2026-10-18_identidade.md`](2026-10-18_identidade.md): um único usuário, Google OIDC direto. Cliente OAuth criado e `iss` real confirmado (`https://accounts.google.com`) na sessão 05; falta o authorizer na AWS.
 2. **AWS:** conta, região, orçamento mensal, ambiente de desenvolvimento e destino dos alertas. Não armazenar esses valores com segredos em Git.
 3. **Google:** conta pessoal ou Google Workspace? Quais dados de Calendar e Gmail devem ser persistidos, por quanto tempo e com que escopos? Keep depende da elegibilidade da conta.
 4. **Dados locais:** é preciso consultar/editar offline ou toda alteração pode depender da API? Isso define cache, conflito e criptografia local.

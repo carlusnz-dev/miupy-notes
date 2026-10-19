@@ -1,9 +1,27 @@
 import { z } from "zod";
 
+const title = z.string().trim().min(1).max(200);
+const body = z.string().max(100_000);
+const tags = z.array(z.string().trim().min(1).max(40)).max(20);
+
 export const createNoteInputSchema = z.strictObject({
-  title: z.string().trim().min(1).max(200),
-  body: z.string().max(100_000).default(""),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  title,
+  body: body.default(""),
+  tags: tags.default([]),
+});
+
+export const updateNoteInputSchema = z.strictObject({
+  title: title.optional(),
+  body: body.optional(),
+  tags: tags.optional(),
+  version: z.int().positive(),
+}).refine((input) => input.title !== undefined || input.body !== undefined || input.tags !== undefined);
+
+export const listNotesQuerySchema = z.strictObject({
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type CreateNoteInput = z.infer<typeof createNoteInputSchema>;
+export type UpdateNoteInput = z.infer<typeof updateNoteInputSchema>;
+export type ListNotesQuery = z.infer<typeof listNotesQuerySchema>;

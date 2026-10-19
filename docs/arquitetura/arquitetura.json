@@ -1,15 +1,51 @@
 {
   "project": "miupy-notes",
   "updatedAt": "2026-10-18",
-  "statusValues": ["planned", "template", "partial", "implemented", "verified"],
+  "statusValues": [
+    "planned",
+    "template",
+    "partial",
+    "implemented",
+    "verified"
+  ],
   "description": "Sistema pessoal Tauri + React com API serverless planejada.",
   "modules": [
-    {"id": "frontend", "path": "apps/web", "status": "partial", "role": "Interface React, rotas e estilo base; dependências novas declaradas mas não instaladas nem compiladas."},
-    {"id": "tauri", "path": "src-tauri", "status": "template", "role": "Casca desktop apontando para apps/web; janela não verificada nesta sessão."},
-    {"id": "api", "path": "apps/api", "status": "partial", "role": "Template Express/TypeScript, core, módulo notes e handler Lambda; notas não montadas sem autenticação; dependências não instaladas."},
-    {"id": "integrations", "path": "apps/api/src/modules/integrations", "status": "planned", "role": "Conectores externos e sincronização."},
-    {"id": "mcp", "path": "mcp", "status": "planned", "role": "Ferramentas limitadas para LLMs."},
-    {"id": "infrastructure", "path": "infra", "status": "planned", "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."}
+    {
+      "id": "frontend",
+      "path": "apps/web",
+      "status": "partial",
+      "role": "Interface React com rotas em HashRouter, tokens flat monocromáticos e fontes locais. Login pelo estado de auth (lib/auth.ts) com comandos Tauri; o Axios só envia com provedor de token (ID token obtido do Rust a cada requisição). Notas: lista, criar (só título) e editor Markdown em #/notes/:id carregado sob demanda (CodeMirror 6 + react-markdown/remark-gfm; autosave por PATCH com version, 409, exclusão). Validado em Chromium headless (1440 e 390 px) nos estados de prévia; editor ainda não validado visualmente (Vite com React duplicado após instalar dependências). Bundle inicial 409 kB (130 kB gzip); chunk do editor 783 kB (261 kB gzip)."
+    },
+    {
+      "id": "tauri",
+      "path": "src-tauri",
+      "status": "partial",
+      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev no Hyprland/Wayland com NVIDIA: npm run tauri:dev:wayland (__NV_DISABLE_EXPLICIT_SYNC=1, mantém DMABUF/GPU); npm run tauri:dev:software (WEBKIT_DISABLE_DMABUF_RENDERER=1) fica como fallback lento, por software. Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth."
+    },
+    {
+      "id": "api",
+      "path": "apps/api",
+      "status": "partial",
+      "role": "Express/TypeScript com core (incl. autenticação jose + lista de sub), módulo notes montado em /v1/notes atrás do middleware, handler Lambda com claims do authorizer (não implantado). API local com DynamoDB Local; 28 testes, build e check:modules passam. Sem DynamoDB real nem AWS."
+    },
+    {
+      "id": "integrations",
+      "path": "apps/api/src/modules/integrations",
+      "status": "planned",
+      "role": "Conectores externos e sincronização."
+    },
+    {
+      "id": "mcp",
+      "path": "mcp",
+      "status": "planned",
+      "role": "Ferramentas limitadas para LLMs."
+    },
+    {
+      "id": "infrastructure",
+      "path": "infra",
+      "status": "planned",
+      "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."
+    }
   ],
   "contracts": {
     "http": "docs/arquitetura/api.md",
@@ -20,5 +56,8 @@
     "style": "styles/tokens.json"
   },
   "openDecisions": "docs/decisoes/pendencias.md",
+  "acceptedDecisions": [
+    "docs/decisoes/2026-10-18_identidade.md"
+  ],
   "deployedResources": []
 }
