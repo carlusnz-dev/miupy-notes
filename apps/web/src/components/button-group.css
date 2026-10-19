@@ -1,0 +1,5 @@
+.button-group { position: relative; display: inline-flex; flex: none; padding: 2px; border: 1px solid var(--color-border); border-radius: var(--radius-small); }
+.button-group-indicator { position: absolute; top: 0; left: 0; pointer-events: none; border-radius: 4px; background: var(--color-surface-raised); }
+.button-group button { position: relative; min-width: 28px; min-height: 28px; padding: 2px 5px; border: 0; border-radius: 4px; color: var(--color-muted); background: transparent; font: inherit; cursor: pointer; }
+.button-group button[aria-pressed="true"] { color: var(--color-text); }
+.period-content { display: flex; flex: 1; flex-direction: column; }
