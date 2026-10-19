@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ApiError, setAccessTokenProvider } from "./api-client";
+import { z } from "zod";
 
 export type AuthStatus = "checking" | "signed-out" | "signed-in" | "unsupported";
 export type AuthState = { status: AuthStatus; signingIn: boolean; error: string | null };
@@ -88,4 +89,16 @@ export function subscribeAuth(listener: (state: AuthState) => void) {
 
 export function useAuth(): AuthState {
   return useSyncExternalStore(subscribe, () => state);
+}
+
+const profileSchema = z.object({ name: z.string().optional(), email: z.email().optional(), picture: z.url().optional() });
+/** O payload serve apenas para exibição; a API valida a assinatura para autorizar dados. */
+export async function getProfile() {
+  if (!isTauri()) return null;
+  const token = await invoke<string>("auth_id_token");
+  const segment = token.split(".")[1];
+  if (!segment) throw new Error("Perfil indisponível.");
+  const binary = atob(segment.replace(/-/g, "+").replace(/_/g, "/"));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return profileSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
 }
