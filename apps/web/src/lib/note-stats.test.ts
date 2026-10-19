@@ -38,3 +38,12 @@ test("computeNoteStats sem notas devolve zeros em todos os dias", () => {
   assert.ok(stats.createdPerDay.every((day) => day.count === 0));
   assert.equal(new Set(stats.createdPerDay.map((day) => day.date)).size, 30);
 });
+
+test("computeNoteDetails ordena datas e notas por palavras sem alterar a lista", async () => {
+  const { computeNoteDetails } = await import("./note-stats");
+  const older = { ...note(new Date(2026, 0, 1), "um dois três"), title: "Antiga" };
+  const newer = { ...note(new Date(2026, 0, 3), "quatro"), title: "Nova" };
+  const notes = [newer, older];
+  assert.deepEqual(computeNoteDetails(notes), { characters: 18, averageWords: 2, first: older.createdAt, last: newer.createdAt, topNotes: [{ title: "Antiga", words: 3 }, { title: "Nova", words: 1 }] });
+  assert.equal(notes[0], newer);
+});

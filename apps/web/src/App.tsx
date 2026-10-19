@@ -1,6 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
+import Sidebar from "./components/Sidebar";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
 import ArrowIcon from "./components/ArrowIcon";
@@ -9,8 +10,12 @@ import { SkeletonBody } from "./components/Skeleton";
 
 // O editor (CodeMirror + prévia Markdown) só carrega ao abrir uma nota.
 const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
+// Perfil traz o Recharts; configurações só carregam quando abertas.
+const ProfilePage = lazy(() => import("./ProfilePage"));
+const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
+import "./account-nav.css";
 
 const sections = [
   { path: "/notes", label: "Notas", description: "Ideias, páginas e conexões em um lugar." },
@@ -71,25 +76,16 @@ function Shell() {
     ? "Visão geral"
     : pathname.startsWith("/notes/")
       ? "Editor de notas"
-      : sections.find((section) => section.path === pathname)?.label ?? "Página não encontrada";
+      : pathname === "/profile"
+        ? "Perfil"
+        : pathname === "/settings"
+          ? "Configurações"
+          : sections.find((section) => section.path === pathname)?.label ?? "Página não encontrada";
 
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
-      <aside className="sidebar">
-        <NavLink className="brand" to="/" aria-label="miupy notes, início">
-          <img src="/mark.svg" alt="" width="34" height="34" />
-          <span>miupy<span className="brand-light"> / notes</span></span>
-        </NavLink>
-        <div className="nav-caption">ESPAÇOS</div>
-        <nav aria-label="Navegação principal">
-          <NavLink end to="/">Visão geral</NavLink>
-          {sections.map((section) => (
-            <NavLink key={section.path} to={section.path}>{section.label}</NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-footer">Um lugar para o que importa.</div>
-      </aside>
+      <Sidebar />
       <main className="main-content">
         <header className="topbar">
           <span>miupy / notes</span>
@@ -104,6 +100,16 @@ function Shell() {
                 <Route path="/notes/:id" element={
                   <Suspense fallback={<SkeletonBody label="Carregando editor…" lines={2} cards={1} cardHeight={380} />}>
                     <NoteEditorPage />
+                  </Suspense>
+                } />
+                <Route path="/settings" element={
+                  <Suspense fallback={<SkeletonBody label="Carregando configurações…" lines={4} />}>
+                    <SettingsPage />
+                  </Suspense>
+                } />
+                <Route path="/profile" element={
+                  <Suspense fallback={<SkeletonBody label="Carregando perfil…" cards={4} cardHeight={120} columns={2} />}>
+                    <ProfilePage />
                   </Suspense>
                 } />
                 {sections.filter((section) => section.path !== "/notes").map((section) => (

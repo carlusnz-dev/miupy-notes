@@ -1,0 +1,26 @@
+.sidebar.shell-sidebar { position: relative; width: var(--sidebar-width); padding: 24px 14px; }
+.sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.shell-sidebar .brand { gap: 8px; padding: 0; font-size: 14px; }
+.sidebar-toggle { display: grid; place-items: center; flex: none; width: 30px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-small); color: var(--color-muted); background: transparent; cursor: pointer; }
+.sidebar-toggle:hover { color: var(--color-text); background: var(--color-surface-raised); }
+.shell-sidebar nav a, .shell-sidebar .sidebar-footer a { display: flex; align-items: center; gap: 10px; }
+.shell-sidebar svg { flex: none; }
+.shell-sidebar .sidebar-footer { padding: 20px 0 0; }
+.shell-sidebar .sidebar-footer a { min-height: 40px; margin: 4px 0; padding: 8px 13px; border-radius: var(--radius-small); }
+.shell-sidebar .sidebar-footer a:hover, .shell-sidebar .sidebar-footer a.active { background: var(--color-surface-raised); }
+.sidebar-resize { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; }
+.sidebar-resize:hover, .sidebar-resize:focus-visible { background: var(--color-border-strong); outline: 2px solid var(--color-focus); outline-offset: -2px; }
+@media (min-width: 761px) {
+  .sidebar.shell-sidebar.is-collapsed { width: 76px; padding-inline: 10px; }
+  .is-collapsed .sidebar-heading { flex-direction: column; gap: 12px; }
+  .is-collapsed .sidebar-label, .is-collapsed .sidebar-resize { display: none; }
+  .is-collapsed nav { margin-top: 30px; }
+  .shell-sidebar.is-collapsed nav a, .shell-sidebar.is-collapsed .sidebar-footer a { justify-content: center; padding-inline: 0; }
+}
+@media (max-width: 760px) {
+  .sidebar.shell-sidebar { width: 100%; padding: 12px 16px 8px; }
+  .shell-sidebar .sidebar-toggle, .shell-sidebar .sidebar-resize { display: none; }
+  .shell-sidebar .sidebar-footer { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 4px; }
+  .shell-sidebar .sidebar-footer a { padding: 4px 7px; margin: 0; min-height: 32px; }
+  .shell-sidebar nav a { gap: 6px; }
+}
