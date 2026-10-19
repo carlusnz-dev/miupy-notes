@@ -17,7 +17,7 @@ RF-02, RF-03, RF-04, RF-08 e RF-10. Base `/v1/finance`, montada atrás da mesma 
 | GET | `/summary` | sem query | `{ currencies: [{ currency, incomeCents, expenseCents, balanceCents, count }] }` |
 | GET | `/export.csv` | sem query | CSV UTF-8 com BOM, download `financas.csv` |
 
-Lançamento completo (todos os campos obrigatórios, inclusive nulos):
+Lançamento completo (campos obrigatórios, inclusive nulos, exceto `installmentCount` opcional):
 
 ```json
 {
@@ -39,3 +39,11 @@ Schemas Zod estritos em `modules/finance/contract.ts` e `dto/input.ts`; campos d
 Paginação por ID, sem ordem cronológica; cursor opaco carrega somente ID, e a partição sempre é reconstruída pelo principal. `summary` e CSV percorrem todas as páginas (50 por consulta), apenas do usuário autenticado, sem converter moedas. CSV inclui ID, título, centavos, moeda, tipo, data, categoria, banco histórico, tags, origem, vínculo, mês e método; campos entre aspas, aspas duplicadas, fórmulas prefixadas com apóstrofo. Exportação é transmitida em fluxo com controle de escrita; falha após envio do cabeçalho encerra a conexão. Totais e exportação não são um snapshot transacional durante escritas concorrentes.
 
 Integração web: `FinancePage` em `apps/web/src/finance/FinancePage.tsx`, cliente `lib/finance-api.ts` usa Axios central autenticado; rotas lazy `#/finance` e `#/finance/:id` (detalhe via GET individual) montadas após autorização do coordenador. Consultas e formulários pessoais só montam com `auth.status === "signed-in"`; sair desmonta estado local e cancela leituras, sem cache financeiro global. `401` expira a sessão. Exportação usa o endpoint global, nunca a página visível. Upload usa FileReader e envia os bytes. Sem login no navegador comum, o cliente central impede requisições, como nas notas.
+
+## Parcelas de cartão
+
+`installmentCount?: number | null` é opcional em POST e PATCH: inteiro de 1 a 120, sem coerção de strings. Número não-nulo só é aceito em `direction: "expense"` e `paymentMethod: "card"`; fora dessa combinação responde `400 VALIDATION_ERROR`. `null` explícito é aceito em qualquer método e significa não informado; `1` significa à vista; `2..120` informa parcelamento. Saídas sempre incluem `installmentCount`, com `null` para itens antigos sem o atributo. O tipo compartilhado `TransactionInput` contém a propriedade opcional, sem exigir adaptação insegura no cliente.
+
+Em PATCH, o corpo continua exigindo os demais campos de domínio e a versão: omitir parcelas preserva o valor existente quando continua despesa por cartão; ao mudar para entrada ou outro método, omissão limpa para `null`. `null` explícito limpa também um cartão. Concorrência e isolamento continuam seguindo as condições de versão e principal já documentadas.
+
+`amountCents` permanece o valor TOTAL: não se divide automaticamente o valor, não se geram lançamentos futuros, nem se alteram os totais globais. CSV acrescenta a coluna `Parcelas` ao final, vazia para `null`; mantém todas as páginas do usuário e o escape de fórmulas/aspas. Exemplo: cartão com `amountCents: 12000, installmentCount: 3` representa uma única despesa de R$ 120,00, informada como três parcelas.

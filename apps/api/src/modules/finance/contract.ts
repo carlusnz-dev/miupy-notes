@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const installmentCountSchema = z.int().min(1).max(120).nullable();
+
 export const transactionFields = {
   title: z.string().trim().min(1).max(200),
   amountCents: z.int().min(1).max(1_000_000_000_000),
@@ -12,6 +14,7 @@ export const transactionFields = {
   source: z.string().trim().min(1).max(200),
   link: z.enum(["none", "salary", "monthlyBills"]),
   linkedMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable(),
+  installmentCount: installmentCountSchema.optional(),
   paymentMethod: z.enum(["pix", "card", "cash", "transfer", "other"]).nullable(),
 };
 export const logoSchema = z.discriminatedUnion("kind", [
@@ -23,7 +26,7 @@ export const logoSchema = z.discriminatedUnion("kind", [
 ]);
 export const bankFields = { title: z.string().trim().min(1).max(120), logo: logoSchema.nullable() };
 const metadata = { id: z.uuid(), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), version: z.int().positive() };
-export const transactionOutputSchema = z.strictObject({ ...transactionFields, ...metadata, bankTitle: z.string().nullable() });
+export const transactionOutputSchema = z.strictObject({ ...transactionFields, installmentCount: installmentCountSchema.default(null), ...metadata, bankTitle: z.string().nullable() });
 export const bankOutputSchema = z.strictObject({ ...bankFields, ...metadata });
 export const transactionPageSchema = z.strictObject({ items: z.array(transactionOutputSchema), nextCursor: z.string().nullable() });
 export const bankPageSchema = z.strictObject({ items: z.array(bankOutputSchema), nextCursor: z.string().nullable() });
