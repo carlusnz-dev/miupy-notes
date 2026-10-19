@@ -11,3 +11,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-18 | 03 — dependências, verificação e refinamento visual | [relatório](2026-10-18_sessao-03.md) |
 | 2026-10-18 | 04 — identidade, módulo de notas e tela de notas | [relatório](2026-10-18_sessao-04.md) |
 | 2026-10-18 | 05 — login Google, /v1/notes autenticado e editor Markdown | [relatório](2026-10-18_sessao-05.md) |
+| 2026-10-19 | 06 — fluxo Git, interface, notas e finanças | [relatório](2026-10-19_sessao-06.md) |
