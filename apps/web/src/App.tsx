@@ -12,6 +12,8 @@ import { SkeletonBody } from "./components/Skeleton";
 const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 // Perfil traz o Recharts; configurações só carregam quando abertas.
 const ProfilePage = lazy(() => import("./ProfilePage"));
+const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
+const FinancePage = lazy(() => import("./finance/FinancePage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
@@ -76,6 +78,8 @@ function Shell() {
     ? "Visão geral"
     : pathname.startsWith("/notes/")
       ? "Editor de notas"
+      : pathname.startsWith("/finance/")
+        ? "Lançamento financeiro"
       : pathname === "/profile"
         ? "Perfil"
         : pathname === "/settings"
@@ -112,7 +116,9 @@ function Shell() {
                     <ProfilePage />
                   </Suspense>
                 } />
-                {sections.filter((section) => section.path !== "/notes").map((section) => (
+                <Route path="/finance/:id" element={<Suspense fallback={<SkeletonBody label="Carregando lançamento…" lines={4} />}><FinanceDetailPage /></Suspense>} />
+                <Route path="/finance" element={<Suspense fallback={<SkeletonBody label="Carregando finanças…" lines={4} />}><FinancePage /></Suspense>} />
+                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance").map((section) => (
                   <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
                 ))}
                 <Route path="*" element={<NotFound />} />
