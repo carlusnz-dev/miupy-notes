@@ -11,6 +11,8 @@ type ModalProps = {
   busy?: boolean;
   /** Elemento que recebe o foco ao abrir; padrão: `[data-autofocus]`, depois o primeiro controle do conteúdo. */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Classe extra no <dialog>, para ajustes de largura de quem consome. */
+  className?: string;
 };
 
 const focusable = "button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])";
@@ -18,7 +20,7 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 
 // <dialog> nativo com showModal(): isola o fundo (inert), prende o Tab e trata Esc.
 // GSAP só anima a entrada/saída; com movimento reduzido tudo é instantâneo.
-export default function Modal({ open, title, onClose, children, busy = false, initialFocusRef }: ModalProps) {
+export default function Modal({ open, title, onClose, children, busy = false, initialFocusRef, className }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [mounted, setMounted] = useState(open);
   const titleId = useId();
@@ -77,14 +79,14 @@ export default function Modal({ open, title, onClose, children, busy = false, in
   return (
     <dialog
       ref={dialogRef}
-      className="modal"
+      className={className ? `modal ${className}` : "modal"}
       aria-labelledby={titleId}
       aria-busy={busy}
       onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onCloseRef.current(); }}
       // Navegadores diferem em para onde o Tab vai ao sair do <dialog> (barra do navegador, <body>): o ciclo é feito aqui.
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
-        const items = [...event.currentTarget.querySelectorAll<HTMLElement>(focusable)].filter((item) => !item.matches(":disabled") && item.offsetParent !== null);
+        const items = [...event.currentTarget.querySelectorAll<HTMLElement>(focusable)].filter((item) => !item.matches(":disabled") && item.getClientRects().length > 0);
         const first = items[0], last = items[items.length - 1];
         if (!first) { event.preventDefault(); return; }
         if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last.focus(); }

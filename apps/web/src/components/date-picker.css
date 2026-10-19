@@ -8,7 +8,7 @@
 .date-picker button.date-toggle:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-raised); }
 .date-picker button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .date-error { margin: 0; color: var(--color-text); font-size: 13px; }
-.date-popover { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: min(304px, calc(100vw - 64px)); display: grid; gap: 8px; padding: 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-medium); color: var(--color-text); background: var(--color-surface-raised); box-shadow: 0 12px 32px rgb(0 0 0 / .5); font-size: 13px; }
+.date-popover { position: fixed; z-index: 20; overflow-y: auto; box-sizing: border-box; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-medium); color: var(--color-text); background: var(--color-surface-raised); box-shadow: 0 12px 32px rgb(0 0 0 / .5); font-size: 13px; }
 .date-header { display: grid; grid-template-columns: auto minmax(0, 1fr) 84px auto; align-items: center; gap: 6px; }
 .date-header .select-field .select-control select { min-height: 34px; padding: 5px 24px 5px 8px; font-size: 13px; background-color: var(--color-surface); }
 .date-header .select-chevron { right: 8px; }

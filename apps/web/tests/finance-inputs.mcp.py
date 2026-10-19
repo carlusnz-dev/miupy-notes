@@ -209,10 +209,130 @@ try:
       assert(last.method === 'PATCH' && last.body.amountCents === 123456 && last.body.version === 3 && last.body.date === '2024-02-29', 'Payload edição: ' + JSON.stringify(last));
       out.push('payloads');
 
+      // Parcelas (cartão): UI reativa, total, validação e payload.
+      const submitForm = async () => { await page.getByRole('button', { name: 'Salvar lançamento' }).click(); await page.waitForTimeout(250); };
+      const fill = async (title) => { await page.locator('input[name=title]').fill(title); await page.locator('input[name=category]').fill('Teste'); await page.getByLabel(/^Valor/, { exact: false }).first().click(); await page.keyboard.type('300'); };
+      const sentBefore = () => sent.length;
+      await page.locator('#new').click();
+      await fill('Notebook');
+      assert(await page.getByText('Compra parcelada').count() === 0, 'Parcelas ocultas fora do cartão');
+      await page.getByLabel('Método de pagamento').selectOption('card');
+      const parceled = page.getByLabel('Compra parcelada');
+      assert(await parceled.count() === 1 && !(await parceled.isChecked()), 'Checkbox de parcelas no cartão');
+      assert(await page.getByLabel('Número de parcelas').count() === 0 && await page.getByLabel('Valor', { exact: true }).count() === 1, 'À vista: sem contagem e valor simples');
+      await parceled.check();
+      assert(await page.getByLabel('Valor total da compra').count() === 1 && await page.getByText('total da compra, não o de cada parcela').count() === 1, 'Valor rotulado como total');
+      const count = page.getByLabel('Número de parcelas');
+      for (const bad of ['0', '1', '121', '1.5', '-3', '']) {
+        await count.fill(bad);
+        const before = sentBefore();
+        await submitForm();
+        assert(sent.length === before && await count.evaluate(el => el.validationMessage) !== '', 'Parcelas inválidas bloqueiam: ' + JSON.stringify(bad));
+      }
+      await count.fill('3');
+      assert(await count.evaluate(el => el.validationMessage) === '', 'Contagem 3 válida');
+      await submitForm();
+      await page.waitForFunction(() => JSON.parse(document.getElementById('saved').textContent || '{}').title === 'Notebook');
+      last = sent.at(-1);
+      assert(last.method === 'POST' && last.body.installmentCount === 3 && last.body.amountCents === 30000 && last.body.paymentMethod === 'card', 'Payload cartão 3x (total inalterado): ' + JSON.stringify(last.body));
+
+      // Edição do count 3 -> 4 e depois método pix -> null.
+      const card = { direction: 'expense', paymentMethod: 'card', installmentCount: 3, link: 'none', linkedMonth: null, currency: 'BRL', amountCents: 30000, title: 'Notebook' };
+      await page.evaluate((patch) => window.__setExisting(patch), card);
+      await page.locator('#edit').click();
+      assert(await page.getByLabel('Compra parcelada').isChecked() && await page.getByLabel('Número de parcelas').inputValue() === '3' && await page.getByLabel('Valor total da compra').inputValue() === '300,00', 'Edição inicia com 3x e total exato');
+      await page.getByLabel('Número de parcelas').fill('4');
+      await submitForm();
+      last = sent.at(-1);
+      assert(last.method === 'PATCH' && last.body.installmentCount === 4 && last.body.amountCents === 30000 && last.body.version === 3, 'Payload edição 4x: ' + JSON.stringify(last.body));
+      await page.locator('#edit').click();
+      await page.getByLabel('Método de pagamento').selectOption('pix');
+      assert(await page.getByLabel('Compra parcelada').count() === 0 && await page.getByLabel('Número de parcelas').count() === 0, 'Pix oculta parcelas');
+      await submitForm();
+      last = sent.at(-1);
+      assert(last.body.installmentCount === null && last.body.paymentMethod === 'pix', 'Pix envia null: ' + JSON.stringify(last.body));
+      await page.locator('#edit').click();
+      await page.getByLabel('Tipo', { exact: true }).selectOption('income');
+      assert(await page.getByLabel('Compra parcelada').count() === 0, 'Entrada oculta parcelas');
+      await submitForm();
+      last = sent.at(-1);
+      assert(last.body.installmentCount === null && last.body.paymentMethod === null, 'Entrada envia null');
+      // Cartão à vista e lançamento antigo sem informação.
+      await page.evaluate((patch) => window.__setExisting(patch), { ...card, installmentCount: 1 });
+      await page.locator('#edit').click();
+      assert(!(await page.getByLabel('Compra parcelada').isChecked()), 'Count 1 aparece como à vista');
+      await submitForm();
+      assert(sent.at(-1).body.installmentCount === 1, 'À vista envia 1');
+      await page.evaluate((patch) => window.__setExisting(patch), { ...card, installmentCount: null });
+      await page.locator('#edit').click();
+      assert(await page.getByText('Parcelamento não informado').count() === 1, 'Legado mostra não informado');
+      await submitForm();
+      assert(sent.at(-1).body.installmentCount === null, 'Legado intocado continua null');
+      await page.locator('#edit').click();
+      await page.getByLabel('Compra parcelada').check();
+      await page.getByLabel('Compra parcelada').uncheck();
+      assert(await page.getByText('Parcelamento não informado').count() === 0, 'Decisão do usuário remove o aviso');
+      await submitForm();
+      assert(sent.at(-1).body.installmentCount === 1, 'Decisão explícita à vista envia 1');
+      out.push('parcelas');
+
+      // Erro de API mantém o formulário utilizável; data inicial local e ISO via FormData.
+      await page.unroute('**/v1/finance/transactions**');
+      await page.route('**/v1/finance/transactions**', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INTERNAL', message: 'Falha sintética.' } }) }));
+      await page.locator('#new').click();
+      const form = await page.evaluate(() => { const now = new Date(); const local = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`; const visual = document.querySelector('.date-control input[type=text]'); const data = new FormData(document.querySelector('form.finance-form')); return { local, shown: visual.value, visualName: visual.name, submitted: data.get('date') }; });
+      assert(form.shown === form.local && form.visualName === '' && /^\d{4}-\d{2}-\d{2}$/.test(form.submitted), 'Data inicial local e ISO oculto: ' + JSON.stringify(form));
+      await page.locator('input[name=title]').fill('Erro'); await page.locator('input[name=category]').fill('Teste');
+      await page.getByLabel('Valor', { exact: true }).click(); await page.keyboard.type('1');
+      await submitForm();
+      assert(await page.getByRole('alert').count() >= 1 && await page.getByRole('button', { name: 'Salvar lançamento' }).isEnabled(), 'Erro de API exibido e formulário liberado');
+      assert(await page.evaluate(() => document.querySelector('input[name=title]').value) === 'Erro', 'Dados preservados após erro');
+      // Colagem pelo clipboard real do navegador.
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.evaluate(() => navigator.clipboard.writeText('R$ 2.500,75'));
+      await page.getByLabel('Valor', { exact: true }).click();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.press('Control+V');
+      assert(await page.getByLabel('Valor', { exact: true }).inputValue() === '2.500,75', 'Ctrl+V real: ' + await page.getByLabel('Valor', { exact: true }).inputValue());
+      await page.getByRole('button', { name: 'Fechar janela' }).click();
+      out.push('erro+data+clipboard');
+
+      // Calendário perto da borda inferior em telas curtas e 390x844.
+      for (const [width, height] of [[390, 844], [390, 520]]) {
+        await page.setViewportSize({ width, height });
+        await page.locator('#new').click();
+        await page.locator('.date-control input[type=text]').scrollIntoViewIfNeeded();
+        await page.getByRole('button', { name: /Abrir calendário/ }).click();
+        const popover = page.getByRole('dialog', { name: /Escolher data/ });
+        await popover.waitFor();
+        await page.waitForTimeout(400);
+        const box = await page.evaluate(() => { const rect = document.querySelector('.date-popover').getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, h: innerHeight, w: innerWidth, scroll: document.querySelector('.date-popover').scrollHeight <= document.querySelector('.date-popover').clientHeight }; });
+        assert(box.top >= 0 && box.bottom <= box.h && box.left >= 0 && box.right <= box.w, 'Calendário dentro da viewport ' + height + ': ' + JSON.stringify(box));
+        const days = page.getByRole('button', { name: /^\d+ de \w+ de \d+$/ });
+        const lastDay = days.last();
+        const lastBox = await lastDay.boundingBox();
+        assert(box.scroll ? lastBox.y + lastBox.height <= height : true, 'Último dia visível ' + height);
+        await page.keyboard.press('ArrowRight');
+        await page.keyboard.press('Escape');
+        await popover.waitFor({ state: 'detached' });
+        assert(await page.locator('dialog.finance-modal').count() === 1, 'Esc fecha só o calendário em ' + height);
+        await page.getByRole('button', { name: /Abrir calendário/ }).click();
+        await popover.waitFor();
+        await page.waitForTimeout(300);
+        await page.getByRole('button', { name: /^15 de \w+ de \d+$/ }).click();
+        assert(await page.locator('.date-control input[type=text]').inputValue().then(v => v.startsWith('15/')), 'Dia clicável em ' + height);
+        await page.getByRole('button', { name: 'Fechar janela' }).click();
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+      out.push('calendário-borda');
+
       // Bancos: Select de logo.
       await page.locator('#banks').click();
       await page.getByLabel('Logo', { exact: true }).selectOption('url');
       assert(await page.getByLabel(/URL HTTP/).count() === 1, 'Select de logo reage');
+      await page.getByLabel('Logo', { exact: true }).selectOption('upload');
+      await page.locator('input[type=file]').setInputFiles({ name: 'logo.txt', mimeType: 'text/plain', buffer: Buffer.from('não é imagem') });
+      assert(await page.getByRole('alert').filter({ hasText: 'PNG, JPEG ou WebP' }).count() === 1, 'Arquivo inválido recusado com mensagem');
       await page.getByRole('button', { name: 'Fechar janela' }).click();
 
       // Movimento reduzido e mobile.

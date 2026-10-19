@@ -17,9 +17,12 @@ const theme = {
   "--radius-small": `${tokens.radiusPx.small}px`, "--radius-medium": `${tokens.radiusPx.medium}px`, "--duration": `${tokens.motion.defaultDurationMs}ms`,
 } as CSSProperties;
 const banks = [{ id: "11111111-1111-4111-8111-111111111111", title: "Banco Sintético", logo: null, createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", version: 1 }];
-const existing = { id: "22222222-2222-4222-8222-222222222222", title: "Existente", amountCents: 123456, currency: "EUR" as const, direction: "income" as const, date: "2024-02-29", category: "Teste", tags: ["a", "b"], bankId: banks[0].id, bankTitle: "Banco Sintético", source: "Manual", link: "salary" as const, linkedMonth: "2026-09", paymentMethod: null, createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", version: 3 };
+const baseExisting = { id: "22222222-2222-4222-8222-222222222222", title: "Existente", amountCents: 123456, currency: "EUR" as const, direction: "income" as const, date: "2024-02-29", category: "Teste", tags: ["a", "b"], bankId: banks[0].id, bankTitle: "Banco Sintético", source: "Manual", link: "salary" as const, linkedMonth: "2026-09", paymentMethod: null, installmentCount: null as number | null, createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", version: 3 };
 
+declare global { interface Window { __setExisting: (patch: Partial<typeof baseExisting>) => void } }
 function Harness() {
+  const [existing, setExisting] = useState<typeof baseExisting>(baseExisting);
+  window.__setExisting = (patch) => setExisting({ ...baseExisting, ...patch });
   const [mode, setMode] = useState<"new" | "edit" | "banks" | null>(null);
   const [saved, setSaved] = useState("");
   return <div className="app-shell finance-page" style={theme}>

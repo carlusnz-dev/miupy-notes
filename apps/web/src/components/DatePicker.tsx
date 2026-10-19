@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import gsap from "gsap";
 import { addDays, addMonths, compare, daysInMonth, fromDisplay, fromIso, maskDisplay, monthNames, toDisplay, toIso, todayLocal, weekday, weekdayNames, type CalendarDate } from "../lib/calendar-date";
 import Select from "./Select";
@@ -27,6 +27,7 @@ export default function DatePicker({ label, value, onChange, required = false, d
   const [text, setText] = useState(() => { const date = fromIso(value); return date ? toDisplay(date) : ""; });
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [placement, setPlacement] = useState<CSSProperties>({ top: 0, left: 0 });
   const [cursor, setCursor] = useState<CalendarDate>(() => fromIso(value) ?? todayLocal());
   const focusDay = useRef(false);
   const selected = fromDisplay(text);
@@ -44,6 +45,29 @@ export default function DatePicker({ label, value, onChange, required = false, d
   useLayoutEffect(() => {
     input.current?.setCustomValidity(text && !selected ? "Informe uma data válida (dd/mm/aaaa)." : "");
   }, [text, selected]);
+
+  // O popover é `position: fixed` (não é cortado pelo overflow do painel do modal) e escolhe o lado com mais espaço.
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    function place() {
+      const field = wrapper.current?.querySelector(".date-control")?.getBoundingClientRect();
+      const element = popover.current;
+      if (!field || !element) return;
+      const width = Math.min(304, window.innerWidth - 16);
+      const left = Math.min(Math.max(8, field.right - width), window.innerWidth - width - 8);
+      const below = window.innerHeight - field.bottom - 14;
+      const above = field.top - 14;
+      const natural = element.scrollHeight;
+      const useBelow = natural <= below || below >= above;
+      const maxHeight = Math.max(160, useBelow ? below : above);
+      const height = Math.min(natural, maxHeight);
+      setPlacement({ left, width, maxHeight, top: useBelow ? field.bottom + 6 : field.top - 6 - height });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [mounted, cursor.year, cursor.month]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
@@ -122,17 +146,18 @@ export default function DatePicker({ label, value, onChange, required = false, d
       <label htmlFor={id}>{label}</label>
       <div className="date-control" data-invalid={invalid ? "true" : undefined}>
         <input
-          ref={input} id={id} name={name} type="text" inputMode="numeric" autoComplete="off" placeholder="dd/mm/aaaa" maxLength={10}
+          ref={input} id={id} type="text" inputMode="numeric" autoComplete="off" placeholder="dd/mm/aaaa" maxLength={10}
           value={text} required={required} disabled={disabled} aria-invalid={invalid ? true : undefined}
           onChange={(event) => { const masked = maskDisplay(event.target.value); const date = fromDisplay(masked); commit(date, masked); }}
         />
+        {name && <input type="hidden" name={name} value={selected ? toIso(selected) : ""} />}
         <button ref={toggle} type="button" className="date-toggle" disabled={disabled} aria-label={`Abrir calendário de ${label.toLowerCase()}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={mounted ? popoverId : undefined} onClick={() => (open ? close(true) : openCalendar())}>
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M2 6.5h12M5.5 1.8v2.6M10.5 1.8v2.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
         </button>
       </div>
       {invalid && <p className="date-error" role="alert">Informe uma data válida (dd/mm/aaaa).</p>}
       {mounted && (
-        <div ref={popover} id={popoverId} className="date-popover" role="dialog" aria-label={`Escolher ${label.toLowerCase()}`}>
+        <div ref={popover} id={popoverId} className="date-popover" style={placement} role="dialog" aria-label={`Escolher ${label.toLowerCase()}`}>
           <div className="date-header">
             <button type="button" className="date-nav" aria-label="Mês anterior" onClick={() => setCursor(addMonths(cursor, -1))}><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
             <Select label="Mês" hideLabel value={String(cursor.month)} options={monthOptions} onChange={(month) => setCursor(addMonths({ ...cursor, day: 1 }, Number(month) - cursor.month))} />
