@@ -23,14 +23,15 @@
 .finance-pagination { justify-content: flex-end; margin-top: 20px; font-size: 14px; }
 .finance-empty { padding: 24px 0; color: #a6a6a2; }
 .finance-error { padding: 16px; border: 1px solid #6e6e6a; margin: 16px 0; }
-.finance-modal { margin: auto; color: #f5f5f2; background: #151516; border: 1px solid #6e6e6a; border-radius: 10px; padding: 24px; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); box-sizing: border-box; overflow-y: auto; }
-.finance-modal::backdrop { background: rgb(0 0 0 / .75); }
-.finance-modal header { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 24px; }
+/* Caixa, backdrop e cabeçalho vêm de components/Modal (modal.css); aqui só a largura do formulário. */
+.finance-modal { width: min(560px, calc(100vw - 32px)); }
 .finance-modal h2 { font-size: 24px; margin: 0; overflow-wrap: anywhere; }
 .finance-modal footer { justify-content: flex-end; margin-top: 24px; }
 .finance-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 16px; min-width: 0; }
 .finance-form label { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
 .finance-form input, .finance-form select { background: #0b0b0c; border: 1px solid #6e6e6a; border-radius: 6px; padding: 10px; color: #f5f5f2; width: 100%; box-sizing: border-box; font: inherit; min-width: 0; color-scheme: dark; }
+.finance-form .finance-check { display: flex; align-items: center; gap: 8px; }
+.finance-form .finance-check input { width: auto; accent-color: #f5f5f2; }
 .finance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .finance-detail { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 16px; }
 .finance-detail dt { color: #a6a6a2; }
@@ -40,7 +41,7 @@
 .finance-banks li span:first-of-type { flex: 1; overflow-wrap: anywhere; }
 .finance-banks img { width: 28px; height: 28px; object-fit: contain; }
 .finance-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media (max-width: 480px) { .finance-grid { grid-template-columns: 1fr; } .finance-actions { width: 100%; } .finance-actions button { flex: 1; } .finance-modal { padding: 20px; } .finance-detail { grid-template-columns: 1fr; gap: 8px; } .finance-detail dd { margin-bottom: 8px; } }
+@media (max-width: 480px) { .finance-grid { grid-template-columns: 1fr; } .finance-actions { width: 100%; } .finance-actions button { flex: 1; } .finance-detail { grid-template-columns: 1fr; gap: 8px; } .finance-detail dd { margin-bottom: 8px; } }
 @media (prefers-reduced-motion: reduce) { .finance-page *, .finance-modal * { scroll-behavior: auto; animation: none; transition: none; } }
 
 .finance-page > h1 { font: 400 clamp(36px, 5vw, 56px) / 1.1 "Instrument Serif", Georgia, serif; margin-bottom: 24px; }

@@ -1,0 +1,12 @@
+.modal { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-medium); overflow: hidden; color: var(--color-text); background: var(--color-surface); }
+.modal::backdrop { background: rgb(0 0 0 / calc(.72 * var(--modal-fade, 1))); }
+.modal-panel { display: grid; gap: 16px; max-height: calc(100dvh - 34px); padding: 20px; overflow-y: auto; }
+.modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.modal-header h2 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.modal-close { flex: none; width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--radius-small); color: var(--color-muted); background: transparent; font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.modal-close:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-raised); }
+.modal-close:disabled { opacity: .5; cursor: not-allowed; }
+.modal :is(button, input, select, textarea, a):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.modal-body { display: grid; gap: 12px; min-width: 0; }
+.modal-body > p { margin: 0; color: var(--color-muted); }
+.modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }

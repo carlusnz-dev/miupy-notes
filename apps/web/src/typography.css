@@ -1,0 +1,5 @@
+/* Títulos de página (h1) seguem a serifa principal e uma escala única em todas as telas.
+   Fora do conteúdo Markdown, que usa --heading-font conforme as preferências. */
+:root { --page-title-size: clamp(40px, 4.6vw, 60px); }
+.page-content h1:not(.markdown-preview *) { max-width: 760px; font-family: var(--font-serif); font-size: var(--page-title-size); font-weight: 400; line-height: 1.05; letter-spacing: -.015em; }
+.page-content h1:not(.markdown-preview *) em { font: inherit; letter-spacing: inherit; }
