@@ -5,7 +5,7 @@ import type { NoteOutput } from "./notes-api";
 
 function note(createdAt: Date, body: string, tags: string[] = []): NoteOutput {
   const iso = createdAt.toISOString();
-  return { id: crypto.randomUUID(), title: "t", body, tags, createdAt: iso, updatedAt: iso, version: 1 };
+  return { id: crypto.randomUUID(), title: "t", body, tags, createdAt: iso, updatedAt: iso, folderId: null, version: 1 };
 }
 
 test("countWords ignora marcação Markdown e conta palavras acentuadas e com hífen", () => {

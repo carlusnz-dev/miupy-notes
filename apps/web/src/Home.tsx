@@ -55,7 +55,7 @@ function previewState(name: string | null) {
     tags,
     createdAt: new Date(now.getTime() - daysAgo * 86_400_000).toISOString(),
     updatedAt: now.toISOString(),
-    version: 1,
+    folderId: null, version: 1,
   });
   return {
     status: "ready" as const,

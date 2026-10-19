@@ -15,6 +15,6 @@
 | Integrações | Google Calendar/Gmail | Planejado | OAuth com consentimento e sincronização por provedor. |
 | Integração | Google Keep | Condicional | API oficial tem foco empresarial; verificar conta e permissões. |
 | LLM | MCP | Futuro | Ferramentas sobre dados autorizados e com auditoria. |
-| Movimento e CSS | GSAP + Tailwind CSS 4 | Instalados; Tailwind ativo no build, GSAP ainda sem uso | GSAP para interações futuras; base atual usa animação CSS com movimento reduzido. |
+| Movimento e CSS | GSAP + Tailwind CSS 4 | Tailwind ativo; GSAP em transições, seleção de períodos e troca de dias, com movimento reduzido | GSAP nas animações de interação; preferências do proprietário em AGENTS.md. Mesh decorativo CSS permanece na base. |
 
 Não fixar versões de provider, runtime Lambda, autenticação ou região até o primeiro módulo concreto e a decisão em `docs/decisoes/pendencias.md`.

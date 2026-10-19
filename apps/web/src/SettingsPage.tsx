@@ -31,7 +31,6 @@ export default function SettingsPage() {
       <PreferenceSelect field="colorTheme" label="Cores do editor" value={p.colorTheme} />
       <PreferenceSelect field="chipStyle" label="Estilo das tags" value={p.chipStyle} />
       <label className="settings-check"><input type="checkbox" checked={p.showTags} onChange={(event) => setEditorPreferences({ showTags: event.target.checked })} /> Mostrar tags no editor</label>
-      <label className="settings-check"><input type="checkbox" checked={p.toolbarExpanded} onChange={(event) => setEditorPreferences({ toolbarExpanded: event.target.checked })} /> Formatação expandida por padrão</label>
     </section><section className={`settings-sample editor-theme-${p.colorTheme} chip-${p.chipStyle}`} aria-label="Prévia ao vivo"><h2>Prévia ao vivo</h2><div className="settings-sample-body markdown-preview"><ReactMarkdown>{"# Uma nota\n\nUm trecho de **texto** para ler com calma.\n\n## Próximo título\n\n- Uma ideia\n- Outra ideia"}</ReactMarkdown>{p.showTags && <span className="editor-chip">exemplo</span>}</div><p className="settings-editor-line" style={{ fontFamily: "var(--editor-font)", fontSize: "var(--editor-size)" }}>Texto no editor em Markdown…</p></section></div>
     <Link className="text-link" to="/notes">Voltar às notas</Link>
   </div>;
