@@ -64,10 +64,14 @@ type Entry = {
   sending: Snapshot | null;
   blocked: boolean;
   error: ApiError | null;
+  /** Geração da sessão em que `pending` foi registrado; só texto da geração atual é enviado sozinho. */
+  pendingGeneration: number;
   running: boolean;
   drain: Promise<void> | null;
   view: EntryView;
 };
+
+const sessionEnded = () => Object.assign(new Error("Sua sessão terminou. Entre de novo."), { code: "UNAUTHORIZED" }) as ApiError;
 
 export type QueueDeps = {
   update: (id: string, input: { version: number; title?: string; body?: string; tags?: string[] }) => Promise<NoteOutput>;
@@ -86,9 +90,13 @@ export type QueueDeps = {
  * - Falha ou 409 não descartam o texto: ele fica em memória (nunca em localStorage) até gravar, recarregar
  *   por escolha do usuário (`reset`) ou sair da conta (`clear`). `attach` o devolve ao reabrir a nota.
  * - O resultado de uma nota nunca é aplicado a outra: cada entrada tem os próprios ouvintes.
+ * - Sessão: `clear` (sair da conta) e `endSession` (sessão expirada) avançam a geração. Resposta de PATCH iniciado
+ *   antes disso é ignorada (não atualiza base nem cache) e a fila nunca envia, por conta própria, texto de uma
+ *   geração anterior com o token da nova: só um novo `submit` do usuário o envia.
  */
 export function createAutosaveQueue(deps: QueueDeps) {
   const entries = new Map<string, Entry>();
+  let generation = 0;
   const listeners = new Map<string, Set<() => void>>();
 
   const notify = (id: string, entry: Entry) => {
@@ -104,32 +112,44 @@ export function createAutosaveQueue(deps: QueueDeps) {
 
   async function run(id: string, entry: Entry) {
     try {
-      while (entry.pending && !entry.blocked) {
+      while (entry.pending && !entry.blocked && entry.pendingGeneration === generation) {
         const snapshot = entry.pending;
         const patch = changes(entry.base, snapshot.draft, snapshot.eol);
         if (!patch) {
           entry.pending = null;
           break;
         }
+        const startedIn = generation;
         entry.sending = snapshot;
         entry.error = null;
         notify(id, entry);
-        let saved: NoteOutput;
+        let saved: NoteOutput | null = null;
+        let failure: ApiError | null = null;
         try {
           saved = await deps.update(id, { version: entry.base.version, ...patch });
         } catch (error) {
-          entry.sending = null;
-          if ((error as ApiError).code === "CONFLICT") entry.blocked = true;
-          else entry.error = error as ApiError;
+          failure = error as ApiError;
+        }
+        entry.sending = null;
+        if (startedIn !== generation) {
+          // A sessão mudou durante o PATCH: o resultado (sucesso ou erro) não é de quem está na tela agora.
+          // O texto enviado fica guardado, e um texto mais novo da sessão atual (se houver) segue na volta.
+          if (!entry.pending) { entry.pending = snapshot; entry.pendingGeneration = startedIn; }
+          if (entry.pendingGeneration !== generation) entry.error = sessionEnded();
           notify(id, entry);
-          deps.onError?.(error as ApiError, id);
+          continue;
+        }
+        if (failure) {
+          if (failure.code === "CONFLICT") entry.blocked = true;
+          else entry.error = failure;
+          notify(id, entry);
+          deps.onError?.(failure, id);
           return;
         }
-        entry.base = saved;
-        entry.sending = null;
+        entry.base = saved!;
         // Se o usuário digitou durante o PATCH, `pending` já é outro objeto e segue para a próxima volta.
         if (entry.pending === snapshot) entry.pending = null;
-        deps.onSaved?.(saved);
+        deps.onSaved?.(saved!);
         notify(id, entry);
       }
       notify(id, entry);
@@ -152,7 +172,7 @@ export function createAutosaveQueue(deps: QueueDeps) {
     attach(loaded: NoteOutput): { note: NoteOutput; restored: Snapshot | null } {
       const entry = entries.get(loaded.id);
       if (!entry) {
-        const created: Entry = { base: loaded, pending: null, sending: null, blocked: false, error: null, running: false, drain: null, view: undefined as unknown as EntryView };
+        const created: Entry = { base: loaded, pending: null, sending: null, blocked: false, error: null, pendingGeneration: generation, running: false, drain: null, view: undefined as unknown as EntryView };
         entries.set(loaded.id, created);
         notify(loaded.id, created);
         return { note: loaded, restored: null };
@@ -181,6 +201,7 @@ export function createAutosaveQueue(deps: QueueDeps) {
     submit(id: string, draft: Draft, eol: Eol, options: { leaving?: boolean } = {}): SubmitResult {
       const entry = entries.get(id);
       if (!entry) return { status: "unknown" };
+      entry.pendingGeneration = generation;
       const { snapshot, message } = snapshotOf(entry, draft, eol, options.leaving === true);
       if (message) {
         // Ao sair não dá para mostrar o erro: o texto fica guardado para quando a nota for reaberta.
@@ -236,9 +257,23 @@ export function createAutosaveQueue(deps: QueueDeps) {
       return [...entries.values()].some((entry) => entry.pending || entry.sending);
     },
 
-    /** Sair da conta: nenhum texto de notas fica em memória. */
+    /** Sair da conta: nenhum texto de notas fica em memória e respostas em voo são ignoradas. */
     clear() {
+      generation++;
       entries.clear();
+    },
+
+    /**
+     * Sessão expirada (401): o texto não gravado continua recuperável, mas não é enviado até o usuário
+     * entrar de novo e pedir (salvar ou editar); respostas de PATCH em voo são ignoradas.
+     */
+    endSession() {
+      generation++;
+      for (const [id, entry] of entries) {
+        if (!entry.pending && !entry.sending) continue;
+        entry.error = sessionEnded();
+        notify(id, entry);
+      }
     },
   };
 }

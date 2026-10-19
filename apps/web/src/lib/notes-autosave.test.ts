@@ -198,3 +198,40 @@ test("outra nota nunca recebe o resultado, e clear (sair da conta) esquece tudo"
   assert.equal(h.queue.view("b"), undefined);
   assert.equal(h.queue.submit("b", text("x"), "\n").status, "unknown");
 });
+
+test("sessão encerrada durante o PATCH: resposta ignorada (sem cache nem base), texto guardado e sem envio automático", async () => {
+  for (const end of ["clear", "endSession"] as const) {
+    const h = harness();
+    h.queue.attach(note("a"));
+    h.queue.submit("a", text("da conta antiga"), "\n"); await tick();
+    h.queue.submit("a", text("da conta antiga 2"), "\n"); // digitado em voo
+    h.queue[end]();
+    h.gates[0].resolve(); await tick(); await tick();
+    assert.deepEqual(h.saved, [], `${end}: o cache não é repovoado pela sessão antiga`);
+    assert.equal(h.calls.length, 1, `${end}: nenhum PATCH novo com o token da sessão seguinte`);
+    if (end === "clear") { assert.equal(h.queue.view("a"), undefined); assert.equal(h.queue.hasUnsaved(), false); continue; }
+    const view = h.queue.view("a")!;
+    assert.equal(view.base.version, 1, "base não avança com resposta de outra sessão");
+    assert.equal(view.pending?.draft.title, "da conta antiga 2");
+    assert.equal(view.error?.code, "UNAUTHORIZED");
+    assert.equal(h.queue.attach(note("a")).restored?.draft.title, "da conta antiga 2", "recuperável após entrar de novo");
+  }
+});
+
+test("depois de endSession só um novo submit do usuário envia o texto, e a resposta velha não o atrapalha", async () => {
+  const h = harness();
+  h.queue.attach(note("a"));
+  h.queue.submit("a", text("antes"), "\n"); await tick();
+  h.queue.endSession();                               // 401: sessão expirou; PATCH velho ainda em voo
+  h.queue.submit("a", text("depois do login"), "\n"); // usuário entrou de novo e editou
+  assert.equal(h.calls.length, 1, "espera o PATCH velho terminar (uma gravação por nota)");
+  h.setMode("instant");
+  h.gates[0].reject(networkError());
+  await tick(); await tick();
+  assert.equal(h.calls.length, 2);
+  assert.equal(h.calls[1], 'a@1:{"title":"depois do login"}', "texto da sessão nova enviado com a base ainda válida");
+  assert.equal(await h.queue.flush("a"), true);
+  assert.equal(h.server.get("a")?.title, "depois do login");
+  assert.deepEqual(h.saved, ["av2"]);
+  assert.equal(h.queue.view("a")?.error, null);
+});
