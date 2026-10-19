@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { saveBank, deleteBank, type Bank, type BankInput } from '../lib/finance-api';
+import Select from '../components/Select';
 import { Modal } from './Modal';
 export function logoSource(logo: Bank['logo']) { return !logo ? undefined : logo.kind === 'url' ? logo.url : `data:${logo.mime};base64,${logo.base64}`; }
 export function BanksModal({ banks, onClose, onChanged }: { banks: Bank[]; onClose: () => void; onChanged: () => void }) {
@@ -42,7 +43,7 @@ export function BanksModal({ banks, onClose, onChanged }: { banks: Bank[]; onClo
     {!banks.length && <p>Nenhum banco cadastrado.</p>}
     <form className="finance-form" onSubmit={submit} key={editing?.id ?? 'new'}><h3>{editing ? 'Editar banco' : 'Novo banco'}</h3><fieldset disabled={busy || fileBusy}>
       <label>Título<input autoFocus data-autofocus name="title" defaultValue={editing?.title} maxLength={120} required /></label>
-      <label>Logo<select aria-label="Logo" value={kind} onChange={e => { setKind(e.target.value as typeof kind); setLogo(null); }}><option value="none">Sem logo</option><option value="url">URL de imagem</option><option value="upload">Enviar arquivo</option></select></label>
+      <Select label="Logo" value={kind} options={[{ value: 'none', label: 'Sem logo' }, { value: 'url', label: 'URL de imagem' }, { value: 'upload', label: 'Enviar arquivo' }]} onChange={next => { setKind(next); setLogo(null); }} />
       {kind === 'url' && <label>URL HTTP(S) de PNG, JPEG ou WebP<input name="url" type="url" maxLength={2048} defaultValue={editing?.logo?.kind === 'url' ? editing.logo.url : ''} required /></label>}
       {kind === 'upload' && <label>Imagem PNG, JPEG ou WebP (até 64 KiB)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => void upload(e.target.files?.[0])} />{logo?.kind === 'upload' && <span>Arquivo pronto para salvar.</span>}</label>}
     </fieldset>{error && <p role="alert">{error}</p>}<footer>{editing && <button type="button" disabled={busy || fileBusy} onClick={() => { setEditing(undefined); setKind('none'); setLogo(null); }}>Novo banco</button>}<button disabled={busy || fileBusy} type="submit">{busy ? 'Salvando…' : 'Salvar banco'}</button></footer></form>

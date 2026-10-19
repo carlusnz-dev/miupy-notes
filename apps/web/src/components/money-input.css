@@ -1,0 +1,8 @@
+.money-field { display: grid; gap: 8px; min-width: 0; }
+.money-field label { color: inherit; font-size: inherit; }
+.money-control { display: flex; align-items: center; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); background: var(--color-background); transition: border-color var(--duration); }
+.money-control:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.money-control[data-invalid="true"] { border-color: var(--color-text); }
+.money-prefix { flex: none; padding: 0 0 0 12px; color: var(--color-muted); font-size: 14px; user-select: none; }
+.money-field .money-control input { flex: 1; width: 100%; min-width: 0; padding: 10px 12px 10px 8px; border: 0; outline: 0; color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; }
+.money-error { margin: 0; color: var(--color-text); font-size: 13px; }
