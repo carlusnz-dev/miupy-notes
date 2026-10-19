@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { changes, saveNote, toDraft, validate } from "./notes-autosave";
+import { changes, createAutosaveQueue, toDraft, validate, type QueueDeps } from "./notes-autosave";
 import type { NoteOutput } from "./notes-api";
 
 const now = "2026-10-19T12:00:00.000Z";
@@ -30,53 +30,171 @@ test("valida título, corpo (no formato gravado) e tags", () => {
   assert.match(validate({ ...ok, tags: Array(21).fill("t") }, "\n")!, /20 tags/);
 });
 
-test("trocar de A para B durante o PATCH: a resposta de A é descartada para a tela e B salva sem esperar", async () => {
-  const inFlight = new Set<string>();
-  const a = note("a");
-  const b = note("b", { version: 3 });
-  let open = "a";
-  const pendingA = deferred<NoteOutput>();
+const conflictError = () => Object.assign(new Error("conflito"), { code: "CONFLICT", status: 409 }); // ApiError real exige import.meta.env (Vite)
+const networkError = () => Object.assign(new Error("rede"), { code: "NETWORK_ERROR" });
+const text = (title: string, body = "") => ({ title, body, tags: [] as string[] });
+
+/** Servidor falso: versão por nota, PATCH controlado por `gate` (resolve/rejeita quando o teste manda). */
+function harness(extra: Partial<QueueDeps> = {}) {
+  const server = new Map<string, NoteOutput>([["a", note("a")], ["b", note("b")]]);
   const calls: string[] = [];
-  const update = (id: string, input: { version: number }) => {
-    calls.push(`${id}@${input.version}`);
-    return id === "a" ? pendingA.promise : Promise.resolve({ ...b, title: "B salvo", version: input.version + 1 });
-  };
+  const saved: string[] = [];
+  const gates: Array<ReturnType<typeof deferred<void>>> = [];
+  let mode: "gated" | "instant" | "network" | "conflict" = "gated";
+  const queue = createAutosaveQueue({
+    update: async (id, input) => {
+      calls.push(`${id}@${input.version}:${JSON.stringify({ ...input, version: undefined })}`);
+      if (mode === "network") throw networkError();
+      if (mode === "conflict") throw conflictError();
+      if (mode === "gated") { const gate = deferred<void>(); gates.push(gate); await gate.promise; }
+      const current = server.get(id)!;
+      if (current.version !== input.version) throw conflictError();
+      const next = { ...current, ...input, version: current.version + 1 } as NoteOutput;
+      server.set(id, next);
+      return next;
+    },
+    onSaved: (n) => saved.push(`${n.id}v${n.version}`),
+    ...extra,
+  });
+  return { queue, server, calls, saved, gates, setMode: (m: typeof mode) => { mode = m; } };
+}
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  const savingA = saveNote({ note: a, draft: { title: "A editada", body: "", tags: [] }, eol: "\n", inFlight, update, openNoteId: () => open });
-  assert.deepEqual(await saveNote({ note: a, draft: { title: "A de novo", body: "", tags: [] }, eol: "\n", inFlight, update, openNoteId: () => open }), { status: "busy" });
+test("saída com texto novo durante o PATCH: o texto mais novo é enviado depois, v1→v2→v3, e B não é tocada", async () => {
+  const h = harness();
+  h.queue.attach(note("a")); h.queue.attach(note("b"));
+  assert.equal(h.queue.submit("a", text("snapshot1"), "\n").status, "queued");
+  await tick();
+  assert.equal(h.queue.view("a")?.sending?.draft.title, "snapshot1");
 
-  open = "b"; // usuário clicou na barra lateral
-  const savedB = await saveNote({ note: b, draft: { title: "B editada", body: "", tags: [] }, eol: "\n", inFlight, update, openNoteId: () => open });
-  assert.equal(savedB.status === "saved" && savedB.stale, false, "B não espera nem é bloqueada por A");
+  // digita snapshot2 durante o PATCH atrasado e sai da nota (cleanup do React → submit com leaving)
+  assert.equal(h.queue.submit("a", text("snapshot2"), "\n", { leaving: true }).status, "queued");
+  assert.equal(h.calls.length, 1, "um PATCH por nota por vez");
+  assert.equal(h.queue.hasUnsaved(), true);
 
-  pendingA.resolve({ ...a, title: "A editada", version: 2 });
-  const resultA = await savingA;
-  assert.equal(resultA.status === "saved" && resultA.stale, true);
-  assert.deepEqual(calls, ["a@1", "b@3"]);
-  assert.equal(inFlight.size, 0);
+  // o usuário já está em B e salva B: não espera por A
+  assert.equal(h.queue.submit("b", text("B editada"), "\n").status, "queued");
+  await tick();
+  assert.equal(h.calls.length, 2);
+  h.gates[1].resolve();
+
+  h.gates[0].resolve(); // termina o PATCH de snapshot1
+  await tick(); await tick();
+  assert.equal(h.calls[2], 'a@2:{"title":"snapshot2"}', "snapshot2 enviado com a version devolvida pelo PATCH anterior");
+  h.gates[2].resolve();
+  assert.equal(await h.queue.flush("a"), true);
+  assert.equal(await h.queue.flush("b"), true);
+  assert.equal(h.server.get("a")?.title, "snapshot2");
+  assert.equal(h.server.get("a")?.version, 3);
+  assert.equal(h.server.get("b")?.title, "B editada");
+  assert.equal(h.server.get("b")?.version, 2);
+  assert.deepEqual(h.saved.filter((s) => s.startsWith("a")), ["av2", "av3"]);
+  assert.equal(h.queue.hasUnsaved(), false);
+  assert.equal(h.queue.view("b")?.base.title, "B editada", "cada nota só vê a própria versão");
 });
 
-test("erro de A depois de trocar para B também é marcado como obsoleto (não mostra erro em B)", async () => {
-  const pendingA = deferred<NoteOutput>();
-  let open = "a";
-  const saving = saveNote({ note: note("a"), draft: { title: "x", body: "", tags: [] }, eol: "\n", inFlight: new Set(), update: () => pendingA.promise, openNoteId: () => open });
-  open = "b";
-  pendingA.reject(Object.assign(new Error("conflito"), { code: "CONFLICT", status: 409 })); // ApiError real exige import.meta.env (Vite)
-  const result = await saving;
-  assert.equal(result.status, "failed");
-  assert.equal(result.status === "failed" && result.stale, true);
+test("voltar para A com PATCH em andamento devolve o texto enviado e depois o mais novo, sem texto do servidor velho", async () => {
+  const h = harness();
+  h.queue.attach(note("a"));
+  h.queue.submit("a", text("snapshot1"), "\n");
+  await tick();
+  assert.equal(h.queue.attach(note("a")).restored?.draft.title, "snapshot1", "a tela reaberta mostra o que está sendo enviado");
+  h.queue.submit("a", text("snapshot2"), "\n");
+  assert.equal(h.queue.attach(note("a")).restored?.draft.title, "snapshot2");
+  h.gates[0].resolve(); await tick(); await tick(); h.gates[1].resolve();
+  await h.queue.flush("a");
+  const again = h.queue.attach(note("a")); // dados velhos do cache de consultas
+  assert.equal(again.restored, null);
+  assert.equal(again.note.version, 3, "a base é a versão salva mais nova, não a do cache velho");
+  assert.equal(again.note.title, "snapshot2");
 });
 
-test("ao sair com título em branco, grava o resto mantendo o título salvo; fora disso, recusa", async () => {
-  const sent: unknown[] = [];
-  const update = async (_id: string, input: { version: number; title?: string; body?: string }) => { sent.push(input); return note("a", { version: 2 }); };
-  const base = { note: note("a"), inFlight: new Set<string>(), update, openNoteId: () => "a" as string | undefined, eol: "\n" as const };
-  const draft = { title: "   ", body: "texto novo", tags: [] };
-  assert.equal((await saveNote({ ...base, draft })).status, "invalid");
-  assert.equal(sent.length, 0);
-  const leaving = await saveNote({ ...base, draft, leaving: true });
-  assert.equal(leaving.status, "saved");
-  assert.deepEqual(sent, [{ version: 1, body: "texto novo" }]);
-  assert.equal((await saveNote({ ...base, draft: { title: "   ", body: "", tags: [] }, leaving: true })).status, "clean");
-  assert.equal((await saveNote({ ...base, draft: { title: "t", body: "x".repeat(100_001), tags: [] }, leaving: true })).status, "invalid");
+test("rede falha: o texto fica guardado, volta ao reabrir e é enviado numa nova tentativa com a mesma version", async () => {
+  const h = harness();
+  h.setMode("network");
+  h.queue.attach(note("a"));
+  h.queue.submit("a", text("perdível?"), "\n", { leaving: true });
+  assert.equal(await h.queue.flush("a"), false);
+  assert.equal(h.queue.view("a")?.error?.code, "NETWORK_ERROR");
+  assert.equal(h.queue.hasUnsaved(), true);
+  assert.equal(h.calls.length, 1, "sem repetição automática");
+
+  const reopened = h.queue.attach(note("a"));
+  assert.equal(reopened.restored?.draft.title, "perdível?");
+  assert.equal(reopened.note.version, 1);
+
+  h.setMode("instant");
+  assert.equal(h.queue.submit("a", reopened.restored!.draft, "\n").status, "queued");
+  assert.equal(await h.queue.flush("a"), true);
+  assert.equal(h.server.get("a")?.title, "perdível?");
+  assert.equal(h.server.get("a")?.version, 2);
+  assert.equal(h.queue.view("a")?.error, null);
+});
+
+test("409 bloqueia reenvio automático e preserva o texto, inclusive o digitado depois; só reset descarta", async () => {
+  const h = harness();
+  h.setMode("conflict");
+  h.queue.attach(note("a"));
+  h.queue.submit("a", text("meu texto"), "\n");
+  assert.equal(await h.queue.flush("a"), false);
+  assert.equal(h.queue.view("a")?.blocked, true);
+  assert.equal(h.queue.submit("a", text("meu texto 2"), "\n", { leaving: true }).status, "blocked");
+  await tick();
+  assert.equal(h.calls.length, 1, "nenhum PATCH extra");
+  assert.equal(h.queue.attach(note("a", { version: 5 })).restored?.draft.title, "meu texto 2", "o servidor mais novo não apaga o rascunho");
+  assert.equal(h.queue.hasUnsaved(), true);
+
+  h.setMode("instant");
+  h.queue.reset(note("a", { version: 5, title: "do servidor" }));
+  const view = h.queue.view("a")!;
+  assert.deepEqual([view.blocked, view.pending, view.base.title], [false, null, "do servidor"]);
+  assert.equal(h.queue.attach(note("a")).restored, null);
+});
+
+test("sem alteração não há PATCH; reverter durante o envio envia a reversão", async () => {
+  const h = harness();
+  h.queue.attach(note("a", { title: "T" }));
+  assert.equal(h.queue.submit("a", text("T"), "\n").status, "clean");
+  assert.equal(h.calls.length, 0);
+  h.queue.submit("a", text("X"), "\n"); await tick();
+  h.queue.submit("a", text("T"), "\n"); // voltou ao título original com "X" em voo
+  h.gates[0].resolve(); await tick(); await tick();
+  h.gates[1].resolve();
+  assert.equal(await h.queue.flush("a"), true);
+  assert.equal(h.server.get("a")?.title, "T");
+  assert.equal(h.server.get("a")?.version, 3);
+});
+
+test("ao sair, título em branco grava o resto; inválido mesmo assim fica guardado para a reabertura", async () => {
+  const h = harness();
+  h.setMode("instant");
+  h.queue.attach(note("a", { title: "Título salvo" }));
+  assert.equal(h.queue.submit("a", text("  ", "corpo novo"), "\n").status, "invalid");
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.queue.view("a")?.pending, null, "fora da saída, inválido não é guardado (fica na tela)");
+  h.queue.submit("a", text("  ", "corpo novo"), "\n", { leaving: true });
+  await h.queue.flush("a");
+  assert.deepEqual(h.calls, ['a@1:{"body":"corpo novo"}'], "o título em branco não vai no PATCH");
+  assert.equal(h.server.get("a")?.body, "corpo novo");
+
+  const tooLong = text("t", "x".repeat(100_001));
+  assert.equal(h.queue.submit("a", tooLong, "\n", { leaving: true }).status, "invalid");
+  assert.equal(h.queue.attach(note("a")).restored?.draft.body.length, 100_001);
+  assert.equal(await h.queue.flush("a"), false);
+});
+
+test("outra nota nunca recebe o resultado, e clear (sair da conta) esquece tudo", async () => {
+  const h = harness();
+  h.queue.attach(note("a")); h.queue.attach(note("b"));
+  const seenB: string[] = [];
+  h.queue.subscribe("b", () => seenB.push(h.queue.view("b")!.base.title));
+  h.queue.submit("a", text("só A"), "\n"); await tick();
+  h.gates[0].resolve(); await h.queue.flush("a");
+  assert.deepEqual(seenB, [], "ouvintes de B não são acionados por A");
+  h.queue.submit("b", text("rascunho B"), "\n", { leaving: true }); await tick();
+  assert.equal(h.queue.hasUnsaved(), true);
+  h.queue.clear();
+  assert.equal(h.queue.hasUnsaved(), false);
+  assert.equal(h.queue.view("b"), undefined);
+  assert.equal(h.queue.submit("b", text("x"), "\n").status, "unknown");
 });
