@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import gsap from "gsap";
+import ButtonGroup from "./components/ButtonGroup";
 import ArrowIcon from "./components/ArrowIcon";
 import { SkeletonBody } from "./components/Skeleton";
 import { ApiError } from "./lib/api-client";
@@ -10,6 +12,7 @@ import { usePageTitle } from "./lib/use-page-title";
 import type { NoteOutput } from "./lib/notes-api";
 
 const periods = [7, 30, 90] as const;
+const periodOptions = periods.map((days) => ({ value: days, label: `${days}d`, accessibleLabel: `${days} dias` }));
 const numberFormat = new Intl.NumberFormat("pt-BR");
 const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
 const spaces = [
@@ -68,7 +71,8 @@ export default function Home() {
   usePageTitle("Visão geral");
   const auth = useAuth();
   const [searchParams] = useSearchParams();
-  const preview = previewState(searchParams.get("estado"));
+  const previewName = searchParams.get("estado");
+  const preview = useMemo(() => previewState(previewName), [previewName]);
   const query = useAllNotes(preview === null);
   const [windowDays, setWindowDays] = useState<(typeof periods)[number]>(30);
   const status = preview?.status ?? (
@@ -79,6 +83,16 @@ export default function Home() {
   const items = preview?.status === "ready" ? preview.items : query.data?.items;
   const stats = useMemo(() => items ? computeNoteStats(items, windowDays) : null, [items, windowDays]);
   const error = query.error instanceof ApiError ? query.error : null;
+
+  const periodContent = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (status !== "ready" || !periodContent.current) return;
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(periodContent.current, { opacity: .35, y: 4 }, { opacity: 1, y: 0, duration: .3, ease: "power2.inOut", clearProps: "opacity,transform" });
+    });
+    return () => media.revert();
+  }, [windowDays, status]);
 
   return (
     <div className="home-page">
@@ -120,17 +134,13 @@ export default function Home() {
               <article className="metric-card metric-period">
                 <div className="metric-top">
                   <span>Novas notas</span>
-                  <div className="period-control" role="group" aria-label="Período das novas notas">
-                    {periods.map((days) => (
-                      <button key={days} type="button" aria-label={`${days} dias`} aria-pressed={windowDays === days} onClick={() => setWindowDays(days)}>
-                        {days}d
-                      </button>
-                    ))}
-                  </div>
+                  <ButtonGroup label="Período das novas notas" options={periodOptions} value={windowDays} onChange={setWindowDays} />
                 </div>
-                <strong>{numberFormat.format(stats.createdInWindow)}</strong>
-                <Sparkline values={stats.createdPerDay} total={stats.createdInWindow} days={windowDays} />
-                <small>Nos últimos {windowDays} dias</small>
+                <div ref={periodContent} className="period-content">
+                  <strong>{numberFormat.format(stats.createdInWindow)}</strong>
+                  <Sparkline values={stats.createdPerDay} total={stats.createdInWindow} days={windowDays} />
+                  <small>Nos últimos {windowDays} dias</small>
+                </div>
               </article>
               <article className="metric-card">
                 <span>Palavras escritas</span>

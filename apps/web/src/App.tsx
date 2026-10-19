@@ -1,7 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
-import { Settings, UserRound } from "lucide-react";
+import Sidebar from "./components/Sidebar";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
 import ArrowIcon from "./components/ArrowIcon";
@@ -85,23 +85,7 @@ function Shell() {
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
-      <aside className="sidebar">
-        <NavLink className="brand" to="/" aria-label="miupy notes, início">
-          <img src="/mark.svg" alt="" width="34" height="34" />
-          <span>miupy<span className="brand-light"> / notes</span></span>
-        </NavLink>
-        <div className="nav-caption">ESPAÇOS</div>
-        <nav aria-label="Navegação principal">
-          <NavLink end to="/">Visão geral</NavLink>
-          {sections.map((section) => (
-            <NavLink key={section.path} to={section.path}>{section.label}</NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <NavLink to="/profile"><UserRound size={16} aria-hidden="true" /> Perfil</NavLink>
-          <NavLink to="/settings"><Settings size={16} aria-hidden="true" /> Configurações</NavLink>
-        </div>
-      </aside>
+      <Sidebar />
       <main className="main-content">
         <header className="topbar">
           <span>miupy / notes</span>
