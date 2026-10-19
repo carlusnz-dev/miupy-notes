@@ -75,6 +75,8 @@ try:
         assert(JSON.parse(await page.evaluate(() => localStorage.getItem('miupy.editor-preferences.v1'))).width === 'wide', 'Preferência persistida com o mesmo valor');
         await page.getByLabel('Fonte do editor').selectOption('serif');
         assert(await page.evaluate(() => getComputedStyle(document.querySelector('.settings-editor-line')).fontFamily.includes('Instrument Serif')), 'Fonte do editor aplicada');
+        await page.getByLabel('Fonte dos títulos').selectOption('editorial');
+        await page.waitForFunction(() => getComputedStyle(document.querySelector('.markdown-preview h1')).fontFamily.startsWith('"Bodoni Moda"') && [...document.fonts].some(f => f.family === 'Bodoni Moda' && f.status === 'loaded'));
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.page-scroll').scrollWidth <= document.querySelector('.page-scroll').clientWidth), 'Overflow em configurações ' + width);
         out.push('select ' + width);
       }

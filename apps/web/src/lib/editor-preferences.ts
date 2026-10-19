@@ -4,7 +4,7 @@ import { z } from "zod";
 const schema = z.object({
   width: z.enum(["narrow", "medium", "wide"]),
   padding: z.number().int().min(12).max(64),
-  headingFont: z.enum(["serif", "sans"]),
+  headingFont: z.enum(["serif", "editorial", "sans"]),
   editorFont: z.enum(["mono", "sans", "serif"]),
   fontSize: z.number().int().min(12).max(24),
   colorTheme: z.enum(["mono", "contrast", "soft"]),
@@ -32,7 +32,7 @@ export function editorStyle(preferences: EditorPreferences): React.CSSProperties
   return {
     "--editor-width": ({ narrow: "620px", medium: "820px", wide: "1100px" } as const)[preferences.width],
     "--editor-padding": `${preferences.padding}px`,
-    "--heading-font": preferences.headingFont === "serif" ? "var(--font-serif)" : "var(--font-sans)",
+    "--heading-font": ({ serif: "var(--font-serif)", editorial: "var(--font-display)", sans: "var(--font-sans)" } as const)[preferences.headingFont],
     "--editor-font": ({ mono: "var(--font-mono)", sans: "var(--font-sans)", serif: "var(--font-serif)" } as const)[preferences.editorFont],
     "--editor-size": `${preferences.fontSize}px`,
   } as React.CSSProperties;

@@ -8,7 +8,7 @@ import "./settings.css";
 
 const choices = {
   width: [["narrow", "Estreita"], ["medium", "Média"], ["wide", "Larga"]],
-  headingFont: [["serif", "Serif"], ["sans", "Padrão"]],
+  headingFont: [["serif", "Serif"], ["editorial", "Editorial"], ["sans", "Padrão"]],
   editorFont: [["mono", "Mono"], ["sans", "Sans"], ["serif", "Serif"]],
   colorTheme: [["mono", "Monocromático"], ["contrast", "Contraste"], ["soft", "Suave"]],
   chipStyle: [["outline", "Contorno"], ["filled", "Preenchido"]],
