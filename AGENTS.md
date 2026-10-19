@@ -13,6 +13,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 ## Regras de implementação
 
 - Interface e documentação em pt-BR; identificadores de código em inglês.
+- Use GSAP nas animações de interação (incluindo seleção deslizante de grupos de botões e troca de períodos); respeite `prefers-reduced-motion` e remova animações/listeners ao desmontar. Preferência do proprietário registrada em 2026-10-19.
 - Frontend: React/TypeScript em `apps/web/src/`; API HTTP no cliente Axios `apps/web/src/lib/api-client.ts`. Segredos e tokens de provedor nunca no bundle do frontend.
 - Backend: `apps/api/src/core/` guarda contratos e tipos compartilhados; `apps/api/src/modules/` guarda features. Entre módulos, importe serviços apenas do `index.ts` público. Veja `apps/api/README.md`.
 - Tauri é a casca desktop. O backend AWS é a autoridade dos dados sincronizados; acesso a provedores passa por conector autorizado. Não duplique regra de domínio entre React e Lambda.
