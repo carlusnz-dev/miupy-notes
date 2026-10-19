@@ -1,7 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
-import { Settings, UserRound } from "lucide-react";
+import Sidebar from "./components/Sidebar";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
 import ArrowIcon from "./components/ArrowIcon";
@@ -12,6 +12,8 @@ import { SkeletonBody } from "./components/Skeleton";
 const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 // Perfil traz o Recharts; configurações só carregam quando abertas.
 const ProfilePage = lazy(() => import("./ProfilePage"));
+const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
+const FinancePage = lazy(() => import("./finance/FinancePage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
@@ -76,6 +78,8 @@ function Shell() {
     ? "Visão geral"
     : pathname.startsWith("/notes/")
       ? "Editor de notas"
+      : pathname.startsWith("/finance/")
+        ? "Lançamento financeiro"
       : pathname === "/profile"
         ? "Perfil"
         : pathname === "/settings"
@@ -85,23 +89,7 @@ function Shell() {
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
-      <aside className="sidebar">
-        <NavLink className="brand" to="/" aria-label="miupy notes, início">
-          <img src="/mark.svg" alt="" width="34" height="34" />
-          <span>miupy<span className="brand-light"> / notes</span></span>
-        </NavLink>
-        <div className="nav-caption">ESPAÇOS</div>
-        <nav aria-label="Navegação principal">
-          <NavLink end to="/">Visão geral</NavLink>
-          {sections.map((section) => (
-            <NavLink key={section.path} to={section.path}>{section.label}</NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <NavLink to="/profile"><UserRound size={16} aria-hidden="true" /> Perfil</NavLink>
-          <NavLink to="/settings"><Settings size={16} aria-hidden="true" /> Configurações</NavLink>
-        </div>
-      </aside>
+      <Sidebar />
       <main className="main-content">
         <header className="topbar">
           <span>miupy / notes</span>
@@ -128,7 +116,9 @@ function Shell() {
                     <ProfilePage />
                   </Suspense>
                 } />
-                {sections.filter((section) => section.path !== "/notes").map((section) => (
+                <Route path="/finance/:id" element={<Suspense fallback={<SkeletonBody label="Carregando lançamento…" lines={4} />}><FinanceDetailPage /></Suspense>} />
+                <Route path="/finance" element={<Suspense fallback={<SkeletonBody label="Carregando finanças…" lines={4} />}><FinancePage /></Suspense>} />
+                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance").map((section) => (
                   <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
                 ))}
                 <Route path="*" element={<NotFound />} />

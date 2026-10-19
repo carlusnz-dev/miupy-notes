@@ -3,7 +3,7 @@ import express, { type RequestHandler, type Router } from "express";
 import { errorHandler } from "./core/http/error-handler.js";
 
 /** Rotas pessoais só existem com autenticação: sem ela, `/v1` responde 404. */
-export type ApiRoutes = { authenticate: RequestHandler; notesRouter: Router; foldersRouter: Router };
+export type ApiRoutes = { authenticate: RequestHandler; notesRouter: Router; foldersRouter?: Router; financeRouter?: Router };
 
 export function createApp(api?: ApiRoutes) {
   const app = express();
@@ -17,7 +17,8 @@ export function createApp(api?: ApiRoutes) {
   if (api) {
     app.use("/v1", api.authenticate);
     app.use("/v1/notes", api.notesRouter);
-    app.use("/v1/folders", api.foldersRouter);
+    if (api.foldersRouter) app.use("/v1/folders", api.foldersRouter);
+    if (api.financeRouter) app.use("/v1/finance", api.financeRouter);
   }
   app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Rota não encontrada.", requestId: res.locals.requestId } }));
   app.use(errorHandler);

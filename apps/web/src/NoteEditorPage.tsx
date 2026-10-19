@@ -5,7 +5,7 @@ import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/
 import TagInput from "./components/TagInput";
 import { SkeletonBody } from "./components/Skeleton";
 import type { ApiError } from "./lib/api-client";
-import { useAuth } from "./lib/auth";
+import { getAuthSessionVersion, useAuth } from "./lib/auth";
 import { editorStyle, setEditorPreferences, useEditorPreferences } from "./lib/editor-preferences";
 import { getNote, type NoteOutput } from "./lib/notes-api";
 import { changes, toDraft, MAX_BODY, MAX_TAG, MAX_TAGS, MAX_TITLE, type Draft, type EntryView } from "./lib/notes-autosave";
@@ -44,6 +44,12 @@ function previewNote(name: string | null): NoteOutput | null {
 }
 
 export default function NoteEditorPage() {
+  const { status } = useAuth();
+  // A tela perde o estado local ao trocar de sessão; recuperar um rascunho exige carregar a nota autorizada.
+  return <NoteEditorSession key={`${status}:${getAuthSessionVersion()}`} />;
+}
+
+function NoteEditorSession() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();

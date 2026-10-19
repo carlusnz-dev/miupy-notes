@@ -86,3 +86,7 @@ Contraprova: os cenários 1 e 2 rodados no código antigo falham como descrito a
 - `api.md`: intro (menciona só `/v1/notes`) e `apps/api/README.md` (lista de módulos, `NOTES_TABLE_NAME` também guarda pastas). `dados.md`: entidade `folder`.
 - Conflitos esperados com finance (`app.ts`, `server.ts`, `lambda.ts` — `createApp` agora exige `foldersRouter`; `compose.ts` é novo): resolver compondo, sem ours/theirs.
 - Índice `docs/relatorios/README.md` não foi alterado.
+
+## Revisão e integração do coordenador
+
+Composição central unificada para manter notes, folders e finance no Express e Lambda. Respostas de mutações de notas/pastas agora conferem a geração da sessão antes de repovoar cache; o editor remonta ao trocar sessão. MCP Chromium com duas sessões e API sintética confirmou a remoção do editor anterior e o estado de nota não encontrada na segunda conta. Build aprovado; testes web 40/40, API 57 aprovados e 3 testes DynamoDB opcionais não executados nesta rodada; check:modules com 3 módulos válido. A primeira asserção MCP buscava mensagem com ponto final inexistente; corrigido o seletor, sem mudar o produto.

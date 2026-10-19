@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "./auth";
+import { getAuthSessionVersion, isCurrentAuthSession, useAuth } from "./auth";
 import { createFolder, listFolders, updateFolder } from "./notes-folders-api";
 
 export const folderKeys = {
@@ -13,13 +13,18 @@ export function useFolders(enabled = true) {
 
 export function useCreateFolder() {
   const client = useQueryClient();
-  return useMutation({ mutationFn: createFolder, onSuccess: () => client.invalidateQueries({ queryKey: folderKeys.all }) });
+  return useMutation({
+    mutationFn: createFolder,
+    onMutate: () => getAuthSessionVersion(),
+    onSuccess: (_folder, _input, session) => { if (isCurrentAuthSession(session)) return client.invalidateQueries({ queryKey: folderKeys.all }); },
+  });
 }
 
 export function useUpdateFolder() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: { id: string } & Parameters<typeof updateFolder>[1]) => updateFolder(id, input),
-    onSuccess: () => client.invalidateQueries({ queryKey: folderKeys.all }),
+    onMutate: () => getAuthSessionVersion(),
+    onSuccess: (_folder, _input, session) => { if (isCurrentAuthSession(session)) return client.invalidateQueries({ queryKey: folderKeys.all }); },
   });
 }
