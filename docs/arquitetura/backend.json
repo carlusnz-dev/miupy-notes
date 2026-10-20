@@ -23,6 +23,8 @@
     "testCommand": "npm run test:api",
     "authenticatedRoutes": [
       "GET /v1/notes",
+      "GET /v1/notes/metadata",
+      "GET /v1/notes/summary",
       "POST /v1/notes",
       "GET /v1/notes/:id",
       "PATCH /v1/notes/:id",
@@ -53,6 +55,13 @@
       "api": "npm run dev:api (127.0.0.1:4000; exige DYNAMODB_ENDPOINT em loopback)",
       "db": "npm run dev:db (amazon/dynamodb-local:3.3.1, volume miupy-dynamodb) + npm run db:create-table",
       "env": "apps/api/.env.development (versionado, sem segredo) + .env.local (ignorado)"
+    },
+    "logging": {
+      "implementation": "core/logging/logger.ts + core/http/request-logger.ts + createErrorHandler",
+      "format": "JSON por linha em stdout/stderr, LOG_LEVEL=info por padrão; debug opt-in",
+      "correlation": "UUID interno em X-Request-Id e error.requestId",
+      "privacy": "Método, rota template, status, duração e classificação allowlist; sem body, tokens, identidade, mensagens/stack arbitrárias ou objetos de provedores",
+      "deployment": "Verificado localmente; CloudWatch, retenção e alarmes não implantados"
     }
   },
   "core": {
@@ -106,7 +115,9 @@
         "create",
         "findById",
         "update",
-        "delete"
+        "delete",
+        "listMetadata",
+        "summary"
       ],
       "testRepository": "MemoryNotesRepository",
       "persistence": {
@@ -115,9 +126,14 @@
         "sk": "NOTE#<id>",
         "list": "Query pk + begins_with(sk, NOTE#); cursor opaco com o último id",
         "concurrency": "PutCommand condicional em version",
-        "delete": "DeleteCommand condicional em attribute_exists(pk)"
+        "delete": "DeleteCommand condicional em attribute_exists(pk)",
+        "body": "Markdown no próprio item DynamoDB; sem S3 nesta sessão",
+        "metadata": "Query com ProjectionExpression sem body; reduz tráfego, não RCUs por si só",
+        "summary": "Agregação paginada de todos itens do proprietário (100/página), sem teto silencioso, sem materialização ou GSI; consistência eventual, sem snapshot",
+        "detail": "GetCommand ConsistentRead true para reconciliação de resultado ambíguo"
       },
-      "verification": "2026-10-18 (sessão 05): 28 testes — rotas com principal falso, autenticação com chaves geradas no teste (401 sem token, malformado, outra chave, alg none, expirado, aud/iss errados; 403 sub fora da lista; acesso permitido com as duas formas de iss; claims do authorizer; JWKS indisponível não vira 401), repositório DynamoDB com cliente falso e service. Manual: curl na API local (401 sem token e com token inválido) e criação de nota pela janela Tauri com login Google real e DynamoDB Local. Sem DynamoDB real."
+      "verification": "2026-10-18 (sessão 05): 28 testes — rotas com principal falso, autenticação com chaves geradas no teste (401 sem token, malformado, outra chave, alg none, expirado, aud/iss errados; 403 sub fora da lista; acesso permitido com as duas formas de iss; claims do authorizer; JWKS indisponível não vira 401), repositório DynamoDB com cliente falso e service. Manual: curl na API local (401 sem token e com token inválido) e criação de nota pela janela Tauri com login Google real e DynamoDB Local. Sem DynamoDB real.",
+      "verificationSession07": "Testes com clientes falsos e HTTP local sintético: metadados/cursor/owner, resumo paginado, compatibilidade, PATCH condicional 200/409; comandos e resultados no relatório 2026-10-20_sessao-07-api-cache.md. Sem AWS."
     },
     {
       "id": "events",

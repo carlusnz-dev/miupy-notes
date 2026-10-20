@@ -29,3 +29,10 @@ export const listNotesQuerySchema = z.strictObject({
 export type CreateNoteInput = z.infer<typeof createNoteInputSchema>;
 export type UpdateNoteInput = z.infer<typeof updateNoteInputSchema>;
 export type ListNotesQuery = z.infer<typeof listNotesQuerySchema>;
+
+export const noteSummaryQuerySchema = z.strictObject({
+  days: z.coerce.number().pipe(z.union([z.literal(7), z.literal(30), z.literal(90)])).default(30),
+  // Minutos a leste de UTC; o cliente envia -Date.getTimezoneOffset().
+  offsetMinutes: z.coerce.number().int().min(-840).max(840).default(0),
+});
+export type NoteSummaryQuery = z.infer<typeof noteSummaryQuerySchema>;

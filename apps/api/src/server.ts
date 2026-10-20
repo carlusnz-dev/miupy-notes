@@ -1,4 +1,5 @@
 import { createRemoteJWKSet } from "jose";
+import { logger } from "./core/logging/logger.js";
 import { createApp } from "./app.js";
 import { authenticate, bearerTokenClaims, GOOGLE_JWKS_URL, parseAllowedSubs } from "./core/http/authenticate.js";
 import { createDynamoClient } from "./core/dynamo/client.js";
@@ -18,7 +19,8 @@ const { notes, folders, finance } = createDataModules(createDynamoClient(endpoin
 const claims = bearerTokenClaims(createRemoteJWKSet(GOOGLE_JWKS_URL), required("GOOGLE_CLIENT_ID"));
 const app = createApp({ authenticate: authenticate(claims, parseAllowedSubs(process.env.ALLOWED_SUBS)), notesRouter: notes.router, foldersRouter: folders.router, financeRouter: finance.router });
 
+logger.info("dependencies.configured", { dependency: "dynamodb-local" });
 const port = Number(process.env.PORT ?? 4000);
 app.listen(port, "127.0.0.1", () => {
-  process.stdout.write(`API local em http://127.0.0.1:${port}\n`);
+  logger.info("server.listening", { port });
 });

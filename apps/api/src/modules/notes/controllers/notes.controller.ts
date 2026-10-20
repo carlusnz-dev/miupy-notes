@@ -3,8 +3,9 @@ import { z } from "zod";
 import { BaseController } from "../../../core/controllers/base.controller.js";
 import { requirePrincipal } from "../../../core/http/principal.js";
 import { NoteDtoAdapter } from "../dto/adapter.js";
-import { createNoteInputSchema, listNotesQuerySchema, updateNoteInputSchema } from "../dto/input.js";
+import { noteSummaryQuerySchema, createNoteInputSchema, listNotesQuerySchema, updateNoteInputSchema } from "../dto/input.js";
 import { NotesService } from "../services/notes.service.js";
+import { noteMetadataListOutputSchema, noteSummaryOutputSchema } from "../dto/output.js";
 
 export class NotesController extends BaseController<NotesService> {
   constructor(service: NotesService) { super(service); }
@@ -14,6 +15,17 @@ export class NotesController extends BaseController<NotesService> {
       const { ownerId } = requirePrincipal(res.locals.principal);
       const page = await this.service.list(ownerId, listNotesQuerySchema.parse(req.query));
       res.json(NoteDtoAdapter.toListOutput(page));
+    });
+
+    router.get("/metadata", async (req, res) => {
+      const { ownerId } = requirePrincipal(res.locals.principal);
+      const page = await this.service.listMetadata(ownerId, listNotesQuerySchema.parse(req.query));
+      res.json(noteMetadataListOutputSchema.parse(page));
+    });
+
+    router.get("/summary", async (req, res) => {
+      const { ownerId } = requirePrincipal(res.locals.principal);
+      res.json(noteSummaryOutputSchema.parse(await this.service.summary(ownerId, noteSummaryQuerySchema.parse(req.query))));
     });
 
     router.post("/", async (req, res) => {

@@ -162,3 +162,47 @@ test("folderId: cria em pasta, move, volta à raiz e rejeita pasta alheia ou inv
   const plain = await (await call("alice", "", { method: "POST", body: { title: "Sem pasta" } })).json() as NoteBody;
   assert.equal(plain.folderId, null);
 });
+
+test("API-HTTP-01 metadata pagina sem corpo/owner, detalhe e lista legada preservam corpo", async () => {
+  const owner = "metadata";
+  const expected = new Set<string>();
+  for (const title of ["a", "b", "c"]) expected.add((await createNote(owner, title)).id);
+  const firstResponse = await call(owner, "/metadata?limit=2");
+  assert.equal(firstResponse.status, 200);
+  const first = await firstResponse.json() as PageBody;
+  const second = await (await call(owner, `/metadata?limit=2&cursor=${first.nextCursor}`)).json() as PageBody;
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(new Set([...first.items, ...second.items].map((note) => note.id)), expected);
+  assert.ok([...first.items, ...second.items].every((note) => !("body" in note) && !("ownerId" in note)));
+  const legacy = await (await call(owner)).json() as PageBody;
+  assert.equal(legacy.items[0].body, "# Markdown");
+  assert.deepEqual(await (await call("unrelated", "/metadata")).json(), { items: [], nextCursor: null });
+  await expectError(await call(null, "/metadata"), 401, "UNAUTHORIZED");
+  await expectError(await call(owner, "/metadata?ownerId=unrelated"), 400, "VALIDATION_ERROR");
+});
+
+test("API-HTTP-02 summary isola owner, valida query e reflete alteração/exclusão", async () => {
+  const owner = "summary";
+  const note = await createNote(owner, "Resumo");
+  const read = async () => { const response = await call(owner, "/summary?days=7&offsetMinutes=-180"); assert.equal(response.status, 200); return await response.json() as { total: number; words: number; tags: unknown[] }; };
+  assert.equal((await read()).words, 1);
+  assert.equal((await read()).total, 1);
+  const patched = await call(owner, `/${note.id}`, { method: "PATCH", body: { version: 1, body: "uma nova frase", tags: ["nova"] } });
+  assert.equal(patched.status, 200);
+  assert.equal((await read()).words, 3);
+  assert.deepEqual((await read()).tags, [{ tag: "nova", count: 1 }]);
+  assert.equal(((await (await call("summary-empty", "/summary")).json()) as { total: number }).total, 0);
+  await expectError(await call(null, "/summary"), 401, "UNAUTHORIZED");
+  for (const query of ["days=500", "offsetMinutes=841", "ownerId=bob"]) await expectError(await call(owner, `/summary?${query}`), 400, "VALIDATION_ERROR");
+  await call(owner, `/${note.id}`, { method: "DELETE" });
+  assert.equal((await read()).total, 0);
+});
+
+test("API-CONC-01 duas atualizações na mesma versão resultam em 200/409", async () => {
+  const note = await createNote("concorrencia", "Inicial");
+  const responses = await Promise.all(["a", "b"].map((body) => call("concorrencia", `/${note.id}`, { method: "PATCH", body: { version: 1, body } })));
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+  const current = await (await call("concorrencia", `/${note.id}`)).json() as NoteBody;
+  assert.equal(current.version, 2);
+  assert.ok(current.body === "a" || current.body === "b");
+});
