@@ -7,7 +7,7 @@ import { SkeletonBody } from "./components/Skeleton";
 import { ApiError } from "./lib/api-client";
 import { useAuth } from "./lib/auth";
 import { computeNoteStats, type DayCount } from "./lib/note-stats";
-import { useAllNotes } from "./lib/notes-queries";
+import { useNotesSummary } from "./lib/notes-queries";
 import { usePageTitle } from "./lib/use-page-title";
 import type { NoteOutput } from "./lib/notes-api";
 
@@ -73,15 +73,14 @@ export default function Home() {
   const [searchParams] = useSearchParams();
   const previewName = searchParams.get("estado");
   const preview = useMemo(() => previewState(previewName), [previewName]);
-  const query = useAllNotes(preview === null);
   const [windowDays, setWindowDays] = useState<(typeof periods)[number]>(30);
+  const query = useNotesSummary(windowDays, preview === null);
   const status = preview?.status ?? (
     auth.status === "checking" ? "carregando"
       : auth.status !== "signed-in" ? "unavailable"
         : query.data ? "ready" : query.isError ? "erro" : "carregando"
   );
-  const items = preview?.status === "ready" ? preview.items : query.data?.items;
-  const stats = useMemo(() => items ? computeNoteStats(items, windowDays) : null, [items, windowDays]);
+  const stats = useMemo(() => preview?.status === "ready" ? computeNoteStats(preview.items ?? [], windowDays) : query.data, [preview, query.data, windowDays]);
   const error = query.error instanceof ApiError ? query.error : null;
 
   const periodContent = useRef<HTMLDivElement>(null);
@@ -160,7 +159,6 @@ export default function Home() {
             </div>
             <div className="dashboard-footnotes">
               {!preview && query.isFetching && <span role="status">Atualizando…</span>}
-              {!preview && query.data?.truncated && <span>Métricas limitadas às 5000 notas mais recentes por ID.</span>}
             </div>
           </>
         )}

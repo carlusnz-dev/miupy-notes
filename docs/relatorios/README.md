@@ -17,3 +17,11 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-19 | 06 — parcelas financeiras | [relatório](2026-10-19_sessao-06-finance-installments.md) |
 | 2026-10-19 | 06 — notas e Live Preview | [relatório](2026-10-19_sessao-06-notas-live.md) |
 | 2026-10-19 | 06 — polimento, fontes e formulários | [relatório](2026-10-19_sessao-06-settings-fixes.md) |
+| 2026-10-20 | 07 — persistência de notas e revisão integrada | [relatório](2026-10-20_sessao-07.md) |
+| 2026-10-20 | 07 — limpeza Git e Orca | [relatório](2026-10-20_sessao-07-git.md) |
+| 2026-10-20 | 07 — Graphify, skills e Codex | [relatório](2026-10-20_sessao-07-ferramentas.md) |
+| 2026-10-20 | 07 — API, metadados e cache | [relatório](2026-10-20_sessao-07-api-cache.md) |
+| 2026-10-20 | 07 — autosave durável | [relatório](2026-10-20_sessao-07-autosave.md) |
+| 2026-10-20 | 07 — revisão independente de persistência | [relatório](2026-10-20_sessao-07-revisao.md) |
+| 2026-10-20 | 07 — logs seguros da API | [relatório](2026-10-20_sessao-07-logs.md) |
+| 2026-10-20 | 08 — validação final de persistência e aceite | [relatório](2026-10-20_sessao-08.md) |

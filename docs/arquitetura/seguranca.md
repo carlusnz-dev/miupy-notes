@@ -22,3 +22,7 @@ A [documentação oficial do Google Keep](https://developers.google.com/workspac
 S3 com acesso público bloqueado, criptografia, versionamento e política de retenção; DynamoDB com criptografia e recuperação conforme necessidade. Roles Lambda com permissões por recurso. Logs sem corpos de e-mail, notas, tokens ou dados financeiros. Alarmes devem avisar erros e falhas de sincronização sem vazar conteúdo.
 
 O servidor MCP futuro terá ferramentas de leitura e escrita separadas, escopos explícitos, limites de resultado e auditoria. Não entregar credenciais AWS ou acesso direto ao DynamoDB a clientes MCP. Pedidos de exclusão e exportação devem abranger cópias e backups conforme política definida.
+
+## Logs da API
+
+Implementados localmente na sessão 07: JSON por linha em stdout/stderr, níveis via `LOG_LEVEL` (padrão `info`, `debug` opt-in), UUID interno por requisição em `X-Request-Id` e no envelope de erro. Logs registram evento, nível, horário, método, template de rota reconhecido, status e duração; rota não reconhecida usa `unmatched`. Nunca registrar URL real, query, body, headers, cookies, tokens, ownerId, e-mail ou valores financeiros. Não registrar mensagens/stack arbitrárias nem serializar Error/cause/request/config de provedores. Diagnóstico usa lista explícita de nomes/códigos seguros, com percurso limitado de causas. Debug não relaxa essa política. A saída pode ser consumida futuramente pela Lambda/CloudWatch, mas implantação, retenção e alarmes continuam pendentes.

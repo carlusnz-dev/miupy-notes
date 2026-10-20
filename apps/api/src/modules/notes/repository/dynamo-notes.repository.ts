@@ -3,7 +3,7 @@ import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCom
 import { z } from "zod";
 import { AppError } from "../../../core/domain/app-error.js";
 import { Note } from "../domain/note.js";
-import { NotesRepository, type NotePage } from "./notes.repository.js";
+import { NotesRepository, type NoteMetadataPage, type NotePage } from "./notes.repository.js";
 
 const storedNoteSchema = z.object({
   id: z.uuid(),
@@ -59,7 +59,7 @@ export class DynamoNotesRepository extends NotesRepository {
   }
 
   async findById(ownerId: string, id: string): Promise<Note | null> {
-    const result = await this.client.send(new GetCommand({ TableName: this.tableName, Key: keyOf(ownerId, id) }));
+    const result = await this.client.send(new GetCommand({ TableName: this.tableName, Key: keyOf(ownerId, id), ConsistentRead: true }));
     return result.Item ? toNote(result.Item) : null;
   }
 
@@ -72,6 +72,22 @@ export class DynamoNotesRepository extends NotesRepository {
       ExclusiveStartKey: cursor ? keyOf(ownerId, decodeCursor(cursor)) : undefined,
     }));
     const items = (result.Items ?? []).map(toNote);
+    const lastId = result.LastEvaluatedKey ? items.at(-1)?.id : undefined;
+    return { items, nextCursor: lastId ? encodeCursor(lastId) : null };
+  }
+
+  async listMetadata(ownerId: string, limit: number, cursor?: string): Promise<NoteMetadataPage> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: this.tableName,
+      KeyConditionExpression: "pk = :pk AND begins_with(sk, :prefix)",
+      ExpressionAttributeValues: { ":pk": `USER#${ownerId}`, ":prefix": "NOTE#" },
+      ProjectionExpression: "#id, #owner, #title, #tags, #folder, #created, #updated, #version",
+      ExpressionAttributeNames: { "#id": "id", "#owner": "ownerId", "#title": "title", "#tags": "tags", "#folder": "folderId", "#created": "createdAt", "#updated": "updatedAt", "#version": "version" },
+      Limit: limit,
+      ExclusiveStartKey: cursor ? keyOf(ownerId, decodeCursor(cursor)) : undefined,
+    }));
+    const schema = storedNoteSchema.omit({ body: true });
+    const items = (result.Items ?? []).map((item) => schema.parse(item));
     const lastId = result.LastEvaluatedKey ? items.at(-1)?.id : undefined;
     return { items, nextCursor: lastId ? encodeCursor(lastId) : null };
   }

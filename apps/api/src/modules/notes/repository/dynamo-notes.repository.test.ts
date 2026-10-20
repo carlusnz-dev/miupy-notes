@@ -69,3 +69,26 @@ test("outros erros do DynamoDB não são mascarados como conflito", async () => 
   await assert.rejects(repository.update(new Note(noteId, "alice", "t", "", [], null, now, now, 2), 1), /rede/);
   await assert.rejects(repository.delete("alice", noteId), /rede/);
 });
+
+test("API-META-01 metadata projeta sem body, mantém cursor/owner e lê legado sem folderId", async () => {
+  const { body: _body, folderId: _folder, ...metadata } = stored;
+  const { sent, client } = fakeClient(() => ({ Items: [metadata], LastEvaluatedKey: { pk: stored.pk, sk: stored.sk } }));
+  const repository = new DynamoNotesRepository(client, "notes");
+  const page = await repository.listMetadata("alice", 1);
+  assert.equal("body" in page.items[0], false);
+  assert.equal(page.items[0].folderId, null);
+  const names = sent[0].input.ExpressionAttributeNames as Record<string, string>;
+  const projected = String(sent[0].input.ProjectionExpression).split(", ").map((alias) => names[alias]);
+  assert.deepEqual(projected, ["id", "ownerId", "title", "tags", "folderId", "createdAt", "updatedAt", "version"]);
+  await repository.listMetadata("bob", 1, page.nextCursor!);
+  assert.deepEqual(sent[1].input.ExclusiveStartKey, { pk: "USER#bob", sk: stored.sk });
+  assert.equal(sent[1].input.Limit, 1);
+  await assert.rejects(repository.listMetadata("alice", 1, "inválido"), { status: 400 });
+});
+
+test("API-DETAIL-01 detalhe usa leitura consistente para reconciliação após timeout", async () => {
+  const { sent, client } = fakeClient(() => ({ Item: stored }));
+  assert.equal((await new DynamoNotesRepository(client, "notes").findById("alice", noteId))?.body, stored.body);
+  assert.equal(sent[0].input.ConsistentRead, true);
+  assert.deepEqual(sent[0].input.Key, { pk: "USER#alice", sk: stored.sk });
+});

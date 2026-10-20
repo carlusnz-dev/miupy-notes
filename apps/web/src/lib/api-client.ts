@@ -21,6 +21,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status?: number,
     public readonly requestId?: string,
+    /** `Retry-After` da resposta, em ms (só chega ao app se a API o expuser via CORS). */
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
   }
@@ -44,12 +46,22 @@ const errorBodySchema = z.object({
   error: z.object({ code: z.string(), message: z.string(), requestId: z.string().optional() }),
 });
 
+function retryAfterMs(error: AxiosError): number | undefined {
+  const raw = error.response?.headers?.["retry-after"];
+  if (typeof raw !== "string") return undefined;
+  const seconds = Number(raw);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(raw) - Date.now();
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
+}
+
 export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
   if (error instanceof AxiosError) {
     const body = errorBodySchema.safeParse(error.response?.data);
-    if (body.success) return new ApiError(body.data.error.code, body.data.error.message, error.response?.status, body.data.error.requestId);
+    if (body.success) return new ApiError(body.data.error.code, body.data.error.message, error.response?.status, body.data.error.requestId, retryAfterMs(error));
     if (!error.response) return new ApiError("NETWORK_ERROR", "Não foi possível alcançar o servidor.");
+    // Resposta sem o corpo de erro do contrato (ex.: 502 do gateway): o status ainda decide se vale tentar de novo.
+    return new ApiError("UNKNOWN_ERROR", "Algo deu errado. Tente de novo.", error.response.status, undefined, retryAfterMs(error));
   }
   return new ApiError("UNKNOWN_ERROR", "Algo deu errado. Tente de novo.");
 }

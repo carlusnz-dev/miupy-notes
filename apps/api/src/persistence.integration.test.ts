@@ -99,6 +99,33 @@ test("isolamento por proprietário em pastas e movimentos", { skip }, async () =
   assert.equal((await call("alice", `/notes/${note.id}`)).body!.folderId, folder.id);
 });
 
+test("metadados e resumo usam DynamoDB Local sem expor corpo ou outro proprietário", { skip }, async () => {
+  const created = (await call("summary-owner", "/notes", { method: "POST", body: { title: "Resumo sintético", body: "duas palavras", tags: ["teste"] } })).body!;
+  await call("summary-other", "/notes", { method: "POST", body: { title: "Outro dono", body: "não deve entrar" } });
+  const metadata = await call("summary-owner", "/notes/metadata?limit=1");
+  assert.equal(metadata.status, 200, "projeção é aceita pelo parser do DynamoDB");
+  const items = metadata.body!.items as Json[];
+  assert.equal(items.length, 1);
+  assert.equal(items[0].id, created.id);
+  assert.equal(items[0].body, undefined);
+  assert.equal(items[0].ownerId, undefined);
+  const summary = await call("summary-owner", "/notes/summary?days=30&offsetMinutes=-180");
+  assert.equal(summary.status, 200);
+  assert.equal(summary.body!.total, 1);
+  assert.equal(summary.body!.words, 2);
+  assert.equal(summary.body!.characters, 13);
+  assert.equal(summary.body!.items, undefined);
+  const competing = await Promise.all([
+    call("summary-owner", `/notes/${created.id}`, { method: "PATCH", body: { version: 1, body: "texto atualizado" } }),
+    call("summary-owner", `/notes/${created.id}`, { method: "PATCH", body: { version: 1, body: "texto concorrente" } }),
+  ]);
+  assert.deepEqual(competing.map((result) => result.status).sort(), [200, 409]);
+  const winner = competing.find((result) => result.status === 200)!;
+  const detail = (await call("summary-owner", `/notes/${created.id}`)).body!;
+  assert.equal(detail.version, 2);
+  assert.equal(detail.body, winner.body!.body);
+});
+
 test("notas gravadas antes das pastas (sem folderId) leem na raiz e o corpo volta byte a byte", { skip }, async () => {
   const id = randomUUID();
   const now = "2026-10-01T00:00:00.000Z";

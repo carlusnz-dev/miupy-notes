@@ -1,7 +1,7 @@
-import { noteListOutputSchema, noteOutputSchema, type NoteListOutput, type NoteOutput as ContractNoteOutput } from "../../../api/src/modules/notes/contract";
+import { noteMetadataListOutputSchema, noteSummaryOutputSchema, noteListOutputSchema, noteOutputSchema, type NoteListOutput, type NoteOutput as ContractNoteOutput } from "../../../api/src/modules/notes/contract";
 import { apiClient, toApiError } from "./api-client";
 
-export type { NoteListOutput } from "../../../api/src/modules/notes/contract";
+export type { NoteMetadataOutput, NoteMetadataListOutput, NoteSummaryOutput, NoteListOutput } from "../../../api/src/modules/notes/contract";
 
 export type NoteOutput = ContractNoteOutput;
 
@@ -51,4 +51,18 @@ export async function deleteNote(id: string): Promise<void> {
   } catch (error) {
     throw toApiError(error);
   }
+}
+
+export async function listNotesMetadata(options: { cursor?: string; limit?: number; signal?: AbortSignal } = {}) {
+  try {
+    const response = await apiClient.get("/v1/notes/metadata", { params: { cursor: options.cursor, limit: options.limit }, signal: options.signal });
+    return noteMetadataListOutputSchema.parse(response.data);
+  } catch (error) { throw toApiError(error); }
+}
+
+export async function getNotesSummary(days: 7 | 30 | 90, offsetMinutes: number, signal?: AbortSignal) {
+  try {
+    const response = await apiClient.get("/v1/notes/summary", { params: { days, offsetMinutes }, signal });
+    return noteSummaryOutputSchema.parse(response.data);
+  } catch (error) { throw toApiError(error); }
 }

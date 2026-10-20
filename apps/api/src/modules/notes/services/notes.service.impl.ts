@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
 import { Note } from "../domain/note.js";
-import type { CreateNoteInput, ListNotesQuery, UpdateNoteInput } from "../dto/input.js";
+import type { CreateNoteInput, ListNotesQuery, NoteSummaryQuery, UpdateNoteInput } from "../dto/input.js";
 import { NotesRepository, type NotePage } from "../repository/notes.repository.js";
 import type { FolderDirectory } from "./folder-directory.js";
 import { NotesService } from "./notes.service.js";
+import { summarizeNotes } from "./notes-summary.js";
 
 const notFound = () => new AppError(404, "NOT_FOUND", "Nota não encontrada.");
 const invalidFolder = () => new AppError(400, "VALIDATION_ERROR", "Pasta inválida.");
@@ -27,6 +28,14 @@ export class NotesServiceImpl extends NotesService {
 
   list(ownerId: string, query: ListNotesQuery): Promise<NotePage> {
     return this.repository.list(ownerId, query.limit, query.cursor);
+  }
+
+  listMetadata(ownerId: string, query: ListNotesQuery) {
+    return this.repository.listMetadata(ownerId, query.limit, query.cursor);
+  }
+
+  summary(ownerId: string, query: NoteSummaryQuery) {
+    return summarizeNotes(this.repository, ownerId, query);
   }
 
   async update(ownerId: string, id: string, input: UpdateNoteInput): Promise<Note> {
