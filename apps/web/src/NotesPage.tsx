@@ -4,7 +4,8 @@ import { FilePlus, FolderPlus } from "lucide-react";
 import NoteTree from "./components/NoteTree";
 import { SkeletonBody } from "./components/Skeleton";
 import { ApiError } from "./lib/api-client";
-import { signIn, signOut, useAuth } from "./lib/auth";
+import SignOutButton from "./components/SignOutButton";
+import { signIn, useAuth } from "./lib/auth";
 import { animateIn } from "./lib/notes-motion";
 import { buildNotesTree } from "./lib/notes-tree";
 import { usePreviewWorkspace, useRemoteWorkspace, type PreviewWorkspaceState, type Workspace } from "./lib/notes-workspace";
@@ -73,7 +74,7 @@ function SignedInNotes({ workspace, preview }: { workspace: Workspace; preview: 
           <span>{countLabel}</span>
           {workspace.status === "ready" && !preview && workspace.refreshing && <span className="refresh-status" role="status">Atualizando…</span>}
         </div>
-        <button type="button" className="button button-secondary" onClick={() => void signOut()} disabled={preview}>Sair</button>
+        <SignOutButton disabled={preview} />
       </div>
 
       <div className="notes-actions" role="group" aria-label="Criar">

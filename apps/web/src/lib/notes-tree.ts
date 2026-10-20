@@ -1,8 +1,8 @@
 import type { FolderOutput } from "./notes-folders-api";
-import type { NoteOutput } from "./notes-api";
+import type { NoteMetadataOutput } from "./notes-api";
 
-export type TreeFolder = { folder: FolderOutput; folders: TreeFolder[]; notes: NoteOutput[]; noteCount: number };
-export type NotesTree = { folders: TreeFolder[]; notes: NoteOutput[] };
+export type TreeFolder = { folder: FolderOutput; folders: TreeFolder[]; notes: NoteMetadataOutput[]; noteCount: number };
+export type NotesTree = { folders: TreeFolder[]; notes: NoteMetadataOutput[] };
 
 const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
@@ -10,7 +10,7 @@ const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base"
  * Monta a árvore a partir das listas planas. Notas e pastas cujo pai não existe (ou que formam ciclo) vão
  * para a raiz: nunca somem da tela, mesmo que a API devolva um estado inconsistente.
  */
-export function buildNotesTree(folders: readonly FolderOutput[], notes: readonly NoteOutput[]): NotesTree {
+export function buildNotesTree(folders: readonly FolderOutput[], notes: readonly NoteMetadataOutput[]): NotesTree {
   const nodes = new Map<string, TreeFolder>(folders.map((folder) => [folder.id, { folder, folders: [], notes: [], noteCount: 0 }]));
   const reachable = (id: string) => {
     for (let cursor: string | null = id, steps = 0; cursor !== null && steps <= nodes.size; steps++) {
@@ -32,7 +32,7 @@ export function buildNotesTree(folders: readonly FolderOutput[], notes: readonly
     (folder ? folder.notes : root.notes).push(note);
   }
 
-  const sortNotes = (items: NoteOutput[]) => items.sort((a, b) => collator.compare(a.title, b.title) || a.id.localeCompare(b.id));
+  const sortNotes = (items: NoteMetadataOutput[]) => items.sort((a, b) => collator.compare(a.title, b.title) || a.id.localeCompare(b.id));
   const finish = (items: TreeFolder[]) => {
     items.sort((a, b) => collator.compare(a.folder.name, b.folder.name) || a.folder.id.localeCompare(b.folder.id));
     for (const node of items) {

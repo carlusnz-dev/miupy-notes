@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "./api-client";
 import { useCreateFolder, useFolders, useUpdateFolder } from "./notes-folders-queries";
 import type { FolderOutput } from "./notes-folders-api";
-import type { NoteOutput } from "./notes-api";
+import type { NoteMetadataOutput, NoteOutput } from "./notes-api";
 import { useAllNotes, useCreateNote, useUpdateNote } from "./notes-queries";
 
 /** Título provisório aceito pelo contrato: a nota nasce sem input prévio e o usuário renomeia no editor. */
@@ -16,14 +16,14 @@ export type Workspace = {
   /** Há mais notas do que o teto de carregamento (ver `useAllNotes`). */
   truncated: boolean;
   refreshing: boolean;
-  notes: NoteOutput[];
+  notes: NoteMetadataOutput[];
   folders: FolderOutput[];
   retry: () => void;
   /** Cada operação devolve o registro criado; erros sobem como `ApiError`. */
   createNote: (folderId: string | null) => Promise<NoteOutput>;
   createFolder: (parentId: string | null) => Promise<FolderOutput>;
   renameFolder: (folder: FolderOutput, name: string) => Promise<void>;
-  moveNote: (note: NoteOutput, folderId: string | null) => Promise<void>;
+  moveNote: (note: NoteMetadataOutput, folderId: string | null) => Promise<void>;
 };
 
 const asApiError = (error: unknown) => (error instanceof ApiError ? error : new ApiError("UNKNOWN_ERROR", "Algo deu errado. Tente de novo."));

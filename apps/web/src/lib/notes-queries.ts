@@ -1,17 +1,12 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAuthSessionVersion, isCurrentAuthSession, useAuth } from "./auth";
-import { createNote, deleteNote, getNote, listNotes, updateNote, type NoteOutput } from "./notes-api";
+import { createNote, deleteNote, getNote, listNotesMetadata, getNotesSummary, updateNote, type NoteMetadataOutput } from "./notes-api";
 
-// Toda leitura de notas passa por estas chaves; mutações invalidam a raiz `notes`.
-export const noteKeys = {
-  all: ["notes"] as const,
-  list: () => [...noteKeys.all, "list"] as const,
-  everything: () => [...noteKeys.all, "everything"] as const,
-  detail: (id: string) => [...noteKeys.all, "detail", id] as const,
-};
+import { noteKeys, cacheSavedNote, cacheCreatedNote, cacheDeletedNote } from "./notes-queries-cache";
+export { noteKeys, cacheSavedNote } from "./notes-queries-cache";
 
 const PAGE_LIMIT = 100;
-// Teto para as métricas: 50 páginas × 100 notas. Acima disso as métricas pedem um endpoint de agregação.
+// Teto explícito da árvore; métricas usam summary sem esse teto.
 const MAX_PAGES = 50;
 
 function useSignedIn() {
@@ -22,22 +17,22 @@ function useSignedIn() {
 export function useNotesList(enabled = true) {
   return useInfiniteQuery({
     queryKey: noteKeys.list(),
-    queryFn: ({ pageParam, signal }) => listNotes({ cursor: pageParam, signal }),
+    queryFn: ({ pageParam, signal }) => listNotesMetadata({ cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     enabled: useSignedIn() && enabled,
   });
 }
 
-/** Todas as notas (até o teto), para métricas e gráficos. `truncated` indica que o teto foi atingido. */
+/** Metadados para árvore (até o teto). `truncated` indica que o teto foi atingido. */
 export function useAllNotes(enabled = true) {
   return useQuery({
     queryKey: noteKeys.everything(),
     queryFn: async ({ signal }) => {
-      const items: NoteOutput[] = [];
+      const items: NoteMetadataOutput[] = [];
       let cursor: string | undefined;
       for (let page = 0; page < MAX_PAGES; page++) {
-        const result = await listNotes({ cursor, limit: PAGE_LIMIT, signal });
+        const result = await listNotesMetadata({ cursor, limit: PAGE_LIMIT, signal });
         items.push(...result.items);
         if (!result.nextCursor) return { items, truncated: false };
         cursor = result.nextCursor;
@@ -59,11 +54,15 @@ export function useNote(id: string) {
   });
 }
 
-/** Grava a versão nova no cache do detalhe e marca listas/métricas como velhas. */
-export function cacheSavedNote(client: QueryClient, note: NoteOutput) {
-  client.setQueryData(noteKeys.detail(note.id), note);
-  void client.invalidateQueries({ queryKey: noteKeys.list() });
-  void client.invalidateQueries({ queryKey: noteKeys.everything() });
+export function useNotesSummary(days: 7 | 30 | 90 = 30, enabled = true) {
+  const offset = -new Date().getTimezoneOffset();
+  return useQuery({
+    queryKey: noteKeys.summary(days, offset),
+    queryFn: ({ signal }) => getNotesSummary(days, offset, signal),
+    enabled: useSignedIn() && enabled,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 }
 
 export function useCreateNote() {
@@ -71,7 +70,7 @@ export function useCreateNote() {
   return useMutation({
     mutationFn: createNote,
     onMutate: () => getAuthSessionVersion(),
-    onSuccess: (note, _input, session) => { if (isCurrentAuthSession(session)) cacheSavedNote(client, note); },
+    onSuccess: (note, _input, session) => { if (isCurrentAuthSession(session)) cacheCreatedNote(client, note); },
   });
 }
 
@@ -91,8 +90,7 @@ export function useDeleteNote() {
     onMutate: () => getAuthSessionVersion(),
     onSuccess: (_, id, session) => {
       if (!isCurrentAuthSession(session)) return;
-      client.removeQueries({ queryKey: noteKeys.detail(id) });
-      void client.invalidateQueries({ queryKey: noteKeys.all });
+      cacheDeletedNote(client, id);
     },
   });
 }

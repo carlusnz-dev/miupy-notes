@@ -2,6 +2,8 @@ import { useSyncExternalStore } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ApiError, setAccessTokenProvider } from "./api-client";
 import { z } from "zod";
+import { decodeIdTokenPayload, ownerIdFromToken } from "./id-token";
+import { signOutNeedsConfirmation } from "./notes-session";
 
 export type AuthStatus = "checking" | "signed-out" | "signed-in" | "unsupported";
 export type AuthState = { status: AuthStatus; signingIn: boolean; error: string | null };
@@ -68,13 +70,35 @@ export async function signIn() {
   }
 }
 
-export async function signOut() {
+export type SignOutResult =
+  | { status: "signed-out"; draftsPurged: boolean }
+  /** Há rascunhos não sincronizados (`unsynced`; `null` = não foi possível verificar). Repita com `discardDrafts: true` após o usuário confirmar. */
+  | { status: "needs-confirmation"; unsynced: number | null };
+
+/**
+ * Único caminho de saída da conta. Se houver notas com texto não sincronizado, não sai sozinho: devolve
+ * `needs-confirmation`, e só `discardDrafts: true` (decisão explícita) apaga esses rascunhos locais.
+ */
+export async function signOut(options: { discardDrafts?: boolean } = {}): Promise<SignOutResult> {
+  let saver: typeof import("./notes-saver") | null = null;
+  let check: Awaited<ReturnType<typeof import("./notes-saver")["draftSignOutCheck"]>> | null = null;
+  try {
+    saver = await import("./notes-saver");
+    check = await saver.draftSignOutCheck();
+  } catch {
+    check = null; // sem a fila não dá para verificar: tratado como "pode haver rascunhos"
+  }
+  if (signOutNeedsConfirmation(check, options.discardDrafts === true)) {
+    return { status: "needs-confirmation", unsynced: check && !check.unknown ? check.unsynced : null };
+  }
   update({ status: "signed-out", error: null });
   try {
     await invoke("auth_sign_out");
   } catch (code) {
     update({ error: messageFor(code) });
   }
+  await saver?.sessionIdle();
+  return { status: "signed-out", draftsPurged: saver?.lastSignOutClose().purged ?? false };
 }
 
 /** Volta para "signed-out" quando a API ou o Rust recusam a sessão (401 ou NOT_SIGNED_IN). */
@@ -101,9 +125,11 @@ const profileSchema = z.object({ name: z.string().optional(), email: z.email().o
 export async function getProfile() {
   if (!isTauri()) return null;
   const token = await invoke<string>("auth_id_token");
-  const segment = token.split(".")[1];
-  if (!segment) throw new Error("Perfil indisponível.");
-  const binary = atob(segment.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return profileSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
+  return profileSchema.parse(decodeIdTokenPayload(token));
+}
+
+/** Conta da sessão atual (`sub` do ID token), usada só para separar rascunhos locais; `null` se deslogado. */
+export async function getOwnerId(): Promise<string | null> {
+  if (state.status !== "signed-in") return null;
+  return ownerIdFromToken(await invoke<string>("auth_id_token"));
 }

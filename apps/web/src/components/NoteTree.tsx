@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import gsap from "gsap";
 import { ChevronRight, FilePlus, FileText, Folder, FolderInput, FolderOpen, FolderPlus, Pencil } from "lucide-react";
-import type { NoteOutput } from "../lib/notes-api";
+import type { NoteMetadataOutput } from "../lib/notes-api";
 import { MAX_FOLDER_NAME, type FolderOutput } from "../lib/notes-folders-api";
 import { reducedMotion } from "../lib/notes-motion";
 import { folderChoices, type NotesTree, type TreeFolder } from "../lib/notes-tree";
@@ -15,11 +15,11 @@ type NoteTreeProps = {
   /** ID de uma pasta recém-criada: entra em modo de renomear, já com o nome selecionado. */
   renameRequest?: string | null;
   disabled?: boolean;
-  onOpenNote: Action<[NoteOutput]>;
+  onOpenNote: Action<[NoteMetadataOutput]>;
   onCreateNote: Action<[folderId: string | null]>;
   onCreateFolder: Action<[parentId: string | null]>;
   onRenameFolder: Action<[FolderOutput, name: string]>;
-  onMoveNote: Action<[NoteOutput, folderId: string | null]>;
+  onMoveNote: Action<[NoteMetadataOutput, folderId: string | null]>;
 };
 
 const COLLAPSED_KEY = "miupy.notes-tree.collapsed.v1";
@@ -141,9 +141,9 @@ export default function NoteTree({ tree, renameRequest = null, disabled = false,
     };
   }
 
-  function findNote(id: string): NoteOutput | undefined {
-    const walk = (notes: NoteOutput[], folders: TreeFolder[]): NoteOutput | undefined =>
-      notes.find((note) => note.id === id) ?? folders.reduce<NoteOutput | undefined>((found, node) => found ?? walk(node.notes, node.folders), undefined);
+  function findNote(id: string): NoteMetadataOutput | undefined {
+    const walk = (notes: NoteMetadataOutput[], folders: TreeFolder[]): NoteMetadataOutput | undefined =>
+      notes.find((note) => note.id === id) ?? folders.reduce<NoteMetadataOutput | undefined>((found, node) => found ?? walk(node.notes, node.folders), undefined);
     return walk(tree.notes, tree.folders);
   }
   // Função (não componente): definida por render, um componente remontaria o <select> e perderia o foco.
@@ -168,7 +168,7 @@ export default function NoteTree({ tree, renameRequest = null, disabled = false,
     return <button type="button" className="tool-button tree-action" aria-label={label} title={label} onClick={onClick} disabled={disabled}>{icon}</button>;
   }
 
-  function renderNote(note: NoteOutput) {
+  function renderNote(note: NoteMetadataOutput) {
     const key = `note:${note.id}`;
     return (
       <li key={note.id} className={`tree-row tree-note${dragging === note.id ? " is-dragging" : ""}`} draggable={!disabled && moving !== key} onDragStart={(event) => { event.dataTransfer.setData("text/plain", note.id); event.dataTransfer.effectAllowed = "move"; setDragging(note.id); }} onDragEnd={() => { setDragging(null); setDropTarget(null); }}>
