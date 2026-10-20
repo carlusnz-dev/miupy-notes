@@ -10,7 +10,7 @@ Sistema pessoal para reunir dados próprios, notas, finanças, calendário, mens
 |---|---|
 | [`docs/`](docs/) | Requisitos, arquitetura, contratos, decisões e relatórios. |
 | [`styles/`](styles/) | Referências e tokens visuais em JSON para pessoas e agentes. |
-| [`skills/`](skills/) | Rotinas de trabalho do projeto. |
+| [`.agents/skills/`](.agents/skills/) | Rotinas de trabalho do projeto; atalhos em `.claude` e `.codex`. |
 | [`infra/`](infra/) | Convenções e futura infraestrutura Terraform. |
 | [`apps/web/`](apps/web/) | Frontend React, rotas básicas e estilo monocromático. |
 | [`apps/api/`](apps/api/) | Template Express/TypeScript com `core/` e módulo `notes`. |
