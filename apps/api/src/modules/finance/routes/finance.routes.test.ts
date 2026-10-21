@@ -29,8 +29,9 @@ class MemoryRepository extends FinanceRepository {
     return { items, nextCursor: rest.length > limit ? Buffer.from(JSON.stringify({ id: items.at(-1)!.id })).toString('base64url') : null };
   }
   async update(record: FinanceRecord, version: number) {
-    if ((await this.findById(record.ownerId,record.id,record.data.kind))?.version !== version) return false;
-    await this.create(record); return true;
+    const key = this.key(record.ownerId,record.id,record.data.kind);
+    if (this.items.get(key)?.version !== version) return false;
+    this.items.set(key,record); return true;
   }
   async delete(owner: string, id: string, kind: RecordKind, version: number) {
     if ((await this.findById(owner,id,kind))?.version !== version) return false;
@@ -208,7 +209,9 @@ test('CSV acrescenta Parcelas ao final e mantém valores totais e segurança',as
 
 test('registro legado sem campo retorna null em GET/lista e permite primeira edição',async () => {
   const created = await create({...input,paymentMethod:'card'});
-  const {installmentCount,...legacy} = created;
+  const {installmentCount,accountId,...legacy} = created;
+  assert.equal(accountId,null);
+  assert.equal(transactionOutputSchema.parse(legacy).accountId,null);
   assert.equal(installmentCount,null);
   assert.equal('installmentCount' in legacy,false);
   assert.equal(transactionOutputSchema.parse(legacy).installmentCount,null);
@@ -224,4 +227,66 @@ test('registro legado sem campo retorna null em GET/lista e permite primeira edi
   assert.equal(found?.installmentCount,null);
   const patched = await call('alice',`/transactions/${created.id}`,'PATCH',{...input,paymentMethod:'card',installmentCount:3,version:1});
   assert.equal(patched.status,200); assert.equal((await patched.json() as Transaction).installmentCount,3);
+});
+
+test('contas separadas: referências, legado, débito/crédito e moeda sem dupla contagem', async () => {
+  const owner = 'balance-synthetic';
+  const bank = await service.create(owner, 'bank', { title: 'Instituição A', logo: null });
+  const second = await service.create(owner, 'bank', { title: 'Instituição B', logo: null });
+  const accountInput = { title: 'Conta BRL', bankId: bank.id, currency: 'BRL' as const, openingBalanceCents: 10000, openingDate: '2026-10-01' };
+  const account = await service.create(owner, 'account', accountInput);
+  const usd = await service.create(owner, 'account', { ...accountInput, title: 'Conta USD', currency: 'USD', openingBalanceCents: -200 });
+  // O saldo de abertura já inclui o lançamento anterior à data de corte.
+  await service.create(owner, 'transaction', { ...input, bankId: bank.id, accountId: account.id, date: '2026-09-30', amountCents: 5000 });
+  await service.create(owner, 'transaction', { ...input, bankId: bank.id, accountId: account.id, date: '2026-10-01', amountCents: 1200 });
+  await service.create(owner, 'transaction', { ...input, bankId: bank.id, accountId: account.id, direction: 'income', paymentMethod: null, amountCents: 3000 });
+  const legacy = await service.create(owner, 'transaction', { ...input, bankId: bank.id, amountCents: 100 });
+  await service.create('other-balance-owner', 'account', { ...accountInput, bankId: (await service.create('other-balance-owner', 'bank', { title: 'Oculto', logo: null })).id, openingBalanceCents: 999999 });
+  let totals = await service.balances(owner);
+  assert.deepEqual(totals.currencies, [{ currency: 'BRL', balanceCents: 11700, unallocatedCents: -100 }, { currency: 'USD', balanceCents: -200, unallocatedCents: 0 }]);
+  assert.equal(totals.accounts.find(a => a.id === account.id)?.movementCents, 1800);
+  assert.equal(totals.accounts.find(a => a.id === account.id)?.source, 'manual');
+  assert.equal(totals.accounts.find(a => a.id === usd.id)?.balanceCents, -200);
+  assert.equal(totals.banks.find(b => b.bankId === bank.id)?.currencies.find(c => c.currency === 'BRL')?.balanceCents, 11700);
+  assert.equal('ownerId' in totals.accounts[0], false);
+  await service.update(owner, legacy.id, 'transaction', { ...input, bankId: second.id, amountCents: 100, version: 1 });
+  totals = await service.balances(owner);
+  assert.equal(totals.banks.find(b => b.bankId === second.id)?.currencies[0].balanceCents, -100);
+  assert.equal(totals.banks.find(b => b.bankId === bank.id)?.currencies.find(c => c.currency === 'BRL')?.balanceCents, 11800);
+  // Moeda e instituição de uma conta são imutáveis; evita reclassificar histórico sem transação.
+  await assert.rejects(service.update(owner, account.id, 'account', { ...accountInput, currency: 'USD', version: 1 }), { status: 400 });
+  await assert.rejects(service.create(owner, 'transaction', { ...input, accountId: account.id, bankId: second.id }), { status: 400 });
+  await assert.rejects(service.create(owner, 'transaction', { ...input, accountId: account.id, bankId: bank.id, currency: 'USD' }), { status: 400 });
+  await assert.rejects(service.findById('bob', account.id, 'account'), { status: 404 });
+  await assert.rejects(service.delete(owner, bank.id, 'bank', 1), { status: 409 });
+  const concurrent = await Promise.allSettled([
+    service.update(owner, account.id, 'account', { ...accountInput, openingBalanceCents: 20000, version: 1 }),
+    service.update(owner, account.id, 'account', { ...accountInput, openingBalanceCents: 30000, version: 1 }),
+  ]);
+  assert.equal(concurrent.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(concurrent.filter(r => r.status === 'rejected' && r.reason.status === 409).length, 1);
+});
+
+test('HTTP contas e balanço: validação estrita, owner, paginação e limites seguros', async () => {
+  const response = await call('bob', '/banks', 'POST', { title: 'Conta HTTP sintética', logo: null });
+  const bank = await response.json() as Bank;
+  const accountInput = { title: 'Conta', bankId: bank.id, currency: 'EUR', openingBalanceCents: 0, openingDate: '2026-10-21' };
+  for (const patch of [{ ownerId: 'alice' }, { openingBalanceCents: 1.2 }, { openingBalanceCents: Number.MAX_SAFE_INTEGER + 1 }, { openingDate: '2026-02-30' }])
+    await status('bob', '/accounts', 'POST', { ...accountInput, ...patch }, 400);
+  const created = await call('bob', '/accounts', 'POST', accountInput);
+  assert.equal(created.status, 201);
+  const account = await created.json() as { id: string; version: number };
+  for (const method of ['GET', 'PATCH']) await status('alice', `/accounts/${account.id}`, method, method === 'PATCH' ? { ...accountInput, version: 1 } : undefined, 404);
+  await status('bob', '/balances?ownerId=alice', 'GET', undefined, 400);
+  await status('bob', `/accounts/${account.id}`, 'DELETE', { version: 1 }, 404);
+  await status('bob', '/accounts', 'POST', { ...accountInput, bankId: randomUUID() }, 404);
+  const owner = 'many-accounts';
+  const institution = await service.create(owner, 'bank', { title: 'Muitas', logo: null });
+  for (let index = 0; index < 53; index++) await service.create(owner, 'account', { ...accountInput, currency: 'EUR', bankId: institution.id, openingBalanceCents: 1 });
+  assert.equal((await service.balances(owner)).currencies[0].balanceCents, 53);
+  const overflow = 'overflow-balance';
+  const institution2 = await service.create(overflow, 'bank', { title: 'Limite', logo: null });
+  await service.create(overflow, 'account', { ...accountInput, currency: 'EUR', bankId: institution2.id, openingBalanceCents: Number.MAX_SAFE_INTEGER });
+  await service.create(overflow, 'account', { ...accountInput, currency: 'EUR', bankId: institution2.id, openingBalanceCents: 1 });
+  await assert.rejects(service.balances(overflow), { status: 422, code: 'TOTAL_OVERFLOW' });
 });
