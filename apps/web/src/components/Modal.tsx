@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import gsap from "gsap";
 import "./modal.css";
 
@@ -68,12 +68,40 @@ export default function Modal({ open, title, onClose, children, busy = false, in
     return () => context.revert();
   }, [open, mounted]);
 
-  // Desmontagem direta (ex.: `{show && <Modal open …/>}`): fecha o dialog e devolve o foco sem animar.
-  useEffect(() => () => {
+  // Consumidores antigos podem desmontar no mesmo render da ação de fechar/salvar.
+  // Uma cópia inerte preserva só a saída visual; React e seus listeners desmontam normalmente.
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (dialog?.open) dialog.close();
-    if (opener.current?.isConnected) opener.current.focus();
-  }, []);
+    return () => {
+      if (dialog?.open && !reducedMotion()) {
+        const bounds = dialog.getBoundingClientRect();
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-exit-backdrop';
+        backdrop.setAttribute('aria-hidden', 'true');
+        backdrop.inert = true;
+        const copy = dialog.cloneNode(true) as HTMLDialogElement;
+        copy.removeAttribute('open'); copy.removeAttribute('aria-labelledby');
+        copy.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+        copy.setAttribute('aria-hidden', 'true'); copy.inert = true;
+        const computed = getComputedStyle(dialog);
+        for (const property of computed) if (property.startsWith('--')) copy.style.setProperty(property, computed.getPropertyValue(property));
+        copy.style.font = computed.font;
+        copy.style.color = computed.color;
+        Object.assign(copy.style, { position: 'fixed', top: `${bounds.top}px`, left: `${bounds.left}px`, margin: '0', width: `${bounds.width}px`, maxHeight: `${bounds.height}px` });
+        const scrollTop = dialog.querySelector('.modal-panel')?.scrollTop ?? 0;
+        queueMicrotask(() => {
+          // StrictMode reexecuta os efeitos mantendo o nó conectado.
+          if (dialog.isConnected) return;
+          backdrop.append(copy); document.body.append(backdrop); copy.show();
+          const panel = copy.querySelector('.modal-panel');
+          if (panel) panel.scrollTop = scrollTop;
+          gsap.to(backdrop, { opacity: 0, duration: .18, ease: 'power1.in', onComplete: () => backdrop.remove() });
+        });
+      }
+      if (dialog?.open) dialog.close();
+      if (opener.current?.isConnected) opener.current.focus();
+    };
+  }, [mounted]);
 
   if (!mounted) return null;
   return (
@@ -95,10 +123,10 @@ export default function Modal({ open, title, onClose, children, busy = false, in
       // O padding fica no painel interno, então um clique direto no <dialog> é um clique no backdrop.
       onClick={(event) => { if (event.target === event.currentTarget && !busyRef.current) onCloseRef.current(); }}
     >
+      <button type="button" className="modal-close" onClick={onClose} disabled={busy} aria-label="Fechar janela">×</button>
       <div className="modal-panel">
         <header className="modal-header">
           <h2 id={titleId}>{title}</h2>
-          <button type="button" className="modal-close" onClick={onClose} disabled={busy} aria-label="Fechar janela">×</button>
         </header>
         <div className="modal-body">{children}</div>
       </div>

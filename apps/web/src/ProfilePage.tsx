@@ -8,10 +8,24 @@ import { computeNoteDetails, computeNoteStats } from "./lib/note-stats";
 import { useNotesSummary } from "./lib/notes-queries";
 import { usePageTitle } from "./lib/use-page-title";
 import type { NoteOutput } from "./lib/notes-api";
+import { getFinanceSummary } from "./lib/finance-api";
+import { formatMoney } from "./finance/money";
 import "./profile.css";
 
 type Profile = Awaited<ReturnType<typeof getProfile>>;
 const sampleNotes: NoteOutput[] = ["Ideias de domingo", "Leituras", "Projeto pessoal"].map((title, index) => ({ id: String(index), title, body: "Uma nota de exemplo com algumas palavras para o perfil.", tags: index ? ["pessoal"] : ["ideias", "pessoal"], createdAt: new Date(Date.now() - index * 86_400_000).toISOString(), updatedAt: new Date().toISOString(), folderId: null, version: 1 }));
+function FinanceMetrics() {
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof getFinanceSummary>>>();
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const abort = new AbortController(); setError(false); setSummary(undefined);
+    getFinanceSummary(abort.signal).then(data => { if (!abort.signal.aborted) setSummary(data); })
+      .catch(() => { if (!abort.signal.aborted) setError(true); });
+    return () => abort.abort();
+  }, [retry]);
+  return <section className="profile-finance"><h2>Finanças</h2>{error ? <p role="alert">Não foi possível carregar as métricas financeiras. <button onClick={() => setRetry(value => value + 1)}>Tentar de novo</button></p> : !summary ? <p role="status">Carregando finanças…</p> : !summary.currencies.length ? <p>Ainda não há lançamentos.</p> : <><p>Movimentações de todo o seu histórico, separadas por moeda.</p><div className="profile-stats">{summary.currencies.map(total => <div className="profile-stat" key={total.currency}><span>{total.currency} · {total.count} lançamento(s)</span><strong>{formatMoney(total.balanceCents, total.currency)}</strong><small>Entradas: {formatMoney(total.incomeCents, total.currency)}</small><small>Saídas: {formatMoney(total.expenseCents, total.currency)}</small></div>)}</div></>}</section>;
+}
 const chartColor = "#F5F5F2";
 const muted = "#A6A6A2";
 function Chart({ title, summary, data, x, horizontal = false }: { title: string; summary: string; data: Record<string, string | number>[]; x: string; horizontal?: boolean }) {
@@ -45,6 +59,7 @@ export default function ProfilePage() {
         <div className="profile-charts"><Chart title="Notas criadas por dia" summary={`${stats.createdInWindow} notas criadas nos últimos 30 dias.`} data={stats.createdPerDay} x="date" /><Chart title="Tags mais usadas" summary={`${stats.tags.length} tags distintas; até oito exibidas.`} data={stats.tags.slice(0, 8).map(({ tag, count }) => ({ tag, count }))} x="tag" horizontal /><Chart title="Palavras por nota" summary={`Até dez notas com mais palavras; média de ${details.averageWords} palavras.`} data={details.topNotes.map(({ title, words }) => ({ title, count: words }))} x="title" horizontal /></div>
         <div className="profile-future">{["Agenda", "Biblioteca"].map((label) => <div key={label} className="profile-stat"><span>{label}</span><strong>0</strong><small>Em preparação</small></div>)}</div>
       </>}
+      {auth.status === "signed-in" && !preview && <FinanceMetrics />}
     </>}
   </div>;
 }
