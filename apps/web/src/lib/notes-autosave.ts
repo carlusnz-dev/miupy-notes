@@ -1,6 +1,6 @@
 import type { ApiError } from "./api-client";
 import type { NoteOutput } from "./notes-api";
-import type { DraftStore } from "./notes-draft-store";
+import type { DraftStore, DraftVersion } from "./notes-draft-store";
 import { fromEditorText, toEditorText, type Eol } from "./notes-markdown";
 import { backoffDelay, createScheduler, systemClock, type Clock, type SchedulerOptions } from "./notes-scheduler";
 
@@ -90,6 +90,7 @@ type Entry = {
   revision: number;
   /** Maior revisão cuja gravação local foi confirmada. */
   durable: number;
+  storedVersion: DraftVersion | null;
   /** Revisão cujo PATCH está em andamento. */
   inflight: number | null;
   /**
@@ -212,7 +213,7 @@ export function createAutosaveQueue(deps: QueueDeps) {
 
   function newEntry(base: NoteOutput, over: Partial<Entry> = {}): Entry {
     const e: Entry = {
-      id: base.id, base, snapshot: null, revision: 0, durable: 0, inflight: null, confirmed: null,
+      id: base.id, base, snapshot: null, revision: 0, durable: 0, storedVersion: null, inflight: null, confirmed: null,
       blocked: false, halt: null, error: null, retrying: false, attempts: 0, notBefore: 0, floorUntil: 0, reconcile: false,
       invalid: null, storeFailed: false, storeAttempts: 0, held: false, dead: false, writing: null, writeDirty: false,
       view: undefined as unknown as EntryView, ...over,
@@ -241,14 +242,18 @@ export function createAutosaveQueue(deps: QueueDeps) {
         const clearing = !snapshot || e.confirmed === revision;
         try {
           if (clearing) {
-            await deps.store.remove(ownerId, e.id, revision);
+            await deps.store.remove(ownerId, e.id, revision, e.storedVersion);
+            e.storedVersion = null;
             if (e.revision === revision && e.confirmed === revision) { e.snapshot = null; e.confirmed = null; e.invalid = null; }
           } else {
-            await deps.store.put({ ownerId, noteId: e.id, draft: snapshot.draft, eol: snapshot.eol, base, revision, savedAt: clock.now() });
+            const writeId = crypto.randomUUID();
+            await deps.store.put({ ownerId, noteId: e.id, draft: snapshot.draft, eol: snapshot.eol, base, revision, writeId, savedAt: clock.now() }, e.storedVersion);
+            e.storedVersion = { revision, writeId };
             e.durable = Math.max(e.durable, revision);
           }
           if (e.revision === revision || !clearing) { e.storeFailed = false; e.storeAttempts = 0; }
-        } catch {
+        } catch (error) {
+          if ((error as ApiError)?.code === "LOCAL_DRAFT_CONFLICT") e.error = error as ApiError;
           // Sem gravação confirmada o texto NÃO é anunciado como protegido, e nada depende dele.
           if (e.snapshot && !e.dead) { e.storeFailed = true; retryStore(e); }
         }
@@ -457,7 +462,7 @@ export function createAutosaveQueue(deps: QueueDeps) {
     restoreError = null;
     for (const record of records) {
       if (entries.has(record.noteId)) continue;
-      newEntry(record.base, { snapshot: { draft: record.draft, eol: record.eol }, revision: record.revision, durable: record.revision, reconcile: true });
+      newEntry(record.base, { snapshot: { draft: record.draft, eol: record.eol }, revision: record.revision, durable: record.revision, storedVersion: { revision: record.revision, writeId: record.writeId }, reconcile: true });
     }
   }
 
@@ -563,7 +568,7 @@ export function createAutosaveQueue(deps: QueueDeps) {
         e = entries.get(loaded.id);
         if (!e) {
           e = record
-            ? newEntry(record.base, { snapshot: { draft: record.draft, eol: record.eol }, revision: record.revision, durable: record.revision, reconcile: true })
+            ? newEntry(record.base, { snapshot: { draft: record.draft, eol: record.eol }, revision: record.revision, durable: record.revision, storedVersion: { revision: record.revision, writeId: record.writeId }, reconcile: true })
             : newEntry(loaded);
           if (record && !applyServer(e, loaded) && !e.blocked) scheduler.edit(e.id);
         }
