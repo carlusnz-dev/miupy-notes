@@ -32,7 +32,8 @@ export default function TimeGrid({ days, events, statusOf, onOpen, onPickDay }: 
     if (!element) return;
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.fromTo(element.querySelectorAll(".calendar-block"), { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: .22, stagger: .02, ease: "power2.out", clearProps: "opacity,transform" });
+      const blocks = element.querySelectorAll(".calendar-block");
+      if (blocks.length > 0) gsap.fromTo(blocks, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: .22, stagger: .02, ease: "power2.out", clearProps: "opacity,transform" });
     });
     return () => media.revert();
     // Só ao trocar de período: eventos novos de um envio não devem rolar nem reanimar a grade.
