@@ -7,10 +7,13 @@ class FakeTx {
   onerror: (() => void) | null = null;
   onabort: (() => void) | null = null;
   error: Error | null = null;
-  constructor(readonly script: (tx: FakeTx, request: FakeRequest) => void) {}
+  constructor(readonly script: (tx: FakeTx, request: FakeRequest) => void, readonly journal = false) {}
   objectStore() {
     const tx = this;
-    const make = () => { const request = new FakeRequest(); queueMicrotask(() => tx.script(tx, request)); return request; };
+    const make = () => { const request = new FakeRequest(); queueMicrotask(() => {
+      if (tx.journal) { request.result = []; request.onsuccess?.(); tx.oncomplete?.(); }
+      else tx.script(tx, request);
+    }); return request; };
     return { get: make, put: make, delete: make, index: () => ({ getAll: make }) };
   }
 }
@@ -26,7 +29,7 @@ function factory(script: (tx: FakeTx, request: FakeRequest) => void): IDBFactory
     open() {
       const req: { onupgradeneeded?: () => void; onsuccess?: () => void; result?: unknown; error?: unknown } = {};
       queueMicrotask(() => {
-        req.result = { transaction: () => new FakeTx(script), createObjectStore: () => ({ createIndex: () => undefined }) };
+        req.result = { transaction: (stores: string[]) => new FakeTx(script, stores.includes("cleanups")), objectStoreNames: { contains: () => false }, createObjectStore: () => ({ createIndex: () => undefined }) };
         req.onupgradeneeded?.();
         req.onsuccess?.();
       });

@@ -8,6 +8,7 @@ export function describeSave(view: EntryView | undefined, savedAt: string): Save
   if (view.status === "saving") return { text: "Salvando na nuvem…", alert: false };
   if (view.status === "protecting") return { text: "Gravando no computador…", alert: false };
   if (view.status === "local-failed") {
+    if (view.error?.code === "LOCAL_DRAFT_CONFLICT") return { text: "Outro editor alterou o rascunho local. Preserve seu texto nesta janela antes de recarregar o aplicativo.", alert: true };
     return view.localIssue === "cleanup"
       ? { text: "Sincronizado, mas o armazenamento local não pôde ser atualizado. Tentando de novo.", alert: true }
       : { text: "Falha ao proteger localmente: o texto só existe nesta janela e não será enviado até ser gravado.", alert: true };
