@@ -38,3 +38,13 @@ Falhas observadas e corrigidas durante o trabalho: aviso GSAP "target not found"
 - Lista do servidor por ID com filtro: custo proporcional ao acervo; sem índice por data.
 - Não atualizados (fora do escopo desta frente): `arquitetura.json`, `backend.json`, `api.md`, `requisitos.md`, `docs/relatorios/README.md` (índice) e `apps/api/README.md`. Linha sugerida para o índice: `| 2026-10-21 | Agendas/planner e Google Calendar | [relatório](2026-10-21_calendar-planner.md) |`.
 - Nenhuma ação em AWS, Terraform, deploy ou contas reais.
+
+## Correções após revisão independente (HEAD revisado `01eb6dd`)
+
+Três P1 reproduzidos pelo revisor, corrigidos com regressão (as regressões falham no código anterior e passam no novo):
+
+1. **Falha em voo sobrescrevia edição mais nova:** `classify` regravava a cópia antiga do envio. Agora toda atualização pós-envio é compare-and-set pela revisão (`store.updateOp`, atômico em IndexedDB; memória idem); se `rev` mudou, nada é substituído.
+2. **Excluir criação em voo ressuscitava o evento:** o envio grava `sentAt` antes de sair (cobre também queda sem ACK). Excluir uma criação com `sentAt` não remove a fila: vira lápide `delete` sem versão, que consulta o servidor (404 ⇒ nunca chegou) e exclui. Criação que nunca saiu continua sendo cancelada sem rede. O ACK de uma revisão antiga reposiciona a revisão mais nova sobre a versão confirmada (`rebaseNewer`; criação vira edição), evitando conflito consigo mesma.
+3. **Sync adotava ETag remoto divergente:** `refreshOwnEtag` só adota o ETag se o conteúdo remoto for idêntico ao que o app enviaria; edição feita no Google não avança o ETag e o envio seguinte responde `GOOGLE_CONFLICT` sem sobrescrever.
+
+Verificado: testes do módulo na web (`src/calendar`) e na API (`modules/calendar` + `app.test.ts`), `npm run build`, `check:modules`; suítes completas não repetidas. Mantém-se: sem conexão real com o Google (falta `CredentialStore` de produção e fluxo de consentimento no desktop).

@@ -60,11 +60,13 @@ export async function enqueue(store: CalendarStore, ownerId: string, change:
   | { kind: "delete"; event: CalendarEventOutput }, now = Date.now()): Promise<OutboxOp | null> {
   const eventId = change.kind === "create" ? change.eventId : change.event.id;
   const existing = await store.getOp(ownerId, eventId);
-  const base = { ownerId, eventId, state: "pending" as const, attempts: 0, nextAttemptAt: 0, lastError: null, serverCopy: null as CalendarEventOutput | null, rev: (existing?.rev ?? 0) + 1, createdAt: existing?.createdAt ?? now, updatedAt: now };
+  const base = { ownerId, eventId, state: "pending" as const, attempts: 0, nextAttemptAt: 0, lastError: null, serverCopy: null as CalendarEventOutput | null, sentAt: existing?.sentAt ?? null, rev: (existing?.rev ?? 0) + 1, createdAt: existing?.createdAt ?? now, updatedAt: now };
 
   if (change.kind === "delete") {
-    if (existing?.kind === "create") { await store.removeOp(ownerId, eventId); await store.removeEvents(ownerId, [eventId]); return null; }
-    const op: OutboxOp = { ...base, kind: "delete", draft: null, baseVersion: existing?.baseVersion ?? change.event.version };
+    // Só cancela sem rede uma criação que nunca saiu. Se um envio já começou (`sentAt`), o servidor pode ter o evento:
+    // a exclusão vira uma lápide ("delete" sem versão) que consulta o servidor antes de excluir.
+    if (existing?.kind === "create" && existing.sentAt === null) { await store.removeOp(ownerId, eventId); await store.removeEvents(ownerId, [eventId]); return null; }
+    const op: OutboxOp = { ...base, kind: "delete", draft: null, baseVersion: existing ? existing.baseVersion : change.event.version };
     await store.putOp(op);
     return op;
   }
@@ -96,10 +98,13 @@ export async function flushOutbox(store: CalendarStore, remote: CalendarRemote, 
     if (!isCurrent()) break;
     if (op.state !== "pending" || (!options.force && op.nextAttemptAt > now())) continue;
     try {
+      // Marca "pode ter saído" ANTES do envio. Se a revisão já mudou, esta rodada pula o evento (a próxima o pega).
+      if (!(await store.updateOp(ownerId, op.eventId, op.rev, { sentAt: now() }))) continue;
       const saved = await send(remote, op);
       if (!isCurrent()) break;
       if (saved === "gone") await store.removeEvents(ownerId, [op.eventId]); else await store.putEvents(ownerId, [saved]);
       await store.removeOp(ownerId, op.eventId, op.rev);
+      if (saved !== "gone") await rebaseNewer(store, ownerId, op, saved);
       result.sent++;
     } catch (error) {
       if (!isCurrent()) break;
@@ -112,10 +117,24 @@ export async function flushOutbox(store: CalendarStore, remote: CalendarRemote, 
   return result;
 }
 
+/**
+ * O servidor confirmou a revisão `op.rev`, mas o usuário pode ter gravado uma revisão mais nova durante o envio.
+ * Ela continua pendente, agora sobre a versão confirmada (e uma criação confirmada vira edição); nada é perdido nem recriado.
+ */
+async function rebaseNewer(store: CalendarStore, ownerId: string, sent: OutboxOp, saved: CalendarEventOutput): Promise<void> {
+  const newer = await store.getOp(ownerId, sent.eventId);
+  if (!newer || newer.rev <= sent.rev) return;
+  await store.updateOp(ownerId, sent.eventId, newer.rev, { kind: newer.kind === "create" ? "update" : newer.kind, baseVersion: saved.version, attempts: 0, nextAttemptAt: 0 });
+}
+
 async function send(remote: CalendarRemote, op: OutboxOp): Promise<CalendarEventOutput | "gone"> {
   if (op.kind === "create") return remote.create(op.eventId, op.draft!);
   if (op.kind === "update") return remote.update(op.eventId, op.baseVersion!, op.draft!);
-  try { await remote.remove(op.eventId, op.baseVersion!); } catch (error) {
+  try {
+    // Lápide (sem versão): descobre a versão atual; 404 ⇒ o evento nunca chegou ao servidor.
+    const version = op.baseVersion ?? (await remote.get(op.eventId)).version;
+    await remote.remove(op.eventId, version);
+  } catch (error) {
     // Já não existe: a exclusão está cumprida (reenvio de uma exclusão cuja resposta se perdeu).
     if (!(isApiError(error) && error.status === 404)) throw error;
   }
@@ -125,7 +144,8 @@ async function send(remote: CalendarRemote, op: OutboxOp): Promise<CalendarEvent
 type Outcome = "retry" | "conflict" | "rejected" | "done";
 
 async function classify(store: CalendarStore, remote: CalendarRemote, op: OutboxOp, error: unknown, at: number): Promise<Outcome> {
-  const save = (patch: Partial<OutboxOp>) => store.putOp({ ...op, ...patch, updatedAt: at });
+  // Compare-and-set pela revisão: se o usuário editou durante o envio que falhou, a edição nova não é substituída.
+  const save = (patch: Partial<OutboxOp>) => store.updateOp(op.ownerId, op.eventId, op.rev, { ...patch, updatedAt: at });
   if (retryable(error)) {
     const attempts = op.attempts + 1;
     await save({ attempts, lastError: errorCode(error), nextAttemptAt: at + backoff(attempts, isApiError(error) ? error.retryAfterMs : undefined) });

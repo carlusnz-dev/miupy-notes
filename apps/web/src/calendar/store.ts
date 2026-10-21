@@ -20,6 +20,8 @@ export type OutboxOp = {
   lastError: string | null;
   /** Cópia do servidor que causou o conflito; nula quando o evento foi removido lá. */
   serverCopy: CalendarEventOutput | null;
+  /** Gravado ANTES de cada envio: indica que o servidor pode já ter recebido este evento (mesmo sem ACK, inclusive após queda). */
+  sentAt: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -32,6 +34,8 @@ export interface CalendarStore {
   getMeta(ownerId: string, key: string): Promise<string | null>;
   setMeta(ownerId: string, key: string, value: string): Promise<void>;
   putOp(op: OutboxOp): Promise<void>;
+  /** Atualiza o envio só se a revisão gravada ainda for `expectedRev` (compare-and-set); `false` = mudou ou não existe. */
+  updateOp(ownerId: string, eventId: string, expectedRev: number, patch: Partial<OutboxOp>): Promise<boolean>;
   getOp(ownerId: string, eventId: string): Promise<OutboxOp | null>;
   listOps(ownerId: string): Promise<OutboxOp[]>;
   /** Remove o envio; com `upToRev`, só se a revisão gravada não for mais nova (edição durante o envio não se perde). */
@@ -57,6 +61,13 @@ export function createMemoryCalendarStore(): CalendarStore & { failNextPut: (err
     async getMeta(ownerId, name) { return meta.get(key(ownerId, name)) ?? null; },
     async setMeta(ownerId, name, value) { meta.set(key(ownerId, name), value); },
     async putOp(op) { guard(); ops.set(key(op.ownerId, op.eventId), copy(op)); },
+    async updateOp(ownerId, eventId, expectedRev, patch) {
+      guard();
+      const stored = ops.get(key(ownerId, eventId));
+      if (!stored || stored.rev !== expectedRev) return false;
+      ops.set(key(ownerId, eventId), copy({ ...stored, ...patch, rev: stored.rev }));
+      return true;
+    },
     async getOp(ownerId, eventId) { const found = ops.get(key(ownerId, eventId)); return found ? copy(found) : null; },
     async listOps(ownerId) { return [...ops.values()].filter((op) => op.ownerId === ownerId).map(copy).sort((a, b) => a.createdAt - b.createdAt); },
     async removeOp(ownerId, eventId, upToRev) {
@@ -73,7 +84,7 @@ export function createMemoryCalendarStore(): CalendarStore & { failNextPut: (err
 
 export function createUnavailableCalendarStore(reason = "Armazenamento local indisponível."): CalendarStore {
   const fail = () => Promise.reject(new Error(reason));
-  return { putEvents: fail, removeEvents: fail, listEvents: () => Promise.resolve([]), getMeta: () => Promise.resolve(null), setMeta: fail, putOp: fail, getOp: () => Promise.resolve(null), listOps: () => Promise.resolve([]), removeOp: fail, clearOwner: fail };
+  return { putEvents: fail, removeEvents: fail, listEvents: () => Promise.resolve([]), getMeta: () => Promise.resolve(null), setMeta: fail, putOp: fail, updateOp: fail, getOp: () => Promise.resolve(null), listOps: () => Promise.resolve([]), removeOp: fail, clearOwner: fail };
 }
 
 const DB_NAME = "miupy-calendar";
@@ -146,6 +157,19 @@ export function createIndexedDbCalendarStore(factory: IDBFactory | undefined = t
       const { t, finished } = await tx(["outbox"], "readwrite");
       t.objectStore("outbox").put(op);
       await finished;
+    },
+    async updateOp(ownerId, eventId, expectedRev, patch) {
+      const { t, finished } = await tx(["outbox"], "readwrite");
+      const store = t.objectStore("outbox");
+      let applied = false;
+      // Leitura e gravação na mesma transação: uma edição nova entre as duas não é sobrescrita.
+      const read = store.get([ownerId, eventId]);
+      read.onsuccess = () => {
+        const stored = read.result as OutboxOp | undefined;
+        if (stored && stored.rev === expectedRev) { store.put({ ...stored, ...patch, rev: stored.rev }); applied = true; }
+      };
+      await finished;
+      return applied;
     },
     async getOp(ownerId, eventId) {
       const { t, finished } = await tx(["outbox"], "readonly");

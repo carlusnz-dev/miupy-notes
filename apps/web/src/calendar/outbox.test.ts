@@ -266,3 +266,97 @@ test("draftOf copia só os campos editáveis", () => {
   const copy = draftOf(server({ links: [{ kind: "note", id: idA }] }));
   assert.deepEqual(Object.keys(copy).sort(), ["allDay", "description", "end", "links", "location", "start", "timeZone", "title"]);
 });
+
+/** Servidor cujo envio fica suspenso até `release`, para editar/excluir "durante o envio". */
+function gated(r: ReturnType<typeof remote>, method: "create" | "update", outcome: "ok" | "network") {
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  const original = r.api[method] as (...args: never[]) => Promise<CalendarEventOutput>;
+  (r.api as unknown as Record<string, unknown>)[method] = async (...args: never[]) => {
+    if (outcome === "network") { await waiting; throw net(); }
+    const saved = await original(...args);
+    await waiting;
+    return saved;
+  };
+  return release;
+}
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("regressão: envio em voo que falha por rede não desfaz a edição mais nova (compare-and-set por revisão)", async () => {
+  const store = createMemoryCalendarStore();
+  const base = server();
+  await store.putEvents(owner, [base]);
+  const r = remote([base]);
+  await enqueue(store, owner, { kind: "update", event: base, draft: draft({ title: "original" }) });
+  const healthy = r.api.update;
+  const release = gated(r, "update", "network");
+  const round = flushOutbox(store, r.api, owner, { force: true });
+  await tick();
+  await enqueue(store, owner, { kind: "update", event: base, draft: draft({ title: "texto novo" }) });
+  release();
+  await round;
+  r.api.update = healthy; // a rede voltou
+  const op = (await store.getOp(owner, idA))!;
+  assert.deepEqual([op.draft?.title, op.rev, op.attempts, op.lastError], ["texto novo", 2, 0, null]);
+  // A edição nova segue para o servidor na próxima rodada.
+  assert.equal((await flushOutbox(store, r.api, owner, { force: true })).sent, 1);
+  assert.equal(r.events.get(idA)!.title, "texto novo");
+});
+
+test("regressão: excluir uma criação já em voo vira lápide; o ACK não ressuscita o evento e o servidor acaba sem ele", async () => {
+  const store = createMemoryCalendarStore();
+  const r = remote();
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft() });
+  const release = gated(r, "create", "ok");
+  const round = flushOutbox(store, r.api, owner, { force: true });
+  await tick();
+  const created = withOutbox([], await store.listOps(owner))[0].event;
+  await enqueue(store, owner, { kind: "delete", event: created });
+  release();
+  await round;
+  // O ACK gravou o evento no cache, mas a lápide o esconde e segue pendente sobre a versão confirmada.
+  const [tombstone] = await store.listOps(owner);
+  assert.deepEqual([tombstone.kind, tombstone.baseVersion, tombstone.state], ["delete", 1, "pending"]);
+  assert.equal(withOutbox(await store.listEvents(owner), [tombstone]).length, 0);
+  assert.equal((await flushOutbox(store, r.api, owner, { force: true })).sent, 1);
+  assert.equal(r.events.size, 0);
+  assert.deepEqual([(await store.listEvents(owner)).length, (await store.listOps(owner)).length], [0, 0]);
+});
+
+test("regressão: lápide sem versão consulta o servidor (404 = nunca chegou) e tolera criação cujo ACK se perdeu", async () => {
+  const store = createMemoryCalendarStore();
+  const r = remote();
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft() });
+  // O envio chegou ao servidor, mas a resposta se perdeu (sentAt gravado, op continua).
+  const original = r.api.create;
+  r.api.create = async (id, d) => { await original(id, d); throw net(); };
+  await flushOutbox(store, r.api, owner, { force: true });
+  assert.equal(r.events.size, 1);
+  await enqueue(store, owner, { kind: "delete", event: withOutbox([], await store.listOps(owner))[0].event });
+  assert.equal((await store.getOp(owner, idA))!.kind, "delete");
+  assert.equal((await flushOutbox(store, r.api, owner, { force: true })).sent, 1);
+  assert.equal(r.events.size, 0);
+
+  // Criação que nunca saiu: cancelada sem rede e sem lápide.
+  const fresh = createMemoryCalendarStore();
+  await enqueue(fresh, owner, { kind: "create", eventId: idA, draft: draft() });
+  await enqueue(fresh, owner, { kind: "delete", event: withOutbox([], await fresh.listOps(owner))[0].event });
+  assert.deepEqual(await fresh.listOps(owner), []);
+});
+
+test("regressão: criação confirmada com edição nova em voo vira edição sobre a versão confirmada (sem conflito consigo mesma)", async () => {
+  const store = createMemoryCalendarStore();
+  const r = remote();
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft({ title: "v1" }) });
+  const release = gated(r, "create", "ok");
+  const round = flushOutbox(store, r.api, owner, { force: true });
+  await tick();
+  await enqueue(store, owner, { kind: "update", event: withOutbox([], await store.listOps(owner))[0].event, draft: draft({ title: "v2" }) });
+  release();
+  await round;
+  const [op] = await store.listOps(owner);
+  assert.deepEqual([op.kind, op.baseVersion, op.draft?.title], ["update", 1, "v2"]);
+  const next = await flushOutbox(store, r.api, owner, { force: true });
+  assert.deepEqual([next.sent, next.conflicts], [1, 0]);
+  assert.equal(r.events.get(idA)!.title, "v2");
+});

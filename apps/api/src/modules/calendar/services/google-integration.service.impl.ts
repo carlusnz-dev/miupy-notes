@@ -226,12 +226,15 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return "upserted";
   }
 
-  /** Mantém o ETag da reflexão atualizado quando a própria cópia volta pela sincronização. */
+  /**
+   * Quando a própria cópia volta pela sincronização, só adota o ETag novo se o conteúdo remoto for exatamente o que o
+   * app enviaria. ETag com conteúdo diferente é edição feita no Google: não avança, e o próximo envio responde 412
+   * (`GOOGLE_CONFLICT`) em vez de sobrescrevê-la. Só o ETag muda; versão e `updatedAt` não, para não conflitar com o usuário.
+   */
   private async refreshOwnEtag(ownerId: string, item: GoogleEvent): Promise<"skipped"> {
     const localId = item.extendedProperties?.private?.[OWN_EVENT_PROPERTY];
     const event = localId ? await this.repository.findById(ownerId, localId) : null;
-    if (event?.reflection && item.etag && event.reflection.etag !== item.etag && item.status !== "cancelled") {
-      // Só o ETag muda; versão e updatedAt do evento não, para não conflitar com a edição do usuário.
+    if (event?.reflection && item.etag && event.reflection.etag !== item.etag && item.status !== "cancelled" && sameRemoteContent(item, toGoogleBody(event))) {
       await this.repository.update(new CalendarEvent(event.id, event.ownerId, event.title, event.description, event.location, event.allDay, event.start, event.end, event.timeZone, event.links, event.source, event.external, { ...event.reflection, etag: item.etag }, event.createdAt, event.updatedAt, event.version), event.version);
     }
     return "skipped";

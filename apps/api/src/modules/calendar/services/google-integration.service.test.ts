@@ -278,3 +278,28 @@ test("mapeia dia inteiro do Google (fim exclusivo) e usa o fuso do calendário q
   assert.deepEqual([call.start, call.timeZone], ["2026-11-02T12:00:00.000Z", "America/Sao_Paulo"]);
   assert.equal(items.length, 2);
 });
+
+test("regressão: sincronizar a cópia editada no Google não adota o ETag; o envio seguinte vira GOOGLE_CONFLICT e preserva a edição remota", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  await kit.integration.reflect(owner, event.id);
+  const googleId = event.id.replaceAll("-", "");
+  const sentEtag = (await kit.repository.findById(owner, event.id))!.reflection!.etag;
+  kit.google.seed({ ...kit.google.events.get(googleId)!, summary: "alterado no Google" });
+  await kit.integration.sync(owner);
+  assert.equal((await kit.repository.findById(owner, event.id))!.reflection!.etag, sentEtag);
+  await assert.rejects(kit.integration.reflect(owner, event.id), { code: "GOOGLE_CONFLICT" });
+  assert.equal(kit.google.events.get(googleId)!.summary, "alterado no Google");
+});
+
+test("sincronizar a cópia com conteúdo idêntico (só ETag mudou) adota o ETag novo", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  await kit.integration.reflect(owner, event.id);
+  const googleId = event.id.replaceAll("-", "");
+  const reseeded = kit.google.seed({ ...kit.google.events.get(googleId)! });
+  await kit.integration.sync(owner);
+  assert.equal((await kit.repository.findById(owner, event.id))!.reflection!.etag, reseeded.etag);
+});
