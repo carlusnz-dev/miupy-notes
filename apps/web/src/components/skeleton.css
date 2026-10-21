@@ -1,0 +1,7 @@
+.skeleton { display: block; flex: none; border-radius: var(--radius-small); background: linear-gradient(90deg, var(--color-surface) 30%, var(--color-surface-raised) 50%, var(--color-surface) 70%) 0 0 / 300% 100%; animation: skeleton-shimmer 1.4s ease-in-out infinite; }
+.skeleton-card { border: 1px solid var(--color-border); }
+.skeleton-body { display: grid; gap: 10px; }
+.skeleton-cards { display: grid; gap: 8px; }
+@keyframes skeleton-shimmer { to { background-position: -150% 0; } }
+@media (max-width: 760px) { .skeleton-cards { grid-template-columns: 1fr !important; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }

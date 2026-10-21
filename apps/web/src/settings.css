@@ -1,0 +1,14 @@
+.settings-page { display: grid; gap: 18px; min-width: 0; overflow-y: auto; }
+.settings-page h1 { margin: 0; }
+.settings-page .lead { margin: 0; }
+.settings-grid { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 20px; }
+.settings-panel { display: grid; gap: 16px; align-content: start; padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-medium); }
+.settings-panel label { display: grid; gap: 7px; color: var(--color-muted); font-size: 13px; }
+.settings-panel input[type="range"] { width: 100%; accent-color: var(--color-text); }
+.settings-panel .settings-check { display: flex; align-items: center; gap: 9px; }
+.settings-check input { accent-color: var(--color-text); }
+.settings-sample { min-width: 0; padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-medium); }
+.settings-sample h2 { margin: 0 0 12px; font-size: 16px; }
+.settings-sample-body { max-width: var(--editor-width); margin: auto; padding: var(--editor-padding); border: 1px solid var(--color-border); border-radius: var(--radius-small); }
+.settings-editor-line { padding: 12px; border: 1px solid var(--color-border); }
+@media (max-width: 700px) { .settings-grid { grid-template-columns: minmax(0, 1fr); } }

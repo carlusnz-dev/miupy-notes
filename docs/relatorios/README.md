@@ -5,6 +5,24 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 ## Índice
 
 | Data | Sessão | Arquivo |
-|---|---|
+|---|---|---|
 | 2026-10-18 | 01 — estrutura inicial | [relatório](2026-10-18_sessao-01.md) |
 | 2026-10-18 | 02 — workspaces, API e base visual | [relatório](2026-10-18_sessao-02.md) |
+| 2026-10-18 | 03 — dependências, verificação e refinamento visual | [relatório](2026-10-18_sessao-03.md) |
+| 2026-10-18 | 04 — identidade, módulo de notas e tela de notas | [relatório](2026-10-18_sessao-04.md) |
+| 2026-10-18 | 05 — login Google, /v1/notes autenticado e editor Markdown | [relatório](2026-10-18_sessao-05.md) |
+| 2026-10-19 | 06 — fluxo Git, interface, notas e finanças | [relatório](2026-10-19_sessao-06.md) |
+| 2026-10-19 | 06 — frente shell e movimento | [relatório](2026-10-19_sessao-06-shell-motion.md) |
+| 2026-10-19 | 06 — frente finanças | [relatório](2026-10-19_sessao-06-finance.md) |
+| 2026-10-19 | 06 — parcelas financeiras | [relatório](2026-10-19_sessao-06-finance-installments.md) |
+| 2026-10-19 | 06 — notas e Live Preview | [relatório](2026-10-19_sessao-06-notas-live.md) |
+| 2026-10-19 | 06 — polimento, fontes e formulários | [relatório](2026-10-19_sessao-06-settings-fixes.md) |
+| 2026-10-20 | 07 — persistência de notas e revisão integrada | [relatório](2026-10-20_sessao-07.md) |
+| 2026-10-20 | 07 — limpeza Git e Orca | [relatório](2026-10-20_sessao-07-git.md) |
+| 2026-10-20 | 07 — Graphify, skills e Codex | [relatório](2026-10-20_sessao-07-ferramentas.md) |
+| 2026-10-20 | 07 — API, metadados e cache | [relatório](2026-10-20_sessao-07-api-cache.md) |
+| 2026-10-20 | 07 — autosave durável | [relatório](2026-10-20_sessao-07-autosave.md) |
+| 2026-10-20 | 07 — revisão independente de persistência | [relatório](2026-10-20_sessao-07-revisao.md) |
+| 2026-10-20 | 07 — logs seguros da API | [relatório](2026-10-20_sessao-07-logs.md) |
+| 2026-10-20 | 08 — validação final de persistência e aceite | [relatório](2026-10-20_sessao-08.md) |
+| 2026-10-20 | 09 — logs legíveis e coloridos | [relatório](2026-10-20_sessao-09.md) |

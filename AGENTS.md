@@ -13,12 +13,21 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 ## Regras de implementação
 
 - Interface e documentação em pt-BR; identificadores de código em inglês.
+- Títulos de página e da nota seguem a serif principal e escala responsiva coerente; corpo/labels em sans. Preferências do proprietário de 2026-10-19: Silvex para uso pessoal local (arquivo fora do Git público), alternativa livre semelhante à referência Lenora/Vogue; selects e modais reutilizáveis, com GSAP nas animações.
+- Use GSAP nas animações de interação (incluindo seleção deslizante de grupos de botões e troca de períodos); respeite `prefers-reduced-motion` e remova animações/listeners ao desmontar. Preferência do proprietário registrada em 2026-10-19.
 - Frontend: React/TypeScript em `apps/web/src/`; API HTTP no cliente Axios `apps/web/src/lib/api-client.ts`. Segredos e tokens de provedor nunca no bundle do frontend.
 - Backend: `apps/api/src/core/` guarda contratos e tipos compartilhados; `apps/api/src/modules/` guarda features. Entre módulos, importe serviços apenas do `index.ts` público. Veja `apps/api/README.md`.
 - Tauri é a casca desktop. O backend AWS é a autoridade dos dados sincronizados; acesso a provedores passa por conector autorizado. Não duplique regra de domínio entre React e Lambda.
 - Infraestrutura em `infra/` com Terraform. Não coloque credenciais, arquivos de estado, `tfvars` reais ou dados pessoais no Git. Não aplique infraestrutura nem faça chamadas a contas reais sem autorização do usuário.
 - Dados financeiros, e-mails e notas exigem isolamento por usuário, privilégio mínimo, criptografia, retenção e exportação verificável. MCP deve expor ferramentas restritas e somente dados autorizados.
 - Antes de implementar: procure código existente. Faça o menor diff legível, teste comportamento relevante e relate exatamente o que foi verificado.
+
+## Navegação e segurança do repositório
+
+- Para localizar código, faça buscas direcionadas com `rg` e leia apenas os arquivos relevantes. Use o Graphify local quando houver um grafo disponível para navegar relações; não faça varredura geral do repositório.
+- Ao gerar ou atualizar um grafo, limite a extração a `apps/web/src` e `apps/api/src`, use `--code-only` e não processe documentos, notas, PDFs, imagens ou vídeo. Não envie o repositório nem notas a provedores LLM.
+- Não abra nem indexe arquivos de dados pessoais, `.env*`, credenciais, tokens, arquivos locais ou estado de Terraform. A configuração TOML do Codex define sandbox e aprovações, mas não garante por si só bloqueio de leitura de cada arquivo; siga esta instrução e os limites do sandbox.
+- Não faça chamadas a contas AWS reais, `terraform apply`/`destroy`, deploys ou resets destrutivos. Comandos locais de build e teste estão permitidos.
 
 ## Verificação atual
 
@@ -28,7 +37,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 
 ## Skills locais
 
-Leia a skill adequada em `skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge e `relatorio` ao encerrar trabalho. Claude encontra atalhos equivalentes em `.claude/skills/`.
+Leia a skill adequada em `.agents/skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge e `relatorio` ao encerrar trabalho. Claude usa atalhos em `.claude/skills/`; Codex descobre as skills em `.agents/skills/` e agentes em `.codex/agents/`.
 
 ## Fim de sessão
 

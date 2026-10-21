@@ -1,0 +1,115 @@
+# Comandos locais permitidos no sandbox de workspace.
+prefix_rule(
+    pattern = ["npm", "run", "build"],
+    decision = "allow",
+    justification = "Build local do projeto autorizado",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "build:web"],
+    decision = "allow",
+    justification = "Build local do frontend autorizado",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "build:api"],
+    decision = "allow",
+    justification = "Build local da API autorizado",
+)
+
+prefix_rule(
+    pattern = ["npm", "test"],
+    decision = "allow",
+    justification = "Testes locais autorizados",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "test:api"],
+    decision = "allow",
+    justification = "Testes locais da API autorizados",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "test:web"],
+    decision = "allow",
+    justification = "Testes locais do frontend autorizados",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "test"],
+    decision = "allow",
+    justification = "Testes locais autorizados",
+)
+
+prefix_rule(
+    pattern = ["npm", "run", "check:modules"],
+    decision = "allow",
+    justification = "Verificação local de módulos autorizada",
+)
+
+# Operações remotas/deploy e destrutivas ficam bloqueadas.
+prefix_rule(
+    pattern = ["aws"],
+    decision = "forbidden",
+    justification = "Não executar comandos contra contas AWS reais; use inspeção local ou mocks.",
+)
+prefix_rule(
+    pattern = ["terraform", "apply"],
+    decision = "forbidden",
+    justification = "Não aplicar infraestrutura; use terraform validate ou fmt local.",
+)
+prefix_rule(
+    pattern = ["terraform", "destroy"],
+    decision = "forbidden",
+    justification = "Operação destrutiva de infraestrutura não autorizada.",
+)
+prefix_rule(
+    pattern = ["npm", "run", "deploy"],
+    decision = "forbidden",
+    justification = "Deploy não autorizado; execute apenas validações locais.",
+)
+prefix_rule(
+    pattern = ["serverless", "deploy"],
+    decision = "forbidden",
+    justification = "Deploy não autorizado; execute apenas validações locais.",
+)
+prefix_rule(
+    pattern = ["sam", "deploy"],
+    decision = "forbidden",
+    justification = "Deploy não autorizado; execute apenas validações locais.",
+)
+prefix_rule(
+    pattern = ["cdk", "deploy"],
+    decision = "forbidden",
+    justification = "Deploy não autorizado; execute apenas validações locais.",
+)
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Reset destrutivo não autorizado; preserve as alterações existentes.",
+)
+prefix_rule(
+    pattern = ["git", "clean"],
+    decision = "forbidden",
+    justification = "Remoção destrutiva de arquivos não autorizada; preserve o checkout.",
+)
+prefix_rule(
+    pattern = ["git", "checkout", "--"],
+    decision = "forbidden",
+    justification = "Descarte destrutivo de alterações não autorizado.",
+)
+prefix_rule(
+    pattern = ["git", "restore"],
+    decision = "forbidden",
+    justification = "Descarte de alterações não autorizado; preserve o checkout.",
+)
+prefix_rule(
+    pattern = ["rm", "-rf"],
+    decision = "forbidden",
+    justification = "Remoção recursiva forçada não autorizada; preserve arquivos existentes.",
+)
+prefix_rule(
+    pattern = ["find"],
+    decision = "forbidden",
+    justification = "Use buscas direcionadas com rg; preserve o checkout e evite varreduras amplas.",
+)

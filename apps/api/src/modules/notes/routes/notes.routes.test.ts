@@ -1,0 +1,208 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
+import { after, before, test } from "node:test";
+import express from "express";
+import { errorHandler } from "../../../core/http/error-handler.js";
+import { NotesController } from "../controllers/notes.controller.js";
+import { MemoryNotesRepository } from "../repository/memory-notes.repository.js";
+import { NotesServiceImpl } from "../services/notes.service.impl.js";
+import { createNotesRouter } from "./notes.routes.js";
+
+const knownFolder = "0b5d6f7e-1c2a-4b3d-8e9f-a0b1c2d3e4f5";
+
+// Principal falso, só no teste: o app público não monta /v1/notes até existir verificação real de token.
+function createTestApp() {
+  const app = express();
+  app.use((req, res, next) => {
+    res.locals.requestId = randomUUID();
+    const owner = req.header("x-test-owner");
+    if (owner) res.locals.principal = { ownerId: owner };
+    next();
+  });
+  app.use(express.json({ limit: "256kb" }));
+  app.use("/v1/notes", createNotesRouter(new NotesController(new NotesServiceImpl(new MemoryNotesRepository(), { exists: async (owner, id) => owner === "alice" && id === knownFolder }))));
+  app.use(errorHandler);
+  return app;
+}
+
+const server = createServer(createTestApp());
+let baseUrl = "";
+
+before(async () => {
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Porta de teste indisponível.");
+  baseUrl = `http://127.0.0.1:${address.port}/v1/notes`;
+});
+
+after(async () => { await new Promise<void>((resolve) => server.close(() => resolve())); });
+
+type ErrorBody = { error: { code: string; message: string; requestId: string } };
+type NoteBody = { id: string; title: string; body: string; tags: string[]; folderId: string | null; version: number; createdAt: string; updatedAt: string };
+type PageBody = { items: NoteBody[]; nextCursor: string | null };
+
+function call(owner: string | null, path = "", init: { method?: string; body?: unknown; raw?: string } = {}) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (owner) headers["x-test-owner"] = owner;
+  const body = init.raw ?? (init.body === undefined ? undefined : JSON.stringify(init.body));
+  return fetch(`${baseUrl}${path}`, { method: init.method ?? "GET", headers, body });
+}
+
+async function expectError(response: Response, status: number, code: string) {
+  assert.equal(response.status, status);
+  const body = await response.json() as ErrorBody;
+  assert.equal(body.error.code, code);
+  assert.equal(typeof body.error.message, "string");
+  assert.match(body.error.requestId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(Object.keys(body), ["error"]);
+}
+
+async function createNote(owner: string, title: string): Promise<NoteBody> {
+  const response = await call(owner, "", { method: "POST", body: { title, body: "# Markdown", tags: ["teste"] } });
+  assert.equal(response.status, 201);
+  return await response.json() as NoteBody;
+}
+
+test("rotas exigem principal e respondem 401 no formato de erro", async () => {
+  await expectError(await call(null), 401, "UNAUTHORIZED");
+  await expectError(await call(null, "", { method: "POST", body: { title: "x" } }), 401, "UNAUTHORIZED");
+  await expectError(await call(null, `/${randomUUID()}`, { method: "DELETE" }), 401, "UNAUTHORIZED");
+});
+
+test("CRUD completo com versão e sem expor ownerId", async () => {
+  const created = await createNote("alice", "Primeira");
+  assert.equal(created.version, 1);
+  assert.equal("ownerId" in created, false);
+
+  const read = await call("alice", `/${created.id}`);
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), created);
+
+  const patched = await call("alice", `/${created.id}`, { method: "PATCH", body: { title: "Revisada", version: 1 } });
+  assert.equal(patched.status, 200);
+  const patchedBody = await patched.json() as NoteBody;
+  assert.equal(patchedBody.title, "Revisada");
+  assert.equal(patchedBody.body, "# Markdown");
+  assert.equal(patchedBody.version, 2);
+
+  await expectError(await call("alice", `/${created.id}`, { method: "PATCH", body: { title: "Antiga", version: 1 } }), 409, "CONFLICT");
+
+  const deleted = await call("alice", `/${created.id}`, { method: "DELETE" });
+  assert.equal(deleted.status, 204);
+  assert.equal(await deleted.text(), "");
+  await expectError(await call("alice", `/${created.id}`), 404, "NOT_FOUND");
+  await expectError(await call("alice", `/${created.id}`, { method: "DELETE" }), 404, "NOT_FOUND");
+});
+
+test("lista pagina por cursor sem repetir nem pular notas", async () => {
+  const owner = "paginacao";
+  const ids = new Set<string>();
+  for (const title of ["a", "b", "c"]) ids.add((await createNote(owner, title)).id);
+
+  const first = await (await call(owner, "?limit=2")).json() as PageBody;
+  assert.equal(first.items.length, 2);
+  assert.equal(typeof first.nextCursor, "string");
+  const second = await (await call(owner, `?limit=2&cursor=${first.nextCursor}`)).json() as PageBody;
+  assert.equal(second.items.length, 1);
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(new Set([...first.items, ...second.items].map((note) => note.id)), ids);
+});
+
+test("um usuário não lê, altera, exclui nem lista notas de outro", async () => {
+  const note = await createNote("dona", "Privada");
+  await expectError(await call("intruso", `/${note.id}`), 404, "NOT_FOUND");
+  await expectError(await call("intruso", `/${note.id}`, { method: "PATCH", body: { title: "x", version: 1 } }), 404, "NOT_FOUND");
+  await expectError(await call("intruso", `/${note.id}`, { method: "DELETE" }), 404, "NOT_FOUND");
+  const page = await (await call("intruso")).json() as PageBody;
+  assert.deepEqual(page, { items: [], nextCursor: null });
+  assert.equal((await call("dona", `/${note.id}`)).status, 200);
+});
+
+test("ownerId enviado pelo cliente é rejeitado, não usado", async () => {
+  await expectError(await call("alice", "", { method: "POST", body: { title: "x", ownerId: "bob" } }), 400, "VALIDATION_ERROR");
+  const note = await createNote("alice", "Minha");
+  await expectError(await call("alice", `/${note.id}`, { method: "PATCH", body: { ownerId: "bob", title: "y", version: 1 } }), 400, "VALIDATION_ERROR");
+});
+
+test("validação Zod e erros de corpo respondem no formato padrão", async () => {
+  const note = await createNote("validacao", "Base");
+  const cases: Array<[string, Parameters<typeof call>[2], number, string]> = [
+    ["/nao-e-uuid", {}, 400, "VALIDATION_ERROR"],
+    ["", { method: "POST", body: { title: "   " } }, 400, "VALIDATION_ERROR"],
+    ["", { method: "POST", body: { title: "x", tags: Array(21).fill("t") } }, 400, "VALIDATION_ERROR"],
+    [`/${note.id}`, { method: "PATCH", body: { version: 1 } }, 400, "VALIDATION_ERROR"],
+    [`/${note.id}`, { method: "PATCH", body: { title: "x" } }, 400, "VALIDATION_ERROR"],
+    [`/${note.id}`, { method: "PATCH", body: { title: "x", version: 0 } }, 400, "VALIDATION_ERROR"],
+    ["?limit=0", {}, 400, "VALIDATION_ERROR"],
+    ["?limit=101", {}, 400, "VALIDATION_ERROR"],
+    ["?ownerId=bob", {}, 400, "VALIDATION_ERROR"],
+    ["", { method: "POST", raw: "{\"title\":" }, 400, "VALIDATION_ERROR"],
+    ["", { method: "POST", body: { title: "x", body: "a".repeat(300_000) } }, 413, "PAYLOAD_TOO_LARGE"],
+  ];
+  for (const [path, init, status, code] of cases) await expectError(await call("validacao", path, init), status, code);
+});
+
+test("folderId: cria em pasta, move, volta à raiz e rejeita pasta alheia ou inválida", async () => {
+  const created = await call("alice", "", { method: "POST", body: { title: "Em pasta", folderId: knownFolder } });
+  assert.equal(created.status, 201);
+  const note = await created.json() as NoteBody;
+  assert.equal(note.folderId, knownFolder);
+
+  const root = await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: null, version: 1 } });
+  const movedRoot = await root.json() as NoteBody;
+  assert.equal(movedRoot.folderId, null);
+  assert.equal(movedRoot.version, 2);
+  const back = await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: knownFolder, version: 2 } });
+  assert.equal(((await back.json()) as NoteBody).folderId, knownFolder);
+
+  await expectError(await call("bob", "", { method: "POST", body: { title: "x", folderId: knownFolder } }), 400, "VALIDATION_ERROR");
+  await expectError(await call("alice", "", { method: "POST", body: { title: "x", folderId: "nao-uuid" } }), 400, "VALIDATION_ERROR");
+  await expectError(await call("alice", `/${note.id}`, { method: "PATCH", body: { folderId: randomUUID(), version: 3 } }), 400, "VALIDATION_ERROR");
+  const plain = await (await call("alice", "", { method: "POST", body: { title: "Sem pasta" } })).json() as NoteBody;
+  assert.equal(plain.folderId, null);
+});
+
+test("API-HTTP-01 metadata pagina sem corpo/owner, detalhe e lista legada preservam corpo", async () => {
+  const owner = "metadata";
+  const expected = new Set<string>();
+  for (const title of ["a", "b", "c"]) expected.add((await createNote(owner, title)).id);
+  const firstResponse = await call(owner, "/metadata?limit=2");
+  assert.equal(firstResponse.status, 200);
+  const first = await firstResponse.json() as PageBody;
+  const second = await (await call(owner, `/metadata?limit=2&cursor=${first.nextCursor}`)).json() as PageBody;
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(new Set([...first.items, ...second.items].map((note) => note.id)), expected);
+  assert.ok([...first.items, ...second.items].every((note) => !("body" in note) && !("ownerId" in note)));
+  const legacy = await (await call(owner)).json() as PageBody;
+  assert.equal(legacy.items[0].body, "# Markdown");
+  assert.deepEqual(await (await call("unrelated", "/metadata")).json(), { items: [], nextCursor: null });
+  await expectError(await call(null, "/metadata"), 401, "UNAUTHORIZED");
+  await expectError(await call(owner, "/metadata?ownerId=unrelated"), 400, "VALIDATION_ERROR");
+});
+
+test("API-HTTP-02 summary isola owner, valida query e reflete alteração/exclusão", async () => {
+  const owner = "summary";
+  const note = await createNote(owner, "Resumo");
+  const read = async () => { const response = await call(owner, "/summary?days=7&offsetMinutes=-180"); assert.equal(response.status, 200); return await response.json() as { total: number; words: number; tags: unknown[] }; };
+  assert.equal((await read()).words, 1);
+  assert.equal((await read()).total, 1);
+  const patched = await call(owner, `/${note.id}`, { method: "PATCH", body: { version: 1, body: "uma nova frase", tags: ["nova"] } });
+  assert.equal(patched.status, 200);
+  assert.equal((await read()).words, 3);
+  assert.deepEqual((await read()).tags, [{ tag: "nova", count: 1 }]);
+  assert.equal(((await (await call("summary-empty", "/summary")).json()) as { total: number }).total, 0);
+  await expectError(await call(null, "/summary"), 401, "UNAUTHORIZED");
+  for (const query of ["days=500", "offsetMinutes=841", "ownerId=bob"]) await expectError(await call(owner, `/summary?${query}`), 400, "VALIDATION_ERROR");
+  await call(owner, `/${note.id}`, { method: "DELETE" });
+  assert.equal((await read()).total, 0);
+});
+
+test("API-CONC-01 duas atualizações na mesma versão resultam em 200/409", async () => {
+  const note = await createNote("concorrencia", "Inicial");
+  const responses = await Promise.all(["a", "b"].map((body) => call("concorrencia", `/${note.id}`, { method: "PATCH", body: { version: 1, body } })));
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
+  const current = await (await call("concorrencia", `/${note.id}`)).json() as NoteBody;
+  assert.equal(current.version, 2);
+  assert.ok(current.body === "a" || current.body === "b");
+});

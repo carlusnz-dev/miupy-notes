@@ -1,25 +1,100 @@
 {
   "version": 1,
-  "status": "partial-unverified-dependencies",
+  "status": "partial-verified",
   "root": "apps/api/src",
   "runtime": {
     "httpFramework": "express",
     "validation": "zod",
     "databaseClient": "@aws-sdk/lib-dynamodb",
     "lambdaAdapter": "serverless-http",
-    "publicRoutes": ["GET /health"],
-    "unmountedRoutes": ["POST /v1/notes", "GET /v1/notes/:id"]
+    "publicRoutes": [
+      "GET /health"
+    ],
+    "errorCodes": {
+      "400": "VALIDATION_ERROR",
+      "401": "UNAUTHORIZED",
+      "403": "FORBIDDEN",
+      "404": "NOT_FOUND",
+      "409": "CONFLICT",
+      "413": "PAYLOAD_TOO_LARGE",
+      "500": "INTERNAL_ERROR",
+      "422": "TOTAL_OVERFLOW"
+    },
+    "testCommand": "npm run test:api",
+    "authenticatedRoutes": [
+      "GET /v1/notes",
+      "GET /v1/notes/metadata",
+      "GET /v1/notes/summary",
+      "POST /v1/notes",
+      "GET /v1/notes/:id",
+      "PATCH /v1/notes/:id",
+      "DELETE /v1/notes/:id",
+      "GET /v1/finance/summary",
+      "GET /v1/finance/export.csv",
+      "GET /v1/finance/transactions",
+      "POST /v1/finance/transactions",
+      "GET /v1/finance/transactions/:id",
+      "PATCH /v1/finance/transactions/:id",
+      "DELETE /v1/finance/transactions/:id",
+      "GET /v1/finance/banks",
+      "POST /v1/finance/banks",
+      "GET /v1/finance/banks/:id",
+      "PATCH /v1/finance/banks/:id",
+      "DELETE /v1/finance/banks/:id",
+      "GET /v1/folders",
+      "POST /v1/folders",
+      "PATCH /v1/folders/:id"
+    ],
+    "authentication": {
+      "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
+      "lambda": "lambdaAuthorizerClaims: requestContext.authorizer.jwt.claims (não implantado)",
+      "authorization": "principalFromClaims: ownerId = sub; ALLOWED_SUBS fora do Git; vazio nega todos",
+      "source": "apps/api/src/core/http/authenticate.ts"
+    },
+    "localRun": {
+      "api": "npm run dev:api (127.0.0.1:4000; exige DYNAMODB_ENDPOINT em loopback)",
+      "db": "npm run dev:db (amazon/dynamodb-local:3.3.1, volume miupy-dynamodb) + npm run db:create-table",
+      "env": "apps/api/.env.development (versionado, sem segredo) + .env.local (ignorado)"
+    },
+    "logging": {
+      "implementation": "core/logging/logger.ts + core/http/request-logger.ts + createErrorHandler",
+      "format": "Texto legível por padrão, cores em TTY com NO_COLOR; LOG_FORMAT=json para JSON por linha sem ANSI; LOG_LEVEL=info por padrão, debug opt-in; HTTP 2xx/3xx success, 4xx warn, 5xx error",
+      "correlation": "UUID interno em X-Request-Id e error.requestId",
+      "privacy": "Método, rota template, status, duração e classificação allowlist; sem body, tokens, identidade, mensagens/stack arbitrárias ou objetos de provedores",
+      "deployment": "Verificado localmente; CloudWatch, retenção e alarmes não implantados"
+    }
   },
   "core": {
-    "domain": ["OwnedEntity", "AppError"],
+    "domain": [
+      "OwnedEntity",
+      "AppError"
+    ],
     "repository": "BaseRepository<TEntity>",
     "service": "BaseService<TEntity, TRepository>",
     "controller": "BaseController<TService>",
-    "http": ["errorHandler", "requirePrincipal"],
+    "http": [
+      "errorHandler",
+      "requirePrincipal",
+      "authenticate",
+      "bearerTokenClaims",
+      "lambdaAuthorizerClaims",
+      "principalFromClaims"
+    ],
     "dynamo": "createDynamoClient"
   },
   "moduleConvention": {
-    "required": ["domain/", "repository/", "services/", "controllers/", "dto/input.ts", "dto/output.ts", "dto/adapter.ts", "routes/", "module.ts", "index.ts"],
+    "required": [
+      "domain/",
+      "repository/",
+      "services/",
+      "controllers/",
+      "dto/input.ts",
+      "dto/output.ts",
+      "dto/adapter.ts",
+      "routes/",
+      "module.ts",
+      "index.ts"
+    ],
     "externalImport": "Somente o index.ts público de outro módulo.",
     "composition": "module.ts cria repository, service, controller e router; index.ts exporta contrato de service e factory.",
     "validationCommand": "npm run check:modules"
@@ -33,13 +108,89 @@
       "serviceImplementation": "NotesServiceImpl",
       "repository": "DynamoNotesRepository",
       "publicEntry": "apps/api/src/modules/notes/index.ts",
-      "routeMount": "disabled-until-auth",
-      "operations": ["create", "findById"]
+      "httpContract": "apps/api/src/modules/notes/contract.ts (schemas Zod de saída; importado pelo cliente web; só depende de zod)",
+      "routeMount": "authenticated",
+      "operations": [
+        "list",
+        "create",
+        "findById",
+        "update",
+        "delete",
+        "listMetadata",
+        "summary"
+      ],
+      "testRepository": "MemoryNotesRepository",
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (local: miupy-notes-local no DynamoDB Local; AWS: não criada)",
+        "pk": "USER#<ownerId>",
+        "sk": "NOTE#<id>",
+        "list": "Query pk + begins_with(sk, NOTE#); cursor opaco com o último id",
+        "concurrency": "PutCommand condicional em version",
+        "delete": "DeleteCommand condicional em attribute_exists(pk)",
+        "body": "Markdown no próprio item DynamoDB; sem S3 nesta sessão",
+        "metadata": "Query com ProjectionExpression sem body; reduz tráfego, não RCUs por si só",
+        "summary": "Agregação paginada de todos itens do proprietário (100/página), sem teto silencioso, sem materialização ou GSI; consistência eventual, sem snapshot",
+        "detail": "GetCommand ConsistentRead true para reconciliação de resultado ambíguo"
+      },
+      "verification": "2026-10-18 (sessão 05): 28 testes — rotas com principal falso, autenticação com chaves geradas no teste (401 sem token, malformado, outra chave, alg none, expirado, aud/iss errados; 403 sub fora da lista; acesso permitido com as duas formas de iss; claims do authorizer; JWKS indisponível não vira 401), repositório DynamoDB com cliente falso e service. Manual: curl na API local (401 sem token e com token inválido) e criação de nota pela janela Tauri com login Google real e DynamoDB Local. Sem DynamoDB real.",
+      "verificationSession07": "Testes com clientes falsos e HTTP local sintético: metadados/cursor/owner, resumo paginado, compatibilidade, PATCH condicional 200/409; comandos e resultados no relatório 2026-10-20_sessao-07-api-cache.md. Sem AWS."
     },
-    {"id": "events", "status": "planned"},
-    {"id": "finance", "status": "planned"},
-    {"id": "library", "status": "planned"},
-    {"id": "integrations", "status": "planned"},
-    {"id": "exports", "status": "planned"}
+    {
+      "id": "events",
+      "status": "planned"
+    },
+    {
+      "id": "finance",
+      "status": "partial",
+      "path": "apps/api/src/modules/finance",
+      "publicEntry": "apps/api/src/modules/finance/index.ts",
+      "serviceContract": "FinanceService",
+      "repository": "DynamoFinanceRepository",
+      "routeMount": "authenticated",
+      "operations": [
+        "transactions CRUD",
+        "banks CRUD",
+        "summary",
+        "export.csv"
+      ],
+      "httpContract": "docs/arquitetura/api-finance.md",
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (DynamoDB Local verificado; AWS não criada)",
+        "pk": "USER#<ownerId>",
+        "sk": "FINANCE#transaction#<id> ou FINANCE#bank#<id>",
+        "concurrency": "versão condicional em edição/exclusão",
+        "logo": "URL raster HTTP(S) ou base64 PNG/JPEG/WebP até 64 KiB"
+      },
+      "verification": "2026-10-19: 8 grupos de finanças aprovados também em tabela sintética do DynamoDB Local, criada e excluída. Isolamento JWT, CRUD, concorrência 200/409, 54 lançamentos, CSV global e paginação de bancos acima de 1 MiB. Playwright MCP desktop/mobile com API e JWT sintéticos, sem login real. Sem AWS."
+    },
+    {
+      "id": "library",
+      "status": "planned"
+    },
+    {
+      "id": "integrations",
+      "status": "planned"
+    },
+    {
+      "id": "exports",
+      "status": "planned"
+    },
+    {
+      "id": "folders",
+      "status": "partial",
+      "path": "apps/api/src/modules/folders",
+      "publicEntry": "apps/api/src/modules/folders/index.ts",
+      "operations": [
+        "list",
+        "create",
+        "rename"
+      ],
+      "persistence": {
+        "pk": "USER#<ownerId>",
+        "sk": "FOLDER#<id>",
+        "parent": "imutável; sem exclusão; mesma tabela de notas"
+      },
+      "verification": "2026-10-19: testes de serviço, rotas e DynamoDB Local sintético aprovados; sem AWS."
+    }
   ]
 }
