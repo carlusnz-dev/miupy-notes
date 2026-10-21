@@ -22,3 +22,7 @@ Estado em 2026-10-18: todos os itens abaixo são **planejados**. O primeiro reco
 | RNF-04 | M | Observabilidade. | Erros e latência da API, falhas de Lambda e sincronização com alarmes acionáveis. |
 | RNF-05 | S | Sincronização resiliente. | Retentativas limitadas, idempotência, paginação e tratamento de limites dos provedores. |
 | RNF-06 | M | Documentação viva para humanos e LLMs. | Contratos e `arquitetura.json` mudam com a implementação; relatório registra verificação real. |
+
+## Continuidade em 2026-10-21
+
+Notas e identidade (RF-01/RF-02) têm proteção local de rascunhos por CAS e journal de descarte; notas foram promovidas para main pelo PR #17. RF-08 inclui contas, referências e balanços por moeda, sem conexão bancária real. RF-05/RF-12 são parciais: planner e portas/adaptadores Google testados com fakes; falta CredentialStore de produção e consentimento no desktop. Nenhuma conexão Google Calendar real ou recurso AWS implantado. A sessão 12 registra as correções e a validação para integração do PR #16; Chromium/fake IndexedDB não substituem Tauri/WebKit/crash/duas janelas.

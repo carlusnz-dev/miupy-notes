@@ -18,7 +18,9 @@
       "409": "CONFLICT",
       "413": "PAYLOAD_TOO_LARGE",
       "500": "INTERNAL_ERROR",
-      "422": "TOTAL_OVERFLOW"
+      "422": "TOTAL_OVERFLOW",
+      "429": "RATE_LIMITED (Calendar)",
+      "502": "UPSTREAM_UNAVAILABLE / UPSTREAM_REJECTED / SYNC_TOO_LARGE / SYNC_INCOMPLETE"
     },
     "testCommand": "npm run test:api",
     "authenticatedRoutes": [
@@ -43,7 +45,24 @@
       "DELETE /v1/finance/banks/:id",
       "GET /v1/folders",
       "POST /v1/folders",
-      "PATCH /v1/folders/:id"
+      "PATCH /v1/folders/:id",
+      "GET /v1/finance/accounts",
+      "POST /v1/finance/accounts",
+      "GET /v1/finance/accounts/:id",
+      "PATCH /v1/finance/accounts/:id",
+      "GET /v1/finance/balances",
+      "GET /v1/calendar/events",
+      "POST /v1/calendar/events",
+      "GET /v1/calendar/events/:id",
+      "PATCH /v1/calendar/events/:id",
+      "DELETE /v1/calendar/events/:id",
+      "POST /v1/calendar/events/:id/google-reflection",
+      "DELETE /v1/calendar/events/:id/google-reflection",
+      "GET /v1/calendar/google",
+      "POST /v1/calendar/google/authorization",
+      "POST /v1/calendar/google/connection",
+      "DELETE /v1/calendar/google/connection",
+      "POST /v1/calendar/google/sync"
     ],
     "authentication": {
       "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
@@ -62,7 +81,8 @@
       "correlation": "UUID interno em X-Request-Id e error.requestId",
       "privacy": "Método, rota template, status, duração e classificação allowlist; sem body, tokens, identidade, mensagens/stack arbitrárias ou objetos de provedores",
       "deployment": "Verificado localmente; CloudWatch, retenção e alarmes não implantados"
-    }
+    },
+    "retryAfter": "AppError.retryAfterMs opcional: resposta em segundos arredondados para cima e Access-Control-Expose-Headers: Retry-After; envelope JSON preservado."
   },
   "core": {
     "domain": [
@@ -136,10 +156,6 @@
       "verificationSession07": "Testes com clientes falsos e HTTP local sintético: metadados/cursor/owner, resumo paginado, compatibilidade, PATCH condicional 200/409; comandos e resultados no relatório 2026-10-20_sessao-07-api-cache.md. Sem AWS."
     },
     {
-      "id": "events",
-      "status": "planned"
-    },
-    {
       "id": "finance",
       "status": "partial",
       "path": "apps/api/src/modules/finance",
@@ -151,17 +167,20 @@
         "transactions CRUD",
         "banks CRUD",
         "summary",
-        "export.csv"
+        "export.csv",
+        "accounts list/create/get/update",
+        "balances"
       ],
       "httpContract": "docs/arquitetura/api-finance.md",
       "persistence": {
         "table": "NOTES_TABLE_NAME (DynamoDB Local verificado; AWS não criada)",
         "pk": "USER#<ownerId>",
-        "sk": "FINANCE#transaction#<id> ou FINANCE#bank#<id>",
+        "sk": "FINANCE#transaction#<id> ou FINANCE#bank#<id> ou FINANCE#account#<id>",
         "concurrency": "versão condicional em edição/exclusão",
         "logo": "URL raster HTTP(S) ou base64 PNG/JPEG/WebP até 64 KiB"
       },
-      "verification": "2026-10-19: 8 grupos de finanças aprovados também em tabela sintética do DynamoDB Local, criada e excluída. Isolamento JWT, CRUD, concorrência 200/409, 54 lançamentos, CSV global e paginação de bancos acima de 1 MiB. Playwright MCP desktop/mobile com API e JWT sintéticos, sem login real. Sem AWS."
+      "verification": "2026-10-19: 8 grupos de finanças aprovados também em tabela sintética do DynamoDB Local, criada e excluída. Isolamento JWT, CRUD, concorrência 200/409, 54 lançamentos, CSV global e paginação de bancos acima de 1 MiB. Playwright MCP desktop/mobile com API e JWT sintéticos, sem login real. Sem AWS.",
+      "verificationAccounts": "2026-10-21: 16 testes financeiros em DynamoDB Local sintético, incluindo contas, referência, moedas, versão concorrente e proprietário; sem Pluggy real. Balanços sem snapshot transacional; sem exclusão de contas nesta etapa."
     },
     {
       "id": "library",
@@ -191,6 +210,27 @@
         "parent": "imutável; sem exclusão; mesma tabela de notas"
       },
       "verification": "2026-10-19: testes de serviço, rotas e DynamoDB Local sintético aprovados; sem AWS."
+    },
+    {
+      "id": "calendar",
+      "status": "partial",
+      "path": "apps/api/src/modules/calendar",
+      "publicEntry": "apps/api/src/modules/calendar/index.ts",
+      "routeMount": "authenticated",
+      "operations": [
+        "events CRUD",
+        "google status/authorization/connection/sync",
+        "google-reflection add/remove"
+      ],
+      "httpContract": "docs/arquitetura/api-calendar.md",
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (local sintético; AWS não implantada)",
+        "pk": "USER#<ownerId>",
+        "sk": "EVENT#<id>, CALENDAR#GOOGLE, CALENDAR#GOOGLE#PENDING",
+        "concurrency": "eventos com versão condicional; criação idempotente por UUID; sincronização sem trava global por proprietário"
+      },
+      "integration": "HttpGoogleOAuth/HttpGoogleCalendarClient com fetch injetável; CredentialStore é porta sem implementação de produção. Composição padrão not_configured, sem consentimento desktop nem conexão real.",
+      "verification": "Sessão 12: suíte API 149 aprovados/9 integrações ignoradas, web 158/158, build/checkmodules e Chromium desktop/mobile. Google somente fakes; sem cofre/consentimento desktop de produção."
     }
   ]
 }

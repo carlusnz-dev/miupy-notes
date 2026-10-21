@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
 import Sidebar from "./components/Sidebar";
 import NotesPage from "./NotesPage";
@@ -14,6 +14,7 @@ const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
+const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
@@ -21,7 +22,7 @@ import "./account-nav.css";
 
 const sections = [
   { path: "/notes", label: "Notas", description: "Ideias, páginas e conexões em um lugar." },
-  { path: "/events", label: "Agenda", description: "Compromissos e tempo com contexto." },
+  { path: "/agendas", label: "Agendas", description: "Compromissos e tempo com contexto." },
   { path: "/finance", label: "Finanças", description: "Movimentos e decisões com clareza." },
   { path: "/library", label: "Biblioteca", description: "Livros, filmes e músicas que ficaram." },
 ] as const;
@@ -118,7 +119,10 @@ function Shell() {
                 } />
                 <Route path="/finance/:id" element={<Suspense fallback={<SkeletonBody label="Carregando lançamento…" lines={4} />}><FinanceDetailPage /></Suspense>} />
                 <Route path="/finance" element={<Suspense fallback={<SkeletonBody label="Carregando finanças…" lines={4} />}><FinancePage /></Suspense>} />
-                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance").map((section) => (
+                <Route path="/agendas" element={<Suspense fallback={<SkeletonBody label="Carregando agendas…" lines={3} cards={1} cardHeight={320} />}><CalendarPage /></Suspense>} />
+                {/* Atalhos antigos (Sidebar e Início) apontavam para /events. */}
+                <Route path="/events" element={<Navigate to="/agendas" replace />} />
+                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance" && section.path !== "/agendas").map((section) => (
                   <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
                 ))}
                 <Route path="*" element={<NotFound />} />

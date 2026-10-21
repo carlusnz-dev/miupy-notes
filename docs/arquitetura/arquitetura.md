@@ -10,7 +10,7 @@ CloudWatch recebe métricas e logs da API, Lambda e sincronizações.
 MCP futuro consulta a mesma camada de autorização, sem acesso direto ao banco.
 ```
 
-O repositório contém `apps/web` com base visual e `apps/api` com template Express/TypeScript. O diagrama é uma direção de implementação, não uma topologia implantada. A API centraliza regras, autorização, persistência e conectores. React apresenta dados e mantém estado de interface; Tauri fornece a janela e funções locais estritamente necessárias. Evite fazer a aplicação desktop conversar diretamente com DynamoDB, S3 ou APIs Google.
+O código contém React e API Express/TypeScript com módulos autenticados de notas, pastas, finanças (contas e balanços) e Calendar. O planner inclui cache/outbox por conta; integração Google permanece não configurada, sem cofre de produção ou consentimento desktop. O diagrama é uma direção de implementação, não uma topologia implantada. A API centraliza regras, autorização, persistência e conectores. React apresenta dados e mantém estado de interface; Tauri fornece a janela e funções locais estritamente necessárias. Evite fazer a aplicação desktop conversar diretamente com DynamoDB, S3 ou APIs Google.
 
 O backend é organizado em módulos de feature. Cada módulo tem domínio, repository, services, controllers, DTO (`input`, `output`, `adapter`), routes, `module.ts` e `index.ts`. Classes concretas herdam contratos em `core/`; a única superfície de importação entre módulos é o `index.ts`. A composição de `notes` existe, mas suas rotas não são montadas antes da identidade.
 

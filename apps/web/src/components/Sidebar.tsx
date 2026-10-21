@@ -9,7 +9,7 @@ const maxWidth = 380;
 const links = [
   { path: "/", label: "Visão geral", icon: House },
   { path: "/notes", label: "Notas", icon: NotebookPen },
-  { path: "/events", label: "Agenda", icon: CalendarDays },
+  { path: "/agendas", label: "Agenda", icon: CalendarDays },
   { path: "/finance", label: "Finanças", icon: CircleDollarSign },
   { path: "/library", label: "Biblioteca", icon: BookOpen },
 ];

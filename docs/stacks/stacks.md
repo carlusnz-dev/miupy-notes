@@ -13,7 +13,7 @@
 | Observabilidade | CloudWatch logs, métricas e alarmes | Planejado | Falhas, latência, custo e sincronizações. |
 | Logs da API | Classe Logger + middleware Express, texto colorido e JSON opcional | Implementado localmente; ver sessões 07/09 | Correlação por requestId, nível configurável e metadados seguros; coleta CloudWatch e alarmes dependem de implantação. |
 | IaC | Terraform | Planejado | Infraestrutura reproduzível em `infra/`. |
-| Integrações | Google Calendar/Gmail | Planejado | OAuth com consentimento e sincronização por provedor. |
+| Integrações | Google Calendar/Gmail | Calendar parcial; Gmail planejado | Planner e adaptadores Google testados com fakes; conexão real pendente de cofre de produção e consentimento desktop. Sem conta real ou AWS usados. |
 | Integração | Google Keep | Condicional | API oficial tem foco empresarial; verificar conta e permissões. |
 | LLM | MCP | Futuro | Ferramentas sobre dados autorizados e com auditoria. |
 | Movimento e CSS | GSAP + Tailwind CSS 4 | Tailwind ativo; GSAP em transições, seleção de períodos e troca de dias, com movimento reduzido | GSAP nas animações de interação; preferências do proprietário em AGENTS.md. Mesh decorativo CSS permanece na base. |
