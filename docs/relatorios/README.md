@@ -26,3 +26,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-20 | 07 — logs seguros da API | [relatório](2026-10-20_sessao-07-logs.md) |
 | 2026-10-20 | 08 — validação final de persistência e aceite | [relatório](2026-10-20_sessao-08.md) |
 | 2026-10-20 | 09 — logs legíveis e coloridos | [relatório](2026-10-20_sessao-09.md) |
+| 2026-10-21 | 10 — preparação, Graphify e bloqueio Orca | [relatório](2026-10-21_sessao-10.md) |
