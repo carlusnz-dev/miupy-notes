@@ -41,6 +41,8 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   const calendar = useCalendar({ ownerId, store, remote, isCurrent });
   const { mode, anchor, setAnchor, setMode } = calendar;
   const [editing, setEditing] = useState<Editing | null>(null);
+  // O formulário fica montado com `open` controlado: o Modal compartilhado faz a saída animada e devolve o foco ao botão que o abriu.
+  const [formOpen, setFormOpen] = useState(false);
   const [notes, setNotes] = useState<NoteChoice[]>([]);
   const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">("loading");
   const [status, setStatus] = useState<GoogleStatusOutput | null>(null);
@@ -69,8 +71,8 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   }, [viewKey]);
 
   const events = useMemo(() => calendar.events.map((item) => item.event), [calendar.events]);
-  const open = useCallback((event: CalendarEventOutput) => setEditing({ key: ++counter.current, entry: calendar.statusOf.get(event.id) ?? null, day: anchor }), [calendar.statusOf, anchor]);
-  const openNew = (day: CalendarDate = anchor) => setEditing({ key: ++counter.current, entry: null, day });
+  const open = useCallback((event: CalendarEventOutput) => { setEditing({ key: ++counter.current, entry: calendar.statusOf.get(event.id) ?? null, day: anchor }); setFormOpen(true); }, [calendar.statusOf, anchor]);
+  const openNew = (day: CalendarDate = anchor) => { setEditing({ key: ++counter.current, entry: null, day }); setFormOpen(true); };
   const pickDay = (day: CalendarDate) => { setAnchor(day); setMode("day"); };
 
   const submit = async (draft: EventDraft) => {
@@ -131,12 +133,12 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
 
       {editing && (
         <EventForm
-          key={editing.key} open entry={editing.entry} day={editing.day} notes={notes} notesState={notesState} events={events} google={status}
+          key={editing.key} open={formOpen} entry={editing.entry} day={editing.day} notes={notes} notesState={notesState} events={events} google={status}
           reflector={editing.entry ? {
-            reflect: async (id) => { await google.reflect(id); setEditing(null); calendar.refreshNow(); },
-            unreflect: async (id, keepRemote) => { await google.unreflect(id, keepRemote); setEditing(null); calendar.refreshNow(); },
+            reflect: async (id) => { await google.reflect(id); setFormOpen(false); calendar.refreshNow(); },
+            unreflect: async (id, keepRemote) => { await google.unreflect(id, keepRemote); setFormOpen(false); calendar.refreshNow(); },
           } : null}
-          onClose={() => setEditing(null)} onSubmit={submit}
+          onClose={() => setFormOpen(false)} onSubmit={submit}
           onDelete={async () => { if (editing.entry) await calendar.submit({ kind: "delete", event: editing.entry.event }); }}
           onResolve={async (choice) => { if (editing.entry) await calendar.resolve(editing.entry.event.id, choice); }}
           onDiscard={async () => { if (editing.entry) await calendar.discard(editing.entry.event.id); }}
