@@ -1,4 +1,44 @@
 async (page) => {
+ const profileOnly = false;
+ if (profileOnly) {
+  const assert = (value, message) => { if (!value) throw new Error(message); };
+  const base = 'http://127.0.0.1:5202/tests/profile-finance-harness.html';
+  const totals = { currencies: [{ currency: 'BRL', incomeCents: 12000, expenseCents: 2000, balanceCents: 10000, count: 3 }] };
+  const notes = { total: 0, words: 0, characters: 0, averageWords: 0, first: null, last: null, windowDays: 30, createdInWindow: 0, createdPerDay: [], tags: [], topNotes: [] };
+  const evidence = [];
+  for (const mode of ['notes-error', 'notes-pending', 'finance-error', 'profile-error', 'signed-out', 'preview']) {
+   let notesCalls = 0, financeCalls = 0, releasePending;
+   await page.unrouteAll({ behavior: 'ignoreErrors' });
+   await page.route('**/v1/notes/summary**', async route => {
+    notesCalls++;
+    if (mode === 'notes-pending' || mode === 'finance-error') await new Promise(resolve => { releasePending = resolve; });
+    await route.fulfill({ status: mode === 'notes-error' ? 500 : 200, contentType: 'application/json', body: JSON.stringify(mode === 'notes-error' ? { error: { code: 'INTERNAL_ERROR', message: 'Falha sintética de notas.' } } : notes) }).catch(() => {});
+   });
+   await page.route('**/v1/finance/summary', route => {
+    financeCalls++;
+    return route.fulfill({ status: mode === 'finance-error' ? 500 : 200, contentType: 'application/json', body: JSON.stringify(mode === 'finance-error' ? { error: { code: 'INTERNAL_ERROR', message: 'Falha sintética financeira.' } } : totals) });
+   });
+   await page.goto(base + '?mode=' + mode + (mode === 'preview' ? '&estado=lista' : ''));
+   if (mode === 'signed-out' || mode === 'preview') {
+    if (mode === 'signed-out') await page.getByText('Perfil indisponível no navegador', { exact: true }).waitFor();
+    else await page.locator('.profile-identity').waitFor();
+    await page.waitForTimeout(100);
+    assert(financeCalls === 0, mode + ' não deve consultar finanças');
+    assert(await page.locator('.profile-finance').count() === 0, mode + ' sem dados financeiros');
+   } else {
+    await page.getByRole('heading', { name: 'Finanças', exact: true }).waitFor();
+    if (mode === 'finance-error') await page.getByText('Não foi possível carregar as métricas financeiras.', { exact: false }).waitFor();
+    else await page.locator('.profile-finance').getByText('R$ 100,00', { exact: true }).waitFor();
+    assert(financeCalls === 1 && notesCalls === 1, mode + ' consultas independentes');
+    if (mode === 'notes-error' || mode === 'profile-error') await page.getByText('Não foi possível carregar o perfil.', { exact: true }).waitFor();
+    if (mode === 'notes-pending') assert(await page.getByText('Carregando perfil', { exact: true }).count() === 1, 'Notas continuam pendentes enquanto finanças renderiza');
+   }
+   releasePending?.();
+   evidence.push(mode);
+  }
+  return evidence;
+ }
+
  const assert = (v,m) => { if(!v) throw Error(m); };
  const evidence=[];
  for (const width of [1440,390]) {

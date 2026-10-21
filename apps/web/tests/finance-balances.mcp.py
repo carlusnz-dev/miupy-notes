@@ -1,5 +1,6 @@
 """Playwright MCP isolado: etapas/parcelas, modal/X, Sidebar e reduced-motion.
 Uso: timeout 90s python apps/web/tests/finance-balances.mcp.py http://127.0.0.1:5202
+Use o argumento final profile para executar somente a regressão de independência do Perfil.
 Sirva apps/web com Vite/envDir vazio. Somente API sintética no harness.
 """
 import json
@@ -43,7 +44,10 @@ try:
     server.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n'); server.stdin.flush()
     names = {tool['name'] for tool in rpc('tools/list', {})['tools']}
     name = 'browser_run_code' if 'browser_run_code' in names else 'browser_run_code_unsafe'
-    result = call(name, dict(code=Path(__file__).with_name('finance-balances.mcp.js').read_text().replace('http://127.0.0.1:5202', sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:5202')))
+    code = Path(__file__).with_name('finance-balances.mcp.js').read_text()
+    if len(sys.argv) > 2 and sys.argv[2] == 'profile':
+        code = code.replace('const profileOnly = false;', 'const profileOnly = true;')
+    result = call(name, dict(code=code.replace('http://127.0.0.1:5202', sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:5202')))
     print(result['content'][0]['text'].split('### Ran')[0])
     call('browser_close', {})
 finally:
