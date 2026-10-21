@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { bankFields, transactionFields } from "../contract.js";
+import { accountFields, bankFields, transactionFields } from "../contract.js";
 
 const validTransaction = (data: { direction: string; paymentMethod: string | null; link: string; linkedMonth: string | null; installmentCount?: number | null }) =>
   (data.direction === "expense" ? data.paymentMethod !== null : data.paymentMethod === null) && (data.link === "none" ? data.linkedMonth === null : data.linkedMonth !== null) &&
@@ -12,3 +12,6 @@ export const updateBankSchema = z.strictObject({ ...bankFields, version: z.int()
 export const versionSchema = z.strictObject({ version: z.int().positive() });
 export const pageQuerySchema = z.strictObject({ limit: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(512).optional() });
 export type PageQuery = z.infer<typeof pageQuerySchema>;
+
+export const createAccountSchema = z.strictObject(accountFields);
+export const updateAccountSchema = z.strictObject({ ...accountFields, version: z.int().positive() });

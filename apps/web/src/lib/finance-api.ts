@@ -1,7 +1,7 @@
-import { bankOutputSchema, bankPageSchema, transactionOutputSchema, transactionPageSchema, summarySchema, type BankInput, type TransactionInput } from '../../../api/src/modules/finance/contract';
+import { accountOutputSchema, accountPageSchema, balancesSchema, bankOutputSchema, bankPageSchema, transactionOutputSchema, transactionPageSchema, summarySchema, type AccountInput, type BankInput, type TransactionInput } from '../../../api/src/modules/finance/contract';
 import { expireSession } from './auth';
 import { apiClient, toApiError } from './api-client';
-export type { Bank, Transaction, BankInput, TransactionInput } from '../../../api/src/modules/finance/contract';
+export type { Account, AccountInput, Balances, Bank, Transaction, BankInput, TransactionInput } from '../../../api/src/modules/finance/contract';
 
 async function request<T>(operation: () => Promise<T>): Promise<T> {
   try { return await operation(); } catch (error) { const apiError = toApiError(error); if (apiError.code === 'UNAUTHORIZED') expireSession(); throw apiError; }
@@ -42,4 +42,22 @@ export function exportFinanceCsv() {
 
 export function getTransaction(id: string, signal?: AbortSignal) {
   return request(async () => transactionOutputSchema.parse((await apiClient.get(`/v1/finance/transactions/${encodeURIComponent(id)}`, { signal })).data));
+}
+
+export function getFinanceBalances(signal?: AbortSignal) {
+  return request(async () => balancesSchema.parse((await apiClient.get('/v1/finance/balances', { signal })).data));
+}
+export function listAllAccounts(signal?: AbortSignal) {
+  return request(async () => {
+    const items = [];
+    let cursor: string | undefined;
+    do {
+      const page = accountPageSchema.parse((await apiClient.get('/v1/finance/accounts', { params: { limit: 50, cursor }, signal })).data);
+      items.push(...page.items); cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return items;
+  });
+}
+export function saveAccount(input: AccountInput, existing?: { id: string; version: number }) {
+  return request(async () => accountOutputSchema.parse((await (existing ? apiClient.patch(`/v1/finance/accounts/${encodeURIComponent(existing.id)}`, { ...input, version: existing.version }) : apiClient.post('/v1/finance/accounts', input))).data));
 }
