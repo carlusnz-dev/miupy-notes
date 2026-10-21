@@ -45,7 +45,7 @@ test("logs HTTP correlacionam erros e sucesso sem dados pessoais", async () => {
   const { Logger } = await import("./core/logging/logger.js");
   const { AppError } = await import("./core/domain/app-error.js");
   const lines: string[] = [];
-  const log = new Logger("debug", (line) => { lines.push(line); });
+  const log = new Logger("debug", (line) => { lines.push(line); }, { format: "json" });
   const router = Router();
   router.get("/ok/:id", (_req, res) => { res.json({ ok: true }); });
   router.get("/summary", () => { throw new Error("private summary"); });
@@ -97,7 +97,7 @@ test("níveis filtram debug e classificação trata causas cíclicas", async () 
   const { Logger, classifyError } = await import("./core/logging/logger.js");
   const lines: string[] = [];
   const sink = (line: string) => { lines.push(line); };
-  const log = new Logger("invalid", sink);
+  const log = new Logger("invalid", sink, { format: "json" });
   log.debug("request.started"); log.info("request.completed"); log.warn("request.failed"); log.error("request.failed");
   assert.deepEqual(lines.map((line) => JSON.parse(line).level), ["info", "warn", "error"]);
   const error = Object.assign(new Error("secret"), { cause: {} });
@@ -113,7 +113,7 @@ test("conexão interrompida gera um único evento de abort", async () => {
   const lines: Array<{ event: string }> = [];
   const router = Router();
   router.get("/slow", (_req, res) => { res.write("partial"); });
-  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, new Logger("info", (line) => { lines.push(JSON.parse(line)); })));
+  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, new Logger("info", (line) => { lines.push(JSON.parse(line)); }, { format: "json" })));
   await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
   const address = local.address(); assert.ok(address && typeof address !== "string");
   try {
@@ -139,7 +139,7 @@ test("erro após headers encerra conexão sem imprimir Error pessoal", async () 
     res.write("partial");
     setTimeout(() => next(Object.assign(new Error("SECRET_MESSAGE"), { cause: new Error("SECRET_CAUSE") })), 10);
   });
-  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, new Logger("debug", (line) => { output.push(line); })));
+  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, new Logger("debug", (line) => { output.push(line); }, { format: "json" })));
   await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
   const address = local.address(); assert.ok(address && typeof address !== "string");
   try {
@@ -177,5 +177,30 @@ test("sink com falha não interrompe sucesso ou resposta de erro HTTP", async ()
     const healthy = await fetch(`http://127.0.0.1:${address.port}/health`); assert.equal(healthy.status, 200); await healthy.json();
     const failed = await fetch(`http://127.0.0.1:${address.port}/v1/notes/summary`); assert.equal(failed.status, 500);
     const body = await failed.json() as { error: { code: string } }; assert.equal(body.error.code, "INTERNAL_ERROR");
+  } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
+});
+
+test("handler HTTP legível informa motivo, status e requestId sem expor requisição ou exceção", async () => {
+  const { Router } = await import("express");
+  const { Logger } = await import("./core/logging/logger.js");
+  const lines: string[] = [];
+  const router = Router();
+  router.get("/:id", () => { throw Object.assign(new Error("PRIVATE_EXCEPTION"), { code: "ECONNREFUSED" }); });
+  const log = new Logger("info", line => { lines.push(line); }, { format: "pretty", color: false });
+  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, log));
+  await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
+  const address = local.address(); assert.ok(address && typeof address !== "string");
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    const ok = await fetch(`${url}/health`); await ok.json();
+    const failed = await fetch(`${url}/v1/notes/PRIVATE_ID?token=PRIVATE_TOKEN`);
+    const body = await failed.json() as { error: { requestId: string } };
+    assert.equal(failed.status, 500);
+    const bad = await fetch(`${url}/health`, { method: "POST", headers: { "content-type": "application/json" }, body: '{"PRIVATE_BODY":' });
+    assert.equal(bad.status, 400); await bad.json();
+    assert.ok(lines.some(line => line.includes("SUCCESS - GET /health Requisição concluída com sucesso.")));
+    assert.ok(lines.some(line => line.includes("ERROR - GET /v1/notes/:id Não foi possível conectar") && line.includes(body.error.requestId)));
+    assert.ok(lines.some(line => line.includes("WARN - POST [rota não identificada] JSON inválido")));
+    assert.doesNotMatch(lines.join("\n"), /PRIVATE|\x1b/);
   } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
 });

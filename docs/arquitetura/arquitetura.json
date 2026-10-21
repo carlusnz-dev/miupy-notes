@@ -26,7 +26,7 @@
       "id": "api",
       "path": "apps/api",
       "status": "partial",
-      "role": "Express/TypeScript com autenticação jose + lista de sub, módulos notes, folders e finance autenticados em /v1; handler Lambda não implantado. API usa DynamoDB Local. Finanças verificadas em tabela sintética real local e MCP (sem dados pessoais); CRUD/versionamento, bancos, summary e CSV global. Sem recursos AWS implantados. Sessão 07: GET /notes/metadata e /notes/summary, detalhe com ConsistentRead e Logger JSON/middleware Express com requestId, status e duração sem conteúdo pessoal. Suíte API 74/74 com tabelas sintéticas DynamoDB Local; projeção e PATCH concorrente 200/409 verificados em integração dirigida. Logs CloudWatch, retenção e alarmes ainda dependem de implantação."
+      "role": "Express/TypeScript com autenticação jose + lista de sub, módulos notes, folders e finance autenticados em /v1; handler Lambda não implantado. API usa DynamoDB Local. Finanças verificadas em tabela sintética real local e MCP (sem dados pessoais); CRUD/versionamento, bancos, summary e CSV global. Sem recursos AWS implantados. Sessão 07: GET /notes/metadata e /notes/summary, detalhe com ConsistentRead e Logger/middleware Express (sessão 09: formato legível com cores e motivos, JSON opcional) com requestId, status e duração sem conteúdo pessoal. Suíte API 74/74 com tabelas sintéticas DynamoDB Local; projeção e PATCH concorrente 200/409 verificados em integração dirigida. Logs CloudWatch, retenção e alarmes ainda dependem de implantação."
     },
     {
       "id": "integrations",

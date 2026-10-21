@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler, Response } from "express";
-import { classifyError, logger, type Logger } from "../logging/logger.js";
+import { classifyError, logger, type Logger, type LogFields } from "../logging/logger.js";
 import { requestMethod, requestRoute } from "./request-logger.js";
 import { ZodError } from "zod";
 import { AppError } from "../domain/app-error.js";
@@ -18,7 +18,8 @@ export function createErrorHandler(log: Logger = logger): ErrorRequestHandler {
     const expected = error instanceof ZodError || (error instanceof AppError && error.status < 500) || bodyErrorType(error) === "entity.parse.failed" || bodyErrorType(error) === "entity.too.large";
     const bodyError = bodyErrorType(error);
     const statusCode = error instanceof ZodError || bodyError === "entity.parse.failed" ? 400 : error instanceof AppError ? error.status : bodyError === "entity.too.large" ? 413 : 500;
-    const fields = { requestId: res.locals.requestId as string, method: requestMethod(req), statusCode, route: requestRoute(req, res), ...classifyError(error), ...(expected ? { classification: "request_rejected" } : {}) };
+    const reason: LogFields["reason"] = bodyError === "entity.parse.failed" ? "invalid_json" : bodyError === "entity.too.large" ? "payload_too_large" : undefined;
+    const fields = { requestId: res.locals.requestId as string, method: requestMethod(req), statusCode, route: requestRoute(req, res), reason, ...classifyError(error), ...(expected ? { classification: "request_rejected" } : {}) };
     if (expected) log.warn("request.failed", fields);
     else log.error("request.failed", fields);
     // Não delegar Error bruto ao handler padrão: ele imprime mensagem/stack em dev.

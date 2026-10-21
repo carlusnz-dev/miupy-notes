@@ -11,7 +11,7 @@
 | Dados | DynamoDB | Planejado | Metadados e entidades; índices só após consultas reais. |
 | Objetos | S3 | Planejado | Anexos, exportações e backups com regras distintas. |
 | Observabilidade | CloudWatch logs, métricas e alarmes | Planejado | Falhas, latência, custo e sincronizações. |
-| Logs da API | Classe Logger + middleware Express, JSON por linha | Implementado localmente; ver sessão 07 | Correlação por requestId, nível configurável e metadados seguros; coleta CloudWatch e alarmes dependem de implantação. |
+| Logs da API | Classe Logger + middleware Express, texto colorido e JSON opcional | Implementado localmente; ver sessões 07/09 | Correlação por requestId, nível configurável e metadados seguros; coleta CloudWatch e alarmes dependem de implantação. |
 | IaC | Terraform | Planejado | Infraestrutura reproduzível em `infra/`. |
 | Integrações | Google Calendar/Gmail | Planejado | OAuth com consentimento e sincronização por provedor. |
 | Integração | Google Keep | Condicional | API oficial tem foco empresarial; verificar conta e permissões. |

@@ -70,7 +70,7 @@ Organizam as notas em árvore (RF-01). Mesma autenticação e isolamento das not
 
 ## Erros
 
-Toda resposta produzida pelo app Express inclui `X-Request-Id`, um UUID gerado pelo servidor (não aceita o valor enviado pelo cliente). Em erros, ele coincide com `error.requestId`. Use esse identificador para correlacionar a interface aos logs estruturados da API. Rotas, status e envelopes existentes permanecem compatíveis. O log de conclusão inclui método, template da rota, status e duração; falhas incluem classificação técnica sem corpo, token ou identidade. `LOG_LEVEL=debug` habilita eventos de início; o padrão é `info`. Configuração e exemplos em [apps/api/README.md](../../apps/api/README.md).
+Toda resposta produzida pelo app Express inclui `X-Request-Id`, um UUID gerado pelo servidor (não aceita o valor enviado pelo cliente). Em erros, ele coincide com `error.requestId`. Use esse identificador para correlacionar a interface aos logs da API (texto legível por padrão, JSON opcional via LOG_FORMAT=json). Rotas, status e envelopes existentes permanecem compatíveis. O log de conclusão inclui método, template da rota, status e duração; falhas incluem classificação técnica sem corpo, token ou identidade. `LOG_LEVEL=debug` habilita eventos de início; o padrão é `info`. Configuração e exemplos em [apps/api/README.md](../../apps/api/README.md).
 
 ```json
 { "error": { "code": "VALIDATION_ERROR", "message": "Dados inválidos.", "requestId": "uuid" } }

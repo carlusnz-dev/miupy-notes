@@ -58,7 +58,7 @@
     },
     "logging": {
       "implementation": "core/logging/logger.ts + core/http/request-logger.ts + createErrorHandler",
-      "format": "JSON por linha em stdout/stderr, LOG_LEVEL=info por padrão; debug opt-in",
+      "format": "Texto legível por padrão, cores em TTY com NO_COLOR; LOG_FORMAT=json para JSON por linha sem ANSI; LOG_LEVEL=info por padrão, debug opt-in; HTTP 2xx/3xx success, 4xx warn, 5xx error",
       "correlation": "UUID interno em X-Request-Id e error.requestId",
       "privacy": "Método, rota template, status, duração e classificação allowlist; sem body, tokens, identidade, mensagens/stack arbitrárias ou objetos de provedores",
       "deployment": "Verificado localmente; CloudWatch, retenção e alarmes não implantados"
