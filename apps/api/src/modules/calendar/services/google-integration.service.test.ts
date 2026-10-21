@@ -303,3 +303,64 @@ test("sincronizar a cópia com conteúdo idêntico (só ETag mudou) adota o ETag
   await kit.integration.sync(owner);
   assert.equal((await kit.repository.findById(owner, event.id))!.reflection!.etag, reseeded.etag);
 });
+
+test("regressão: sincronização em voo não ressuscita a conexão desconectada nem regrava espelhos", async () => {
+  const kit = createKit({ now: () => at(12) });
+  await connect(kit, "reflect");
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  const original = kit.google.listEvents.bind(kit.google);
+  kit.google.listEvents = async (...args) => { await waiting; return original(...args); };
+  kit.google.seed(gEvent("a"));
+  const syncing = kit.integration.sync(owner);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await kit.integration.disconnect(owner);
+  assert.equal((await kit.integration.status(owner)).state, "not_connected");
+  release();
+  await assert.rejects(syncing, { code: "INTEGRATION_NOT_CONNECTED" });
+  assert.equal((await kit.integration.status(owner)).state, "not_connected");
+  assert.deepEqual((await kit.repository.list(owner, { limit: 100 })).items, []);
+});
+
+test("regressão: erro tardio de uma conexão antiga não altera a conexão refeita; só os espelhos dela são removidos", async () => {
+  const kit = createKit({ now: () => at(12) });
+  await connect(kit, "mirror");
+  kit.google.seed(gEvent("a"));
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  kit.google.listEvents = async () => { await waiting; throw new GoogleApiError("rate_limited"); };
+  const syncing = kit.integration.sync(owner);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await kit.integration.disconnect(owner);
+  await connect(kit, "mirror");
+  release();
+  await assert.rejects(syncing, { code: "RATE_LIMITED" });
+  const status = await kit.integration.status(owner);
+  assert.deepEqual([status.state, status.lastError], ["connected", null]);
+});
+
+test("regressão: espelhos de uma conexão antiga gravados após a reconexão são limpos sem tocar nos da nova", async () => {
+  const kit = createKit({ now: () => at(12) });
+  await connect(kit, "mirror");
+  const old = (await kit.repository.getConnection(owner))!;
+  await kit.integration.disconnect(owner);
+  await connect(kit, "mirror");
+  kit.google.seed(gEvent("novo"));
+  await kit.integration.sync(owner);
+  const { toMirrorEvent } = await import("../google/google-mapping.js");
+  await kit.repository.upsertMirror(toMirrorEvent(gEvent("velho"), { ownerId: owner, calendarId: "primary", connectionId: old.connectionId, syncedAt: at(12).toISOString(), existing: null })!);
+  assert.equal(await kit.repository.deleteAllMirrors(owner, old.connectionId), 1);
+  assert.deepEqual((await kit.repository.list(owner, { limit: 100 })).items.map((item) => item.title), ["novo"]);
+});
+
+test("regressão: insert 409 com conteúdo remoto divergente é conflito explícito e não sobrescreve o Google", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  const googleId = event.id.replaceAll("-", "");
+  kit.google.seed({ id: googleId, summary: "remoto divergente", start: { dateTime: event.start }, end: { dateTime: event.end } });
+  await assert.rejects(kit.integration.reflect(owner, event.id), { code: "GOOGLE_CONFLICT" });
+  assert.equal(kit.google.events.get(googleId)!.summary, "remoto divergente");
+  assert.equal(kit.google.calls.includes("update"), false);
+  assert.equal((await kit.repository.findById(owner, event.id))!.reflection, null);
+});

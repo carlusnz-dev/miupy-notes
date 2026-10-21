@@ -114,7 +114,7 @@ test("outros erros do DynamoDB não são mascarados como conflito", async () => 
 test("cadastro da integração fica em chave própria e sem token", async () => {
   const { sent, client } = fakeClient(() => ({}));
   const repository = new DynamoCalendarRepository(client, "t");
-  await repository.saveConnection("alice", { status: "connected", mode: "mirror", scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: null, lastSyncAt: null, lastError: null });
+  await repository.saveConnection("alice", { connectionId: "c1", status: "connected", mode: "mirror", scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: null, lastSyncAt: null, lastError: null });
   const item = sent[0].input.Item as Record<string, unknown>;
   assert.deepEqual([item.pk, item.sk], ["USER#alice", "CALENDAR#GOOGLE"]);
   assert.equal(Object.keys(item).some((key) => /token$/i.test(key) && key !== "syncToken"), false);

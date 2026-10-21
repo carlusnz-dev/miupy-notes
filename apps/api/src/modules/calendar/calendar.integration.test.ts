@@ -69,7 +69,7 @@ test("lista paginada com filtro de período, dia inteiro e isolamento por dono",
 
 test("espelho: não sobrescreve evento local; remoção em massa só atinge origem google", { skip }, async () => {
   const local = await repository!.create(make("erin", 1));
-  const mirror = new CalendarEvent(randomUUID(), "erin", "G", "", "", false, local.start, local.end, "UTC", [], "google", { provider: "google", calendarId: "primary", externalId: "x", etag: "\"1\"", syncedAt: now }, null, now, now, 1);
+  const mirror = new CalendarEvent(randomUUID(), "erin", "G", "", "", false, local.start, local.end, "UTC", [], "google", { provider: "google", calendarId: "primary", externalId: "x", etag: "\"1\"", syncedAt: now, connectionId: "c1" }, null, now, now, 1);
   await repository!.upsertMirror(mirror);
   await assert.rejects(repository!.upsertMirror(new CalendarEvent(local.id, "erin", "G", "", "", false, local.start, local.end, "UTC", [], "google", mirror.external, null, now, now, 1)), { status: 409 });
   assert.equal(await repository!.deleteAllMirrors("erin"), 1);
@@ -78,7 +78,7 @@ test("espelho: não sobrescreve evento local; remoção em massa só atinge orig
 });
 
 test("cadastro da integração e autorização pendente ficam isolados por dono", { skip }, async () => {
-  await repository!.saveConnection("frank", { status: "connected", mode: "reflect", scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: "tok", lastSyncAt: now, lastError: null });
+  await repository!.saveConnection("frank", { connectionId: "c1", status: "connected", mode: "reflect", scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: "tok", lastSyncAt: now, lastError: null });
   assert.equal((await repository!.getConnection("frank"))?.syncToken, "tok");
   assert.equal(await repository!.getConnection("gina"), null);
   await repository!.savePending("frank", { state: "s", mode: "reflect", redirectUri: "http://127.0.0.1/cb", expiresAt: now });
@@ -87,4 +87,19 @@ test("cadastro da integração e autorização pendente ficam isolados por dono"
   assert.equal(await repository!.getPending("frank"), null);
   await repository!.deleteConnection("frank");
   assert.equal(await repository!.getConnection("frank"), null);
+});
+
+test("espelhos por conexão e gravação condicional do cadastro (conexão refeita não é sobrescrita)", { skip }, async () => {
+  const mirror = (title: string, connectionId: string) => new CalendarEvent(randomUUID(), "hank", title, "", "", false, "2026-12-01T10:00:00.000Z", "2026-12-01T11:00:00.000Z", "UTC", [], "google", { provider: "google", calendarId: "primary", externalId: title, etag: "\"1\"", syncedAt: now, connectionId }, null, now, now, 1);
+  await repository!.upsertMirror(mirror("velho", "c-old"));
+  await repository!.upsertMirror(mirror("novo", "c-new"));
+  assert.equal(await repository!.deleteAllMirrors("hank", "c-old"), 1);
+  assert.deepEqual((await repository!.list("hank", { limit: 10 })).items.map((item) => item.title), ["novo"]);
+
+  const connection = (connectionId: string) => ({ connectionId, status: "connected" as const, mode: "mirror" as const, scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: null, lastSyncAt: null, lastError: null });
+  assert.equal(await repository!.saveConnectionIf("hank", "c-new", connection("c-new")), false);
+  await repository!.saveConnection("hank", connection("c-new"));
+  assert.equal(await repository!.saveConnectionIf("hank", "c-old", connection("c-old")), false);
+  assert.equal(await repository!.saveConnectionIf("hank", "c-new", { ...connection("c-new"), syncToken: "t" }), true);
+  assert.equal((await repository!.getConnection("hank"))?.syncToken, "t");
 });

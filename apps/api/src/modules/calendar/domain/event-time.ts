@@ -18,6 +18,15 @@ export function addDaysToDate(value: string, days: number): string {
   return new Date(Date.parse(`${value}T00:00:00.000Z`) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
+const instantPattern = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]([01]\d|2[0-3]):([0-5]\d))$/;
+/** Data-hora estrita: data real, hora 00–23, minuto/segundo 00–59 e deslocamento explícito (nunca o fuso do servidor). */
+export function parseInstant(text: string): number | null {
+  const match = instantPattern.exec(text);
+  if (!match || !isRealDate(match[1]) || Number(match[2]) > 23 || Number(match[3]) > 59 || (match[4] !== undefined && Number(match[4]) > 59)) return null;
+  const ms = Date.parse(text);
+  return Number.isNaN(ms) ? null : ms;
+}
+
 export type EventTimes = { allDay: boolean; start: string; end: string; timeZone: string | null };
 
 const invalid = (message: string) => new AppError(400, "VALIDATION_ERROR", message);
@@ -33,8 +42,8 @@ export function normalizeTimes(input: { allDay: boolean; start: string; end: str
     return { allDay: true, start: input.start, end: input.end, timeZone: null };
   }
   if (!input.timeZone || !isValidTimeZone(input.timeZone)) throw invalid("Fuso horário IANA inválido.");
-  const start = Date.parse(input.start), end = Date.parse(input.end);
-  if (Number.isNaN(start) || Number.isNaN(end) || dateOnly.test(input.start) || dateOnly.test(input.end)) throw invalid("Início e fim devem ser data e hora com deslocamento.");
+  const start = parseInstant(input.start), end = parseInstant(input.end);
+  if (start === null || end === null) throw invalid("Início e fim devem ser data e hora reais, com deslocamento (ex.: 2026-10-21T09:00:00-03:00).");
   if (end <= start) throw invalid("O fim deve ser posterior ao início.");
   return { allDay: false, start: new Date(start).toISOString(), end: new Date(end).toISOString(), timeZone: input.timeZone };
 }

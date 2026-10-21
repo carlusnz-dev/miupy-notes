@@ -48,3 +48,12 @@ Três P1 reproduzidos pelo revisor, corrigidos com regressão (as regressões fa
 3. **Sync adotava ETag remoto divergente:** `refreshOwnEtag` só adota o ETag se o conteúdo remoto for idêntico ao que o app enviaria; edição feita no Google não avança o ETag e o envio seguinte responde `GOOGLE_CONFLICT` sem sobrescrever.
 
 Verificado: testes do módulo na web (`src/calendar`) e na API (`modules/calendar` + `app.test.ts`), `npm run build`, `check:modules`; suítes completas não repetidas. Mantém-se: sem conexão real com o Google (falta `CredentialStore` de produção e fluxo de consentimento no desktop).
+
+### Segunda rodada da revisão (achados adicionais)
+
+- **P1 desconexão:** `connectionId` por conexão; sincronização confere a conexão por página e grava cursor/erros com `saveConnectionIf` (condicional; DynamoDB `ConditionExpression`); se mudou, apaga só os espelhos daquela conexão (`external.connectionId`) e responde `INTEGRATION_NOT_CONNECTED`.
+- **P1 ETag (complemento):** `409` no insert com conteúdo remoto divergente agora é `GOOGLE_CONFLICT` explícito; antes atualizava o remoto com o ETag recém-lido.
+- **P1 cache (repro 8):** a leitura de período compara um snapshot local (eventos ID@versão + envios ID#rev) antes e depois da busca; se algo mudou (ACK, edição), descarta a resposta e busca de novo (`reconcile.ts`, testado).
+- **P2 tempo:** backend exige data real e deslocamento explícito (`parseInstant`); UI faz ida e volta no fuso e recusa horário inexistente no salto do horário de verão com mensagem (`draft.ts`).
+- **P2 Retry-After:** piso `notBefore` separado do backoff; "Tentar agora" não o antecipa; teto de sanidade de 6 h (não 60 s); a tela informa até quando o servidor pediu para aguardar. Observação: a API ainda não devolve o cabeçalho `Retry-After` no `429 RATE_LIMITED` (o `AppError` não carrega cabeçalhos); o piso só vale quando o cabeçalho chega.
+- Regressões: web (`outbox`, `reconcile`, `draft`, `time`) e API (`google-integration`, `event-time`, integração DynamoDB Local com `connectionId`, 5/5 em contêiner próprio removido ao fim).

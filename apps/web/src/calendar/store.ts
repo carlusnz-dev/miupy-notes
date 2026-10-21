@@ -16,6 +16,8 @@ export type OutboxOp = {
   rev: number;
   attempts: number;
   nextAttemptAt: number;
+  /** Piso imposto pelo servidor (`Retry-After`): nem "tentar agora" nem o backoff o antecipam. */
+  notBefore: number;
   /** Código público do último erro (`NETWORK_ERROR`, `CONFLICT`...), sem texto do servidor. */
   lastError: string | null;
   /** Cópia do servidor que causou o conflito; nula quando o evento foi removido lá. */

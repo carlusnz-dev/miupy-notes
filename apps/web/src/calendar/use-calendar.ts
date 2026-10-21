@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { todayLocal, type CalendarDate } from "../lib/calendar-date";
 import type { CalendarEventOutput } from "../lib/calendar-api";
 import { apiRange, upcomingEvents, type ViewMode } from "./layout";
+import { reconcileRange } from "./reconcile";
 import { discardOp, enqueue, flushOutbox, resolveConflict, withOutbox, type CalendarRemote, type DisplayEvent, type FlushResult } from "./outbox";
 import type { CalendarStore, OutboxOp } from "./store";
 
@@ -13,13 +14,6 @@ export type Connectivity = "online" | "offline";
 export type FetchState = { status: "loading" } | { status: "ok"; at: number } | { status: "stale"; reason: string; at: number | null };
 
 export type RangeRemote = CalendarRemote & { listRange(range: { from: string; to: string }, signal?: AbortSignal): Promise<CalendarEventOutput[]> };
-
-// Mesma sobreposição do servidor; dia inteiro como datas flutuantes lidas em UTC (o período já vem ampliado em um dia).
-const overlapsRange = (event: Pick<CalendarEventOutput, "allDay" | "start" | "end">, from: string, to: string) => {
-  const startsAt = event.allDay ? `${event.start}T00:00:00.000Z` : event.start;
-  const endsAt = event.allDay ? `${event.end}T23:59:59.999Z` : event.end;
-  return startsAt < to && endsAt > from;
-};
 
 export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: string; store: CalendarStore; remote: RangeRemote; isCurrent?: () => boolean }) {
   const [mode, setMode] = useState<ViewMode>("day");
@@ -45,17 +39,11 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
   // Mostra o que está guardado no dispositivo antes de qualquer rede.
   useEffect(() => { void reload().catch(() => setLocalError("Não foi possível ler os dados guardados neste dispositivo.")); }, [reload]);
 
-  /** Busca um período no servidor e reconcilia o cache: atualiza o que veio e remove o que sumiu, exceto o que tem envio pendente. */
+  /** Reconcilia um período (ver `reconcileRange`); se algo mudou localmente durante a busca, descarta e busca de novo. */
   const refreshRange = useCallback(async (range: { from: string; to: string }, signal: AbortSignal) => {
-    const fetched = await remote.listRange(range, signal);
-    if (signal.aborted || !current()) return false;
-    const [known, pending] = await Promise.all([store.listEvents(ownerId), store.listOps(ownerId)]);
-    const withOps = new Set(pending.map((op) => op.eventId));
-    const seen = new Set(fetched.map((event) => event.id));
-    const gone = known.filter((event) => !seen.has(event.id) && !withOps.has(event.id) && overlapsRange(event, range.from, range.to)).map((event) => event.id);
-    await store.putEvents(ownerId, fetched);
-    if (gone.length > 0) await store.removeEvents(ownerId, gone);
-    return true;
+    const outcome = await reconcileRange(store, remote, ownerId, range, signal, current);
+    if (outcome === "changed") setTick((value) => value + 1);
+    return outcome === "ok";
   }, [remote, store, ownerId, current]);
 
   const viewKey = `${mode}:${anchor.year}-${anchor.month}-${anchor.day}`;

@@ -45,6 +45,13 @@ export function wallTimeToInstant(wall: WallTime, timeZone: string): string {
   return new Date(guess).toISOString();
 }
 
+/** Como `wallTimeToInstant`, mas `null` quando o horário não existe no fuso (salto do horário de verão): nunca ajusta em silêncio. */
+export function wallTimeToInstantStrict(wall: WallTime, timeZone: string): string | null {
+  const instant = wallTimeToInstant(wall, timeZone);
+  const back = wallTimeInZone(instant, timeZone);
+  return back.year === wall.year && back.month === wall.month && back.day === wall.day && back.hour === wall.hour && back.minute === wall.minute ? instant : null;
+}
+
 const pad = (value: number) => String(value).padStart(2, "0");
 export const wallDate = (wall: Pick<WallTime, "year" | "month" | "day">) => `${String(wall.year).padStart(4, "0")}-${pad(wall.month)}-${pad(wall.day)}`;
 export const wallClock = (wall: Pick<WallTime, "hour" | "minute">) => `${pad(wall.hour)}:${pad(wall.minute)}`;

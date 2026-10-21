@@ -360,3 +360,32 @@ test("regressão: criação confirmada com edição nova em voo vira edição so
   assert.deepEqual([next.sent, next.conflicts], [1, 0]);
   assert.equal(r.events.get(idA)!.title, "v2");
 });
+
+test("regressão: Retry-After é piso — 600 s não vira 60 s e 'tentar agora' não o antecipa", async () => {
+  const store = createMemoryCalendarStore();
+  const r = remote();
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft() }, 0);
+  r.failures.push(http(429, "RATE_LIMITED", 600_000));
+  await flushOutbox(store, r.api, owner, { now: () => 0 });
+  const op = (await store.getOp(owner, idA))!;
+  assert.deepEqual([op.notBefore, op.nextAttemptAt, op.state], [600_000, 600_000, "pending"]);
+
+  const before = r.calls.length;
+  const manual = await flushOutbox(store, r.api, owner, { now: () => 1, force: true });
+  assert.deepEqual([r.calls.length, manual.sent + manual.failed], [before, 0]);
+  assert.equal((await flushOutbox(store, r.api, owner, { now: () => 599_999, force: true })).sent, 0);
+  // Depois do piso, o envio acontece (inclusive manual) e o rascunho continua intacto até lá.
+  assert.equal((await flushOutbox(store, r.api, owner, { now: () => 600_000, force: true })).sent, 1);
+});
+
+test("Retry-After é limitado por um teto de sanidade e o piso sobrevive a nova edição do rascunho", async () => {
+  const store = createMemoryCalendarStore();
+  const r = remote();
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft() }, 0);
+  r.failures.push(http(429, "RATE_LIMITED", 10 * 24 * 3_600_000));
+  await flushOutbox(store, r.api, owner, { now: () => 0 });
+  assert.equal((await store.getOp(owner, idA))!.notBefore, 6 * 3_600_000);
+  await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft({ title: "editado" }) }, 1_000);
+  assert.equal((await store.getOp(owner, idA))!.notBefore, 6 * 3_600_000);
+  assert.equal((await flushOutbox(store, r.api, owner, { now: () => 2_000, force: true })).sent, 0);
+});

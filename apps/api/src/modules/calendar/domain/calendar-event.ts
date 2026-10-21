@@ -5,7 +5,7 @@ export type EventLinkKind = "note" | "event";
 export type EventLink = { readonly kind: EventLinkKind; readonly id: string };
 
 /** Origem de um evento espelhado do Google; `etag` é o da última leitura. */
-export type ExternalRef = { readonly provider: "google"; readonly calendarId: string; readonly externalId: string; readonly etag: string; readonly syncedAt: string };
+export type ExternalRef = { readonly provider: "google"; readonly calendarId: string; readonly externalId: string; readonly etag: string; readonly syncedAt: string; readonly connectionId: string };
 /** Cópia de um evento local no Google, criada por consentimento explícito (`reflector`). */
 export type Reflection = { readonly googleEventId: string; readonly calendarId: string; readonly etag: string; readonly reflectedVersion: number; readonly reflectedAt: string };
 

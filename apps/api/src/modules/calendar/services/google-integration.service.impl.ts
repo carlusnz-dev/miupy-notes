@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
 import type { GoogleConnection, GoogleMode } from "../domain/google-connection.js";
@@ -67,7 +67,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     }
     await google.credentials.put(ownerId, grant.refreshToken);
     await this.repository.saveConnection(ownerId, {
-      status: "connected", mode: pending.mode, scopes: grant.scopes, calendarId: CALENDAR_ID,
+      connectionId: randomUUID(), status: "connected", mode: pending.mode, scopes: grant.scopes, calendarId: CALENDAR_ID,
       connectedAt: this.now().toISOString(), syncToken: null, lastSyncAt: null, lastError: null,
     });
     return this.status(ownerId);
@@ -96,12 +96,13 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
       } catch (error) {
         if (!(error instanceof GoogleApiError) || error.kind !== "gone") throw error;
         // 410: o cursor perdeu a validade. Apaga o espelho e refaz a sincronização completa, como a documentação manda.
-        await this.repository.deleteAllMirrors(ownerId);
+        await this.repository.deleteAllMirrors(ownerId, connection.connectionId);
         resynced = true;
         result = await this.pull(google, ownerId, connection, null);
       }
       const lastSyncAt = this.now().toISOString();
-      await this.repository.saveConnection(ownerId, { ...connection, syncToken: result.syncToken, lastSyncAt, lastError: null });
+      // Só grava se esta conexão ainda é a atual: uma sincronização em voo não ressuscita uma sessão desconectada.
+      if (!(await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, syncToken: result.syncToken, lastSyncAt, lastError: null }))) throw await this.dropped(ownerId, connection);
       return { kind: result.kind, pages: result.pages, upserted: result.upserted, deleted: result.deleted, resynced, lastSyncAt };
     } catch (error) {
       throw await this.failed(ownerId, connection, error);
@@ -145,6 +146,16 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return saved;
   }
 
+  /** A conexão desta operação foi desconectada ou refeita no meio: remove o que ela gravou e informa. */
+  private async dropped(ownerId: string, connection: GoogleConnection): Promise<AppError> {
+    await this.repository.deleteAllMirrors(ownerId, connection.connectionId);
+    return notConnected();
+  }
+
+  private async assertCurrent(ownerId: string, connection: GoogleConnection): Promise<void> {
+    if ((await this.repository.getConnection(ownerId))?.connectionId !== connection.connectionId) throw await this.dropped(ownerId, connection);
+  }
+
   private require(): GoogleIntegrationDeps {
     if (!this.google) throw notConfigured();
     return this.google;
@@ -176,7 +187,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
       // O ID é derivado do evento: 409 significa que uma tentativa anterior chegou ao Google. Reconcilia em vez de duplicar.
       const remote = await google.client.getEvent(ownerId, CALENDAR_ID, googleId);
       if (sameRemoteContent(remote, body)) return remote;
-      return google.client.updateEvent(ownerId, CALENDAR_ID, googleId, body, remote.etag ?? "");
+      // Conteúdo diferente: pode ser edição feita no Google. Conflito explícito, nunca sobrescrita com o ETag recém-lido.
+      throw new GoogleApiError("precondition_failed");
     }
   }
 
@@ -202,8 +214,10 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
       if (pages >= MAX_PAGES) throw new AppError(502, "SYNC_TOO_LARGE", "A sincronização excedeu o limite de páginas. Nada foi marcado como em dia.");
       const page = await google.client.listEvents(ownerId, connection.calendarId, { syncToken: syncToken ?? undefined, pageToken, timeMin });
       pages++;
+      // Desconectar no meio da sincronização: nada desta página é gravado.
+      await this.assertCurrent(ownerId, connection);
       for (const item of page.items) {
-        const outcome = await this.apply(ownerId, connection.calendarId, page.timeZone, item);
+        const outcome = await this.apply(ownerId, connection, page.timeZone, item);
         if (outcome === "upserted") upserted++; else if (outcome === "deleted") deleted++;
       }
       if (page.nextPageToken) { pageToken = page.nextPageToken; continue; }
@@ -213,14 +227,15 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     }
   }
 
-  private async apply(ownerId: string, calendarId: string, calendarTimeZone: string | undefined, item: GoogleEvent): Promise<"upserted" | "deleted" | "skipped"> {
+  private async apply(ownerId: string, connection: GoogleConnection, calendarTimeZone: string | undefined, item: GoogleEvent): Promise<"upserted" | "deleted" | "skipped"> {
     // Cópia que o próprio app enviou: o original local é a fonte, não se reimporta como espelho.
     if (item.extendedProperties?.private?.[OWN_EVENT_PROPERTY]) return this.refreshOwnEtag(ownerId, item);
+    const calendarId = connection.calendarId;
     const id = mirrorId(ownerId, calendarId, item.id);
     if (item.status === "cancelled") return (await this.repository.deleteMirror(ownerId, id)) ? "deleted" : "skipped";
     const existing = await this.repository.findById(ownerId, id);
     if (existing?.external?.etag && existing.external.etag === item.etag) return "skipped";
-    const mirror = toMirrorEvent(item, { ownerId, calendarId, calendarTimeZone, syncedAt: this.now().toISOString(), existing });
+    const mirror = toMirrorEvent(item, { ownerId, calendarId, connectionId: connection.connectionId, calendarTimeZone, syncedAt: this.now().toISOString(), existing });
     if (!mirror) return "skipped";
     await this.repository.upsertMirror(mirror);
     return "upserted";
@@ -248,7 +263,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     const translated = this.translate(error);
     if (translated instanceof AppError) {
       const needsReauth = translated.code === "REAUTH_REQUIRED";
-      if (needsReauth || recordError) await this.repository.saveConnection(ownerId, { ...connection, status: needsReauth ? "needs_reauth" : connection.status, lastError: translated.code });
+      // Condicionado à conexão: um erro tardio não ressuscita nem altera uma sessão desconectada/refeita.
+      if (needsReauth || recordError) await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, status: needsReauth ? "needs_reauth" : connection.status, lastError: translated.code });
     }
     return translated;
   }

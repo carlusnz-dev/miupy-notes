@@ -57,14 +57,21 @@ export class MemoryCalendarRepository extends CalendarRepository {
     return this.events.delete(key);
   }
 
-  async deleteAllMirrors(ownerId: string): Promise<number> {
+  async deleteAllMirrors(ownerId: string, connectionId?: string): Promise<number> {
     let removed = 0;
-    for (const [key, event] of this.events) if (event.ownerId === ownerId && event.source === "google") { this.events.delete(key); removed++; }
+    for (const [key, event] of this.events) {
+      if (event.ownerId === ownerId && event.source === "google" && (connectionId === undefined || event.external?.connectionId === connectionId)) { this.events.delete(key); removed++; }
+    }
     return removed;
   }
 
   async getConnection(ownerId: string) { return this.connections.get(ownerId) ?? null; }
   async saveConnection(ownerId: string, connection: GoogleConnection) { this.connections.set(ownerId, connection); }
+  async saveConnectionIf(ownerId: string, connectionId: string, connection: GoogleConnection) {
+    if (this.connections.get(ownerId)?.connectionId !== connectionId) return false;
+    this.connections.set(ownerId, connection);
+    return true;
+  }
   async deleteConnection(ownerId: string) { this.connections.delete(ownerId); }
   async getPending(ownerId: string) { return this.pending.get(ownerId) ?? null; }
   async savePending(ownerId: string, pending: PendingAuthorization) { this.pending.set(ownerId, pending); }

@@ -15,6 +15,8 @@ const isApiError = (error: unknown): error is ApiErrorLike => error instanceof E
 
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
+/** Teto de sanidade para `Retry-After` (o piso do servidor é respeitado até aqui, sem truncar para o teto do backoff). */
+const RETRY_AFTER_MAX_MS = 6 * 3_600_000;
 
 export const draftOf = (event: CalendarEventOutput): EventDraft => ({
   title: event.title, description: event.description, location: event.location, allDay: event.allDay,
@@ -60,7 +62,7 @@ export async function enqueue(store: CalendarStore, ownerId: string, change:
   | { kind: "delete"; event: CalendarEventOutput }, now = Date.now()): Promise<OutboxOp | null> {
   const eventId = change.kind === "create" ? change.eventId : change.event.id;
   const existing = await store.getOp(ownerId, eventId);
-  const base = { ownerId, eventId, state: "pending" as const, attempts: 0, nextAttemptAt: 0, lastError: null, serverCopy: null as CalendarEventOutput | null, sentAt: existing?.sentAt ?? null, rev: (existing?.rev ?? 0) + 1, createdAt: existing?.createdAt ?? now, updatedAt: now };
+  const base = { ownerId, eventId, state: "pending" as const, attempts: 0, nextAttemptAt: 0, notBefore: existing?.notBefore ?? 0, lastError: null, serverCopy: null as CalendarEventOutput | null, sentAt: existing?.sentAt ?? null, rev: (existing?.rev ?? 0) + 1, createdAt: existing?.createdAt ?? now, updatedAt: now };
 
   if (change.kind === "delete") {
     // Só cancela sem rede uma criação que nunca saiu. Se um envio já começou (`sentAt`), o servidor pode ter o evento:
@@ -79,7 +81,7 @@ export async function enqueue(store: CalendarStore, ownerId: string, change:
   return op;
 }
 
-const backoff = (attempts: number, retryAfterMs?: number) => Math.min(BACKOFF_MAX_MS, retryAfterMs ?? BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
+const backoff = (attempts: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
 const errorCode = (error: unknown) => (isApiError(error) ? error.code : "UNKNOWN_ERROR");
 const retryable = (error: unknown) => isApiError(error) && (error.code === "NETWORK_ERROR" || error.status === 429 || (error.status !== undefined && error.status >= 500));
 
@@ -96,7 +98,8 @@ export async function flushOutbox(store: CalendarStore, remote: CalendarRemote, 
   const result: FlushResult = { sent: 0, failed: 0, conflicts: 0, rejected: 0, stopped: null };
   for (const op of await store.listOps(ownerId)) {
     if (!isCurrent()) break;
-    if (op.state !== "pending" || (!options.force && op.nextAttemptAt > now())) continue;
+    // `force` ("tentar agora") antecipa só o backoff do app; o piso do servidor (Retry-After) vale sempre.
+    if (op.state !== "pending" || op.notBefore > now() || (!options.force && op.nextAttemptAt > now())) continue;
     try {
       // Marca "pode ter saído" ANTES do envio. Se a revisão já mudou, esta rodada pula o evento (a próxima o pega).
       if (!(await store.updateOp(ownerId, op.eventId, op.rev, { sentAt: now() }))) continue;
@@ -124,7 +127,7 @@ export async function flushOutbox(store: CalendarStore, remote: CalendarRemote, 
 async function rebaseNewer(store: CalendarStore, ownerId: string, sent: OutboxOp, saved: CalendarEventOutput): Promise<void> {
   const newer = await store.getOp(ownerId, sent.eventId);
   if (!newer || newer.rev <= sent.rev) return;
-  await store.updateOp(ownerId, sent.eventId, newer.rev, { kind: newer.kind === "create" ? "update" : newer.kind, baseVersion: saved.version, attempts: 0, nextAttemptAt: 0 });
+  await store.updateOp(ownerId, sent.eventId, newer.rev, { kind: newer.kind === "create" ? "update" : newer.kind, baseVersion: saved.version, attempts: 0, nextAttemptAt: 0, notBefore: 0 });
 }
 
 async function send(remote: CalendarRemote, op: OutboxOp): Promise<CalendarEventOutput | "gone"> {
@@ -148,7 +151,9 @@ async function classify(store: CalendarStore, remote: CalendarRemote, op: Outbox
   const save = (patch: Partial<OutboxOp>) => store.updateOp(op.ownerId, op.eventId, op.rev, { ...patch, updatedAt: at });
   if (retryable(error)) {
     const attempts = op.attempts + 1;
-    await save({ attempts, lastError: errorCode(error), nextAttemptAt: at + backoff(attempts, isApiError(error) ? error.retryAfterMs : undefined) });
+    const retryAfter = isApiError(error) ? error.retryAfterMs : undefined;
+    const notBefore = retryAfter !== undefined ? Math.max(op.notBefore, at + Math.min(retryAfter, RETRY_AFTER_MAX_MS)) : op.notBefore;
+    await save({ attempts, lastError: errorCode(error), notBefore, nextAttemptAt: Math.max(at + backoff(attempts), notBefore) });
     return "retry";
   }
   const status = isApiError(error) ? error.status : undefined;
@@ -157,7 +162,7 @@ async function classify(store: CalendarStore, remote: CalendarRemote, op: Outbox
     let server: CalendarEventOutput | null;
     try { server = await remote.get(op.eventId); } catch (lookup) {
       if (isApiError(lookup) && lookup.status === 404) server = null;
-      else { await save({ attempts: op.attempts + 1, lastError: errorCode(lookup), nextAttemptAt: at + backoff(op.attempts + 1) }); return "retry"; }
+      else { await save({ attempts: op.attempts + 1, lastError: errorCode(lookup), nextAttemptAt: Math.max(at + backoff(op.attempts + 1), op.notBefore) }); return "retry"; }
     }
     if (op.kind === "delete" && server === null) { await store.removeEvents(op.ownerId, [op.eventId]); await store.removeOp(op.ownerId, op.eventId, op.rev); return "done"; }
     if (op.draft && server && sameContent(server, op.draft)) { await store.putEvents(op.ownerId, [server]); await store.removeOp(op.ownerId, op.eventId, op.rev); return "done"; }

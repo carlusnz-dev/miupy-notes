@@ -53,3 +53,11 @@ test("mirrorId é determinístico, no formato UUID e separa proprietários", () 
   assert.notEqual(a, mirrorId("bob", "primary", "abc"));
   assert.notEqual(a, mirrorId("alice", "primary", "abd"));
 });
+
+test("regressão: com hora exige data real e deslocamento explícito (nada de normalizar 30/02 nem usar o fuso do servidor)", () => {
+  const base = { allDay: false, timeZone: "UTC" };
+  for (const bad of ["2026-02-30T09:00:00Z", "2026-13-01T09:00:00Z", "2026-10-21T24:00:00Z", "2026-10-21T09:60:00Z", "2026-10-21T09:00:00", "2026-10-21T09:00", "2026-10-21 09:00:00Z", "2026-10-21T09:00:00+24:00"]) {
+    assert.throws(() => normalizeTimes({ ...base, start: bad, end: "2026-10-22T10:00:00Z" }), { status: 400 }, bad);
+  }
+  assert.equal(normalizeTimes({ ...base, start: "2026-10-21T09:00-03:00", end: "2026-10-21T15:00:00.5+00:00" }).start, "2026-10-21T12:00:00.000Z");
+});

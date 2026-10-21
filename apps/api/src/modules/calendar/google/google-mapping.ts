@@ -41,12 +41,12 @@ export function sameRemoteContent(remote: GoogleEvent, body: GoogleEventBody): b
     && instant(remote.start) === instant(body.start) && instant(remote.end) === instant(body.end);
 }
 
-export type MirrorContext = { ownerId: string; calendarId: string; calendarTimeZone?: string; syncedAt: string; existing: CalendarEvent | null };
+export type MirrorContext = { ownerId: string; calendarId: string; connectionId: string; calendarTimeZone?: string; syncedAt: string; existing: CalendarEvent | null };
 
 /** Converte um evento do Google em espelho. `null` se não for representável (sem datas) — nunca inventa horário. */
 export function toMirrorEvent(google: GoogleEvent, ctx: MirrorContext): CalendarEvent | null {
   const startDate = google.start?.date, endDate = google.end?.date;
-  const external: ExternalRef = { provider: "google", calendarId: ctx.calendarId, externalId: google.id, etag: google.etag ?? "", syncedAt: ctx.syncedAt };
+  const external: ExternalRef = { provider: "google", calendarId: ctx.calendarId, externalId: google.id, etag: google.etag ?? "", syncedAt: ctx.syncedAt, connectionId: ctx.connectionId };
   const id = mirrorId(ctx.ownerId, ctx.calendarId, google.id);
   const createdAt = ctx.existing?.createdAt ?? ctx.syncedAt;
   const common = [(google.summary?.trim() || "(sem título)").slice(0, 200), (google.description ?? "").slice(0, 8_000), (google.location ?? "").trim().slice(0, 300)] as const;

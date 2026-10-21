@@ -83,6 +83,8 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   const conflicts = calendar.ops.filter((op) => op.state === "conflict").length;
   const rejected = calendar.ops.filter((op) => op.state === "rejected").length;
   const offline = calendar.connectivity === "offline";
+  // Piso do servidor (Retry-After): "Tentar agora" não o antecipa, então a tela diz até quando ele vale.
+  const waitUntil = Math.max(0, ...calendar.ops.filter((op) => op.state === "pending").map((op) => op.notBefore));
 
   const days = mode === "day" ? [anchor] : Array.from({ length: 7 }, (_, index) => addDays(visibleDays("week", anchor).first, index));
   const today = todayLocal();
@@ -99,7 +101,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
           {conflicts > 0 ? `${conflicts} conflito(s) para resolver. ` : ""}
           {rejected > 0 ? `${rejected} envio(s) recusado(s) pelo servidor. ` : ""}
           {offline ? "Sem conexão. " : ""}
-          {pending > 0 ? `${pending} alteração(ões) salva(s) só neste dispositivo, aguardando envio.` : calendar.fetchState.status === "ok" && !conflicts && !rejected ? `Em dia com o servidor desde ${new Date(calendar.fetchState.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : calendar.fetchState.status === "stale" ? calendar.fetchState.reason : calendar.fetchState.status === "loading" ? "Atualizando…" : ""}
+          {pending > 0 ? `${pending} alteração(ões) salva(s) só neste dispositivo, aguardando envio.${waitUntil > Date.now() ? ` O servidor pediu para aguardar até ${new Date(waitUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : ""}` : calendar.fetchState.status === "ok" && !conflicts && !rejected ? `Em dia com o servidor desde ${new Date(calendar.fetchState.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : calendar.fetchState.status === "stale" ? calendar.fetchState.reason : calendar.fetchState.status === "loading" ? "Atualizando…" : ""}
           {(pending > 0 || offline || calendar.fetchState.status === "stale") && <> <button type="button" className="calendar-link-button" onClick={calendar.retryNow}>Tentar agora</button></>}
         </p>
       </header>

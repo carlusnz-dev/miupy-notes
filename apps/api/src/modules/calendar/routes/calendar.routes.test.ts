@@ -160,7 +160,7 @@ test("espelhos do Google são somente leitura para edição e exclusão", async 
 
 async function seedMirror(): Promise<EventBody> {
   const { toMirrorEvent } = await import("../google/google-mapping.js");
-  const event = toMirrorEvent({ id: "g-ro", etag: "\"1\"", summary: "Do Google", start: { dateTime: "2026-10-21T10:00:00Z" }, end: { dateTime: "2026-10-21T11:00:00Z" } }, { ownerId: "alice", calendarId: "primary", syncedAt: "2026-10-21T00:00:00.000Z", existing: null })!;
+  const event = toMirrorEvent({ id: "g-ro", etag: "\"1\"", summary: "Do Google", start: { dateTime: "2026-10-21T10:00:00Z" }, end: { dateTime: "2026-10-21T11:00:00Z" } }, { ownerId: "alice", calendarId: "primary", connectionId: "c1", syncedAt: "2026-10-21T00:00:00.000Z", existing: null })!;
   await kit.repository.upsertMirror(event);
   return await (await call("alice", `/events/${event.id}`)).json() as EventBody;
 }

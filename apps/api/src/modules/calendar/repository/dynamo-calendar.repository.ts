@@ -12,12 +12,12 @@ const storedEventSchema = z.object({
   id: z.uuid(), ownerId: z.string(), title: z.string(), description: z.string(), location: z.string(),
   allDay: z.boolean(), start: z.string(), end: z.string(), timeZone: z.string().nullable(),
   links: z.array(link), source: z.enum(["local", "google"]),
-  external: z.object({ provider: z.literal("google"), calendarId: z.string(), externalId: z.string(), etag: z.string(), syncedAt: z.string() }).nullable().default(null),
+  external: z.object({ provider: z.literal("google"), calendarId: z.string(), externalId: z.string(), etag: z.string(), syncedAt: z.string(), connectionId: z.string().default("") }).nullable().default(null),
   reflection: z.object({ googleEventId: z.string(), calendarId: z.string(), etag: z.string(), reflectedVersion: z.int().positive(), reflectedAt: z.string() }).nullable().default(null),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), version: z.int().positive(),
 });
 const connectionSchema = z.object({
-  status: z.enum(["connected", "needs_reauth"]), mode: z.enum(["mirror", "reflect"]), scopes: z.array(z.string()), calendarId: z.string(),
+  connectionId: z.string(), status: z.enum(["connected", "needs_reauth"]), mode: z.enum(["mirror", "reflect"]), scopes: z.array(z.string()), calendarId: z.string(),
   connectedAt: z.string(), syncToken: z.string().nullable(), lastSyncAt: z.string().nullable(), lastError: z.string().nullable(),
 });
 const pendingSchema = z.object({ state: z.string(), mode: z.enum(["mirror", "reflect"]), redirectUri: z.string(), expiresAt: z.string() });
@@ -145,17 +145,17 @@ export class DynamoCalendarRepository extends CalendarRepository {
     }
   }
 
-  async deleteAllMirrors(ownerId: string): Promise<number> {
+  async deleteAllMirrors(ownerId: string, connectionId?: string): Promise<number> {
     let removed = 0;
     let startKey: Record<string, unknown> | undefined;
     do {
       const result = await this.client.send(new QueryCommand({
         TableName: this.tableName,
         KeyConditionExpression: "pk = :pk AND begins_with(sk, :prefix)",
-        FilterExpression: "#source = :google",
+        FilterExpression: connectionId === undefined ? "#source = :google" : "#source = :google AND #external.#connection = :connection",
         ProjectionExpression: "id",
-        ExpressionAttributeNames: { "#source": "source" },
-        ExpressionAttributeValues: { ":pk": ownerKey(ownerId), ":prefix": EVENT_PREFIX, ":google": "google" },
+        ExpressionAttributeNames: { "#source": "source", ...(connectionId === undefined ? {} : { "#external": "external", "#connection": "connectionId" }) },
+        ExpressionAttributeValues: { ":pk": ownerKey(ownerId), ":prefix": EVENT_PREFIX, ":google": "google", ...(connectionId === undefined ? {} : { ":connection": connectionId }) },
         ExclusiveStartKey: startKey,
       }));
       for (const item of result.Items ?? []) if (await this.deleteMirror(ownerId, String(item.id))) removed++;
@@ -170,6 +170,18 @@ export class DynamoCalendarRepository extends CalendarRepository {
   }
   async saveConnection(ownerId: string, connection: GoogleConnection): Promise<void> {
     await this.client.send(new PutCommand({ TableName: this.tableName, Item: { pk: ownerKey(ownerId), sk: CONNECTION_SK, ...connection } }));
+  }
+  async saveConnectionIf(ownerId: string, connectionId: string, connection: GoogleConnection): Promise<boolean> {
+    try {
+      await this.client.send(new PutCommand({
+        TableName: this.tableName, Item: { pk: ownerKey(ownerId), sk: CONNECTION_SK, ...connection },
+        ConditionExpression: "#connection = :connection", ExpressionAttributeNames: { "#connection": "connectionId" }, ExpressionAttributeValues: { ":connection": connectionId },
+      }));
+      return true;
+    } catch (error) {
+      if (error instanceof ConditionalCheckFailedException) return false;
+      throw error;
+    }
   }
   async deleteConnection(ownerId: string): Promise<void> {
     await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: CONNECTION_SK } }));

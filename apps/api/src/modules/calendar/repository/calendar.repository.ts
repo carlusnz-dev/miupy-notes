@@ -17,10 +17,13 @@ export abstract class CalendarRepository extends BaseRepository<CalendarEvent> {
   /** Espelho do Google: grava sem condição de versão, mas nunca sobre um evento local. */
   abstract upsertMirror(event: CalendarEvent): Promise<void>;
   abstract deleteMirror(ownerId: string, id: string): Promise<boolean>;
-  abstract deleteAllMirrors(ownerId: string): Promise<number>;
+  /** Remove espelhos do proprietário; com `connectionId`, só os gravados por essa conexão. */
+  abstract deleteAllMirrors(ownerId: string, connectionId?: string): Promise<number>;
 
   abstract getConnection(ownerId: string): Promise<GoogleConnection | null>;
   abstract saveConnection(ownerId: string, connection: GoogleConnection): Promise<void>;
+  /** Grava somente se a conexão persistida ainda tem este `connectionId`; `false` = foi desconectada/refeita. */
+  abstract saveConnectionIf(ownerId: string, connectionId: string, connection: GoogleConnection): Promise<boolean>;
   abstract deleteConnection(ownerId: string): Promise<void>;
   abstract getPending(ownerId: string): Promise<PendingAuthorization | null>;
   abstract savePending(ownerId: string, pending: PendingAuthorization): Promise<void>;
