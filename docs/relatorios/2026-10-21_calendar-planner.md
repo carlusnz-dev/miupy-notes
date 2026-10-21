@@ -17,7 +17,7 @@ Branch `feat/calendar-planner` (renomeada de `carlusnz-dev/feat-calendar-planner
 
 | Comando / ação | Resultado |
 |---|---|
-| `npm run test:api` | Rodada completa antes do teste de logger: 144 testes, 136 passam, 0 falham, 8 ignorados (integrações DynamoDB Local sem `DYNAMODB_TEST_ENDPOINT`). Depois, `app.test.ts` ganhou o teste dirigido de `/v1/calendar` (template sem UUID, query nem identidade; autorizado pelo coordenador) e passou 10/10 isolado; a suíte completa não foi repetida após essa adição. |
+| `npm run test:api` | 145 testes: 137 passam, 0 falham, 8 ignorados (integrações DynamoDB Local sem `DYNAMODB_TEST_ENDPOINT`), já com o teste dirigido de `/v1/calendar` no logger (autorizado pelo coordenador). |
 | `DYNAMODB_TEST_ENDPOINT=http://127.0.0.1:8031 tsx --test src/modules/calendar/calendar.integration.test.ts` | 4/4 contra DynamoDB Local 3.3.1 em contêiner próprio (`-inMemory`, porta 8031, removido ao fim; tabela sintética criada/removida pelo teste). O DynamoDB da porta 8000 (dados do proprietário) **não foi tocado**. |
 | `npm run test:web` | 134/134 (inclui `time`, `layout`, `outbox`). |
 | `npm run build` (web: `tsc` + Vite; API: `tsc --noEmit`) | Aprovado. Aviso de chunk > 500 kB já existente (editor); chunk da agenda 45 kB. |
