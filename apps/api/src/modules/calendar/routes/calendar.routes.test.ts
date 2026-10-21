@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createKit, createTestServer, knownNote } from "../calendar.test-kit.js";
+import { GoogleApiError } from "../google/google-calendar.client.js";
+import { SCOPE_MIRROR } from "../google/google-oauth.js";
 
 const kit = createKit();
 const server = createTestServer(kit);
@@ -164,3 +166,21 @@ async function seedMirror(): Promise<EventBody> {
   await kit.repository.upsertMirror(event);
   return await (await call("alice", `/events/${event.id}`)).json() as EventBody;
 }
+
+test("sync expõe Retry-After do Google no HTTP 429 e 502 sem mudar o envelope", async () => {
+  kit.oauth.grantedScopes = [SCOPE_MIRROR];
+  const redirectUri = "http://127.0.0.1:53682/callback";
+  const auth = await kit.integration.authorize("alice", { mode: "mirror", redirectUri, codeChallenge: "a".repeat(43) });
+  await kit.integration.connect("alice", { state: auth.state, code: "fake-code", codeVerifier: "b".repeat(43), redirectUri });
+  for (const [kind, status, code] of [["rate_limited", 429, "RATE_LIMITED"], ["unavailable", 502, "UPSTREAM_UNAVAILABLE"]] as const) {
+    kit.google.failures.list = [new GoogleApiError(kind, 600_001)];
+    const response = await call("alice", "/google/sync", { method: "POST", body: {} });
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("retry-after"), "601");
+    assert.equal(response.headers.get("access-control-expose-headers"), "Retry-After");
+    const body = await response.json() as { error: { code: string; requestId: string } };
+    assert.equal(body.error.code, code);
+    assert.equal(typeof body.error.requestId, "string");
+    assert.equal(JSON.stringify(body).includes("refresh-secret"), false);
+  }
+});

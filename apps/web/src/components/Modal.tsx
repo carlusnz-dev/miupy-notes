@@ -100,6 +100,9 @@ export default function Modal({ open, title, onClose, children, busy = false, in
       }
       if (dialog?.open) dialog.close();
       if (opener.current?.isConnected) opener.current.focus();
+      // Na desmontagem direta, o browser pode mover o foco ao body depois deste cleanup.
+      const target = opener.current;
+      queueMicrotask(() => { if (!dialog?.isConnected && target?.isConnected) target.focus(); });
     };
   }, [mounted]);
 

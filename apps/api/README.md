@@ -48,3 +48,9 @@ Toda resposta inclui `X-Request-Id`, UUID gerado internamente (o header recebido
 `dependencies.configured` confirma somente a composição, e `/health` confirma que o processo HTTP responde: nenhum dos dois testa conexão ou existência de tabela. `server.listening` informa a porta local sem imprimir endpoints com credenciais. Para a Lambda futura, `LOG_FORMAT=json` permite correlação por `requestId` no destino CloudWatch configurado no deployment; o ID interno é independente do ID da invocação AWS. Não há deployment, configuração CloudWatch, retenção ou alarmes implementados nesta frente.
 
 Em falhas nas rotas montadas, o template completo é capturado antes de o Express sair do router (por exemplo, `/v1/notes/:id`), sem UUID real nem query. `request.failed` inclui método limitado aos verbos reconhecidos (demais: `OTHER`) e status público que o handler enviaria. Se os headers já foram enviados, esse status descreve a falha detectada, não altera o status já transmitido: o handler encerra a conexão sem entregar o Error bruto ao handler padrão do Express. O evento final é `request.aborted`, sem status de conclusão. Falha no sink não interrompe o processamento HTTP.
+
+## Calendar
+
+`/v1/calendar` usa o mesmo principal de notas/finanças. CRUD de eventos é local e versionado; contrato em `docs/arquitetura/api-calendar.md`. A composição padrão informa Google `not_configured`: os adaptadores existem, mas faltam `CredentialStore` de produção e consentimento desktop separado do login. Não use o ID token do login como token Calendar.
+
+Retry-After do provedor aceita segundos/HTTP-date; esperas longas retornam ao cliente com o prazo intacto em cabeçalho HTTP, sem prender o pedido nem reduzir para 60 s. Testes usam fakes e HTTP local, sem Google real.

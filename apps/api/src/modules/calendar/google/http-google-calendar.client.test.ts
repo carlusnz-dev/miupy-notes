@@ -148,3 +148,26 @@ test("refresh recusado (invalid_grant) vira unauthorized e não é repetido", as
   const oauth = new HttpGoogleOAuth({ clientId: "c", clientSecret: "s" }, async () => json(400, { error: "invalid_grant" }));
   await assert.rejects(oauth.refreshAccessToken("r"), { kind: "unauthorized" });
 });
+
+// Prazos maiores que a janela de retry voltam ao chamador, sem dormir nem antecipar o Google.
+test("Retry-After longo em segundos ou HTTP-date volta intacto sem repetir antes do prazo", async () => {
+  const make = await ready();
+  for (const header of ["600", new Date(Date.now() + 600_000).toUTCString()]) {
+    const s = await make([json(429, {}, { "retry-after": header })]);
+    await assert.rejects(s.client.listEvents("alice", "primary", {}), error => error instanceof GoogleApiError && error.kind === "rate_limited" && error.retryAfterMs! > 590_000 && error.retryAfterMs! <= 600_000);
+    assert.equal(s.calls.length, 1);
+    assert.deepEqual(s.sleeps, []);
+  }
+});
+
+test("Retry-After de 5xx também volta ao chamador; cabeçalho inválido usa backoff", async () => {
+  const make = await ready();
+  const down = await make([json(503, {}, { "retry-after": "600" })]);
+  await assert.rejects(down.client.listEvents("alice", "primary", {}), { kind: "unavailable", retryAfterMs: 600_000 });
+  assert.deepEqual(down.sleeps, []);
+  for (const header of ["nada", "-1", "1.5"]) {
+    const invalid = await make([json(429, {}, { "retry-after": header }), json(200, { items: [] })]);
+    await invalid.client.listEvents("alice", "primary", {});
+    assert.deepEqual(invalid.sleeps, [500]);
+  }
+});

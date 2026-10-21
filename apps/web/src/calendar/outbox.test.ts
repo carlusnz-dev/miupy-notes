@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CalendarEventOutput, EventDraft } from "../lib/calendar-api";
 import { discardOp, draftOf, enqueue, flushOutbox, resolveConflict, sameContent, withOutbox, type CalendarRemote } from "./outbox.js";
-import { createMemoryCalendarStore } from "./store.js";
+import { createIndexedDbCalendarStore, createMemoryCalendarStore } from "./store.js";
+import { IDBFactory } from "fake-indexeddb";
 
 const owner = "alice";
 const iso = "2026-10-21T12:00:00.000Z";
@@ -378,14 +379,45 @@ test("regressão: Retry-After é piso — 600 s não vira 60 s e 'tentar agora' 
   assert.equal((await flushOutbox(store, r.api, owner, { now: () => 600_000, force: true })).sent, 1);
 });
 
-test("Retry-After é limitado por um teto de sanidade e o piso sobrevive a nova edição do rascunho", async () => {
+test("Retry-After longo não é truncado e o piso sobrevive a nova edição do rascunho", async () => {
   const store = createMemoryCalendarStore();
   const r = remote();
   await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft() }, 0);
   r.failures.push(http(429, "RATE_LIMITED", 10 * 24 * 3_600_000));
   await flushOutbox(store, r.api, owner, { now: () => 0 });
-  assert.equal((await store.getOp(owner, idA))!.notBefore, 6 * 3_600_000);
+  assert.equal((await store.getOp(owner, idA))!.notBefore, 10 * 24 * 3_600_000);
   await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft({ title: "editado" }) }, 1_000);
-  assert.equal((await store.getOp(owner, idA))!.notBefore, 6 * 3_600_000);
+  assert.equal((await store.getOp(owner, idA))!.notBefore, 10 * 24 * 3_600_000);
   assert.equal((await flushOutbox(store, r.api, owner, { now: () => 2_000, force: true })).sent, 0);
 });
+
+for (const adapter of ["memory", "indexeddb"] as const) {
+  test(`429 durante edição preserva o texto e o piso do servidor (${adapter})`, async () => {
+    const store = adapter === "memory" ? createMemoryCalendarStore() : createIndexedDbCalendarStore(new IDBFactory());
+    const r = remote();
+    await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft({ title: "v1" }) }, 0);
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const sending = new Promise<void>(resolve => { started = resolve; });
+    const healthy = r.api.create;
+    r.api.create = async () => { started(); await gate; throw http(429, "RATE_LIMITED", 600_000); };
+    const round = flushOutbox(store, r.api, owner, { now: () => 0 });
+    await sending;
+    await enqueue(store, owner, { kind: "create", eventId: idA, draft: draft({ title: "v2" }) }, 1);
+    const stale = (await store.getOp(owner, idA))!;
+    release(); await round;
+    let op = (await store.getOp(owner, idA))!;
+    assert.deepEqual([op.draft?.title, op.rev, op.notBefore], ["v2", 2, 600_000]);
+    // Uma edição que leu antes do 429 também não pode apagar o prazo na gravação.
+    await store.putOp({ ...stale, rev: 3, draft: draft({ title: "v3" }) });
+    op = (await store.getOp(owner, idA))!;
+    assert.deepEqual([op.draft?.title, op.notBefore], ["v3", 600_000]);
+    r.api.create = healthy;
+    assert.equal((await flushOutbox(store, r.api, owner, { now: () => 599_999, force: true })).sent, 0);
+    assert.equal(r.events.size, 0);
+    assert.equal((await flushOutbox(store, r.api, owner, { now: () => 600_000, force: true })).sent, 1);
+    assert.equal(r.events.get(idA)!.title, "v3");
+    assert.equal((await store.listOps(owner)).length, 0);
+  });
+}

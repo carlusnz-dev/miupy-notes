@@ -91,7 +91,8 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
         continue;
       }
       const retryable = response.status === 429 || response.status >= 500 || (response.status === 403 && reason !== undefined && RETRYABLE_REASONS.has(reason));
-      if (retryable && attempt < MAX_ATTEMPTS) { await this.sleep(retryAfterMs ?? this.delay(attempt)); continue; }
+      // Esperas longas voltam à API com o prazo intacto, sem prender a requisição HTTP ou antecipar o provedor.
+      if (retryable && attempt < MAX_ATTEMPTS && (retryAfterMs ?? 0) <= MAX_DELAY_MS) { await this.sleep(retryAfterMs ?? this.delay(attempt)); continue; }
       throw new GoogleApiError(this.kind(response.status, reason), retryAfterMs);
     }
   }
@@ -111,8 +112,9 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
 
   private retryAfter(response: Response): number | undefined {
     const raw = response.headers.get("retry-after");
-    const seconds = raw === null ? Number.NaN : Number(raw);
-    return Number.isFinite(seconds) && seconds >= 0 ? Math.min(seconds * 1000, 60_000) : undefined;
+    if (raw === null) return undefined;
+    const ms = /^\d+$/.test(raw.trim()) ? Number(raw) * 1000 : Date.parse(raw) - Date.now();
+    return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
   }
 
   private async reason(response: Response): Promise<string | undefined> {

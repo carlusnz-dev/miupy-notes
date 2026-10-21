@@ -15,8 +15,6 @@ const isApiError = (error: unknown): error is ApiErrorLike => error instanceof E
 
 const BACKOFF_BASE_MS = 2_000;
 const BACKOFF_MAX_MS = 60_000;
-/** Teto de sanidade para `Retry-After` (o piso do servidor é respeitado até aqui, sem truncar para o teto do backoff). */
-const RETRY_AFTER_MAX_MS = 6 * 3_600_000;
 
 export const draftOf = (event: CalendarEventOutput): EventDraft => ({
   title: event.title, description: event.description, location: event.location, allDay: event.allDay,
@@ -152,8 +150,10 @@ async function classify(store: CalendarStore, remote: CalendarRemote, op: Outbox
   if (retryable(error)) {
     const attempts = op.attempts + 1;
     const retryAfter = isApiError(error) ? error.retryAfterMs : undefined;
-    const notBefore = retryAfter !== undefined ? Math.max(op.notBefore, at + Math.min(retryAfter, RETRY_AFTER_MAX_MS)) : op.notBefore;
+    const notBefore = retryAfter !== undefined && Number.isFinite(retryAfter) && retryAfter > 0 ? Math.max(op.notBefore, at + retryAfter) : op.notBefore;
     await save({ attempts, lastError: errorCode(error), notBefore, nextAttemptAt: Math.max(at + backoff(attempts), notBefore) });
+    // O prazo vale também para uma edição feita enquanto a revisão antiga estava em voo.
+    if (notBefore > 0) await store.deferOp(op.ownerId, op.eventId, notBefore);
     return "retry";
   }
   const status = isApiError(error) ? error.status : undefined;

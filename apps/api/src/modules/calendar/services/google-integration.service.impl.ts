@@ -273,11 +273,11 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     if (!(error instanceof GoogleApiError)) return error;
     switch (error.kind) {
       case "unauthorized": return reauth();
-      case "rate_limited": return new AppError(429, "RATE_LIMITED", "O Google limitou as requisições. Tente de novo em instantes.");
+      case "rate_limited": return new AppError(429, "RATE_LIMITED", "O Google limitou as requisições. Tente de novo em instantes.", error.retryAfterMs);
       case "precondition_failed": return googleConflict();
       case "not_found": return new AppError(409, "GOOGLE_EVENT_MISSING", "O evento não existe mais no Google. Desfaça o envio e envie de novo.");
       case "conflict": return googleConflict();
-      case "unavailable": return new AppError(502, "UPSTREAM_UNAVAILABLE", "O Google Calendar está indisponível. Tente de novo.");
+      case "unavailable": return new AppError(502, "UPSTREAM_UNAVAILABLE", "O Google Calendar está indisponível. Tente de novo.", error.retryAfterMs);
       default: return new AppError(502, "UPSTREAM_REJECTED", "O Google recusou o pedido.");
     }
   }

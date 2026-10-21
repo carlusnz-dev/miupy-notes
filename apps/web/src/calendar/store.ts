@@ -38,6 +38,8 @@ export interface CalendarStore {
   putOp(op: OutboxOp): Promise<void>;
   /** Atualiza o envio só se a revisão gravada ainda for `expectedRev` (compare-and-set); `false` = mudou ou não existe. */
   updateOp(ownerId: string, eventId: string, expectedRev: number, patch: Partial<OutboxOp>): Promise<boolean>;
+  /** Eleva atomicamente o piso do servidor na revisão atual, sem alterar o rascunho. */
+  deferOp(ownerId: string, eventId: string, notBefore: number): Promise<void>;
   getOp(ownerId: string, eventId: string): Promise<OutboxOp | null>;
   listOps(ownerId: string): Promise<OutboxOp[]>;
   /** Remove o envio; com `upToRev`, só se a revisão gravada não for mais nova (edição durante o envio não se perde). */
@@ -62,7 +64,16 @@ export function createMemoryCalendarStore(): CalendarStore & { failNextPut: (err
     async listEvents(ownerId) { return [...events.values()].filter((item) => item.ownerId === ownerId).map(({ ownerId: _owner, ...event }) => copy(event)); },
     async getMeta(ownerId, name) { return meta.get(key(ownerId, name)) ?? null; },
     async setMeta(ownerId, name, value) { meta.set(key(ownerId, name), value); },
-    async putOp(op) { guard(); ops.set(key(op.ownerId, op.eventId), copy(op)); },
+    async putOp(op) {
+      guard();
+      const stored = ops.get(key(op.ownerId, op.eventId));
+      ops.set(key(op.ownerId, op.eventId), copy({ ...op, notBefore: Math.max(op.notBefore, stored?.notBefore ?? 0), sentAt: op.sentAt ?? stored?.sentAt ?? null }));
+    },
+    async deferOp(ownerId, eventId, notBefore) {
+      guard();
+      const stored = ops.get(key(ownerId, eventId));
+      if (stored) ops.set(key(ownerId, eventId), { ...stored, notBefore: Math.max(stored.notBefore, notBefore) });
+    },
     async updateOp(ownerId, eventId, expectedRev, patch) {
       guard();
       const stored = ops.get(key(ownerId, eventId));
@@ -86,7 +97,7 @@ export function createMemoryCalendarStore(): CalendarStore & { failNextPut: (err
 
 export function createUnavailableCalendarStore(reason = "Armazenamento local indisponível."): CalendarStore {
   const fail = () => Promise.reject(new Error(reason));
-  return { putEvents: fail, removeEvents: fail, listEvents: () => Promise.resolve([]), getMeta: () => Promise.resolve(null), setMeta: fail, putOp: fail, updateOp: fail, getOp: () => Promise.resolve(null), listOps: () => Promise.resolve([]), removeOp: fail, clearOwner: fail };
+  return { putEvents: fail, removeEvents: fail, listEvents: () => Promise.resolve([]), getMeta: () => Promise.resolve(null), setMeta: fail, putOp: fail, updateOp: fail, deferOp: fail, getOp: () => Promise.resolve(null), listOps: () => Promise.resolve([]), removeOp: fail, clearOwner: fail };
 }
 
 const DB_NAME = "miupy-calendar";
@@ -157,7 +168,22 @@ export function createIndexedDbCalendarStore(factory: IDBFactory | undefined = t
     },
     async putOp(op) {
       const { t, finished } = await tx(["outbox"], "readwrite");
-      t.objectStore("outbox").put(op);
+      const store = t.objectStore("outbox");
+      const read = store.get([op.ownerId, op.eventId]);
+      read.onsuccess = () => {
+        const stored = read.result as OutboxOp | undefined;
+        store.put({ ...op, notBefore: Math.max(op.notBefore, stored?.notBefore ?? 0), sentAt: op.sentAt ?? stored?.sentAt ?? null });
+      };
+      await finished;
+    },
+    async deferOp(ownerId, eventId, notBefore) {
+      const { t, finished } = await tx(["outbox"], "readwrite");
+      const store = t.objectStore("outbox");
+      const read = store.get([ownerId, eventId]);
+      read.onsuccess = () => {
+        const stored = read.result as OutboxOp | undefined;
+        if (stored) store.put({ ...stored, notBefore: Math.max(stored.notBefore, notBefore) });
+      };
       await finished;
     },
     async updateOp(ownerId, eventId, expectedRev, patch) {
