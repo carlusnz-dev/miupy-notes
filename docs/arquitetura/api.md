@@ -68,6 +68,16 @@ Organizam as notas em árvore (RF-01). Mesma autenticação e isolamento das not
 - **Notas entre pastas:** mover nota (`PATCH /notes/{id}` com `folderId`) é seguro porque pastas não são excluídas; ele valida a pasta do próprio proprietário e incrementa `version` da nota.
 - **Concorrência:** `version` como nas notas (`409` se divergir; gravação condicional). Nomes duplicados entre irmãs são aceitos.
 
+## Finanças e agendas
+
+Contratos completos: [finanças](api-finance.md) e [agenda](api-calendar.md). Notas, pastas, finanças e Calendar compartilham a autenticação de `/v1`; proprietário vem exclusivamente do principal.
+
+Finanças incluem `/finance/accounts` (listar/criar), `/finance/accounts/{id}` (ler/editar com versão) e `/finance/balances`. Referência manual, movimentos e moedas permanecem separados; sem Pluggy ou outbox financeira.
+
+Calendar inclui CRUD versionado em `/calendar/events`, criação idempotente por UUID enviado pelo cliente, eventos com hora/fuso ou dia inteiro e relações com notas/eventos. `/calendar/google` informa estado e as rotas de authorization/connection/sync/reflection ficam atrás de portas autorizadas. Na composição padrão e na Lambda, Google permanece **not_configured**. A API local Linux permite opt-in com Secret Service e consentimento separado no Tauri; não há conta/cofre/consentimento nativo real verificado. Modo de escrita consentida permite alterar/excluir espelhos com ETag/PATCH e enviar cópias locais. A carga inicial cobre 30 dias passados e 366 futuros, com sync incremental sob demanda. A serialização OAuth é somente por processo local; não há cofre AWS ou garantia distribuída. Detalhes, payloads e limites no contrato dedicado.
+
+`429 RATE_LIMITED` e `502 UPSTREAM_UNAVAILABLE` podem incluir `Retry-After` em segundos (arredondamento para cima), exposto por `Access-Control-Expose-Headers`; o envelope JSON não muda. O prazo do Google não é reduzido ao teto do backoff; na outbox vale também para a revisão escrita durante o envio.
+
 ## Erros
 
 Toda resposta produzida pelo app Express inclui `X-Request-Id`, um UUID gerado pelo servidor (não aceita o valor enviado pelo cliente). Em erros, ele coincide com `error.requestId`. Use esse identificador para correlacionar a interface aos logs da API (texto legível por padrão, JSON opcional via LOG_FORMAT=json). Rotas, status e envelopes existentes permanecem compatíveis. O log de conclusão inclui método, template da rota, status e duração; falhas incluem classificação técnica sem corpo, token ou identidade. `LOG_LEVEL=debug` habilita eventos de início; o padrão é `info`. Configuração e exemplos em [apps/api/README.md](../../apps/api/README.md).
@@ -86,8 +96,9 @@ Mensagem pública sem dados sensíveis; `requestId` presente em todos os erros, 
 | `404` | `NOT_FOUND` | rota inexistente ou nota ausente/de outro proprietário |
 | `409` | `CONFLICT` | `version` divergente |
 | `413` | `PAYLOAD_TOO_LARGE` | corpo acima de 256 kB |
-| `429` | — | previsto, no API Gateway |
+| `429` | `RATE_LIMITED` | limite do provedor Calendar; throttling do API Gateway depende de implantação |
 | `500` | `INTERNAL_ERROR` | falha não tratada |
+| `503` | `CREDENTIAL_STORE_UNAVAILABLE` | cofre Calendar local indisponível ou falha de gravação/limpeza |
 
 ## Planejado
 

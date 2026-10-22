@@ -107,7 +107,7 @@ fn config() -> Result<Config, String> {
     })
 }
 
-fn generate_verifier() -> Result<String, String> {
+pub(crate) fn generate_verifier() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|_| {
         eprintln!("auth: falha ao gerar bytes aleatórios");
@@ -116,7 +116,7 @@ fn generate_verifier() -> Result<String, String> {
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
-fn code_challenge(verifier: &str) -> String {
+pub(crate) fn code_challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
@@ -149,6 +149,7 @@ fn authorization_url(
 
 /// Interpreta a primeira linha do request HTTP (`GET /?code=...&state=... HTTP/1.1`).
 fn parse_callback(request_line: &str, expected_state: &str) -> Callback {
+    if !request_line.starts_with("GET ") { return Callback::Invalid; }
     let Some(target) = request_line.split_whitespace().nth(1) else {
         return Callback::Invalid;
     };
@@ -158,12 +159,13 @@ fn parse_callback(request_line: &str, expected_state: &str) -> Callback {
     let Ok(url) = Url::parse(&format!("http://127.0.0.1{target}")) else {
         return Callback::Invalid;
     };
+    if url.path() != "/" && url.path() != "/callback" { return Callback::Invalid; }
     let (mut code, mut state, mut error) = (None, None, None);
     for (key, value) in url.query_pairs() {
         match key.as_ref() {
-            "code" => code = Some(value.into_owned()),
-            "state" => state = Some(value.into_owned()),
-            "error" => error = Some(value.into_owned()),
+            "code" => { if code.is_some() || value.is_empty() { return Callback::Invalid; } code = Some(value.into_owned()); },
+            "state" => { if state.is_some() { return Callback::Invalid; } state = Some(value.into_owned()); },
+            "error" => { if error.is_some() { return Callback::Invalid; } error = Some(value.into_owned()); },
             _ => {}
         }
     }
@@ -335,7 +337,7 @@ async fn read_request_line(stream: &mut TcpStream) -> Option<String> {
 }
 
 /// Espera o redirect do Google até receber um callback com o state esperado.
-async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
+pub(crate) async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
     loop {
         let Ok((mut stream, _)) = listener.accept().await else {
             continue;
@@ -579,6 +581,17 @@ mod tests {
             parse_callback("GET /?error=access_denied&state=x HTTP/1.1", "abc"),
             Callback::Invalid
         );
+    }
+
+    #[test]
+    fn callback_rejects_duplicates_empty_code_and_wrong_path() {
+        for line in [
+            "GET /callback?code=c&state=s&state=s HTTP/1.1",
+            "GET /callback?code=c&code=d&state=s HTTP/1.1",
+            "GET /callback?code=&state=s HTTP/1.1",
+            "GET /other?code=c&state=s HTTP/1.1",
+            "POST /callback?code=c&state=s HTTP/1.1",
+        ] { assert!(matches!(parse_callback(line, "s"), Callback::Invalid)); }
     }
 
     #[test]

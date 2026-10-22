@@ -15,6 +15,8 @@ Toda consulta e chave de objeto são derivadas da identidade validada. Rotas pes
 
 Calendar e Gmail exigem OAuth com consentimento explícito e escopos mínimos. Token de atualização e segredo OAuth devem ficar protegidos no backend; nunca em `VITE_*`, JSON versionado ou logs. Desconexão revoga acesso quando possível e interrompe jobs. Sincronização registra escopos, data e falhas. Escopos de leitura de Gmail podem exigir verificação e avaliação adicional se dados forem armazenados no servidor; validar exigências antes de usar em produção.
 
+Calendar local (sessão 13): Secret Service Linux no backend, com namespace próprio e hash do proprietário; tokens trafegam por pipes privados, sem argv ou DynamoDB. Consentimento Tauri é separado do login, com PKCE/state de uso único/loopback validado; código e verifier vão do Rust à API local. Cancelamento termina antes do POST de conclusão, fase explicitamente informada; sair do app não revoga Calendar automaticamente. Connect/disconnect são serializados somente em um processo local, sem garantia distribuída nem transação entre cofre/Google/DynamoDB. Lambda não habilita esse adaptador; prova com cofre/conta/consentimento nativo reais permanece pendente. Decisão e limites em [Calendar local](../decisoes/2026-10-22_calendar-local-oauth.md).
+
 A [documentação oficial do Google Keep](https://developers.google.com/workspace/keep/api/guides) descreve a API para uso empresarial. Confirmar se a conta do proprietário é elegível; caso contrário, não prometer integração oficial. A [lista oficial de escopos Gmail](https://developers.google.com/workspace/gmail/api/auth/scopes) deve orientar o recorte mínimo.
 
 ## AWS e LLM

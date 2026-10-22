@@ -74,6 +74,7 @@ async (page) => {
   assert(data.amountCents===12000 && data.installmentCount===3 && data.accountId===null,'Payload exato '+JSON.stringify(data));
   await page.waitForTimeout(250);
   assert(await page.locator('.modal-exit-backdrop').count()===0,'Limpeza animação saída');
+  assert(await page.getByRole('button',{name:'Novo lançamento',exact:true}).evaluate(e=>e===document.activeElement),'Foco após salvar '+width);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Sem overflow '+width);
   await page.getByRole('button',{name:'Novo lançamento'}).click();
   await page.waitForTimeout(350);
@@ -87,6 +88,7 @@ async (page) => {
   assert(exit.exists && exit.inert && exit.hidden==='true','Saída sobrevivente '+JSON.stringify(exit));
   await page.waitForTimeout(250);
   assert(await page.locator('.modal-exit-backdrop').count()===0,'Cópia removida');
+  assert(await page.getByRole('button',{name:'Novo lançamento',exact:true}).evaluate(e=>e===document.activeElement),'Foco após desmontar '+width);
   if(width===1440) {
    assert(await page.getByRole('link',{name:'Finanças',exact:true}).count()===1,'Nome acessível da sidebar');
    await page.getByRole('button',{name:'Recolher menu'}).click();
@@ -106,6 +108,7 @@ async (page) => {
  await page.getByRole('button',{name:'Fechar janela'}).click();
  await page.waitForTimeout(30);
  assert(await page.locator('.modal-exit-backdrop').count()===0,'Reduced saída sem cópia');
+ assert(await page.getByRole('button',{name:'Novo lançamento',exact:true}).evaluate(e=>e===document.activeElement),'Reduced devolve foco');
  evidence.push('reduced-motion');
  await page.getByRole('button',{name:'Instituições',exact:true}).click();
  await page.getByRole('heading',{name:'Contas e saldos'}).waitFor();

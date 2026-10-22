@@ -25,7 +25,13 @@ export function createErrorHandler(log: Logger = logger): ErrorRequestHandler {
     // Não delegar Error bruto ao handler padrão: ele imprime mensagem/stack em dev.
     if (res.headersSent) { res.destroy(); return; }
     if (error instanceof ZodError) return sendError(res, 400, "VALIDATION_ERROR", "Dados inválidos.");
-    if (error instanceof AppError) return sendError(res, error.status, error.code, error.message);
+    if (error instanceof AppError) {
+      if (error.retryAfterMs !== undefined && Number.isFinite(error.retryAfterMs) && error.retryAfterMs > 0) {
+        res.setHeader("Retry-After", String(Math.ceil(error.retryAfterMs / 1000)));
+        res.append("Access-Control-Expose-Headers", "Retry-After");
+      }
+      return sendError(res, error.status, error.code, error.message);
+    }
     if (bodyError === "entity.parse.failed") return sendError(res, 400, "VALIDATION_ERROR", "JSON inválido.");
     if (bodyError === "entity.too.large") return sendError(res, 413, "PAYLOAD_TOO_LARGE", "Conteúdo maior que o permitido.");
     sendError(res, 500, "INTERNAL_ERROR", "Erro interno.");
