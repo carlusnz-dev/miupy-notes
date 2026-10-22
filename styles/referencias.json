@@ -59,5 +59,53 @@
     "Tema claro futuro",
     "Manter ou remover o mesh decorativo no visual flat"
   ],
-  "verifiedAt": "2026-10-18"
+  "verifiedAt": "2026-10-18",
+  "capturedReferences": [
+    {
+      "file": "styles/referencias/imagens/apg-combobox-select-only.jpg",
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-select-only/",
+      "capturedAt": "2026-10-22",
+      "license": "W3C Document License (conteúdo W3C); Captura própria (Playwright, 1280×800, movimento reduzido) de página pública, só como referência interna de design; não redistribuir nem usar no produto. Direitos do conteúdo pertencem ao titular do site.",
+      "observed": "Combobox só de seleção: foco fica no campo, opção ativa por aria-activedescendant, busca por digitação, Esc mantém o valor, Enter/Espaço/Tab escolhem.",
+      "application": "Base do components/Select.tsx (role=combobox + listbox em popover); Tab escolhe a opção ativa, como no APG."
+    },
+    {
+      "file": "styles/referencias/imagens/apg-datepicker-dialog.jpg",
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/datepicker-dialog/",
+      "capturedAt": "2026-10-22",
+      "license": "W3C Document License (conteúdo W3C); Captura própria (Playwright, 1280×800, movimento reduzido) de página pública, só como referência interna de design; não redistribuir nem usar no produto. Direitos do conteúdo pertencem ao titular do site.",
+      "observed": "Campo de data com botão que abre diálogo com grade; setas, PageUp/PageDown e Esc devolvendo o foco ao campo.",
+      "application": "Confere o comportamento já existente do components/DatePicker.tsx, agora sobre os hooks compartilhados de popover."
+    },
+    {
+      "file": "styles/referencias/imagens/notion-calendar.jpg",
+      "url": "https://www.notion.com/product/calendar",
+      "capturedAt": "2026-10-22",
+      "license": "Captura própria (Playwright, 1280×800, movimento reduzido) de página pública, só como referência interna de design; não redistribuir nem usar no produto. Direitos do conteúdo pertencem ao titular do site.",
+      "observed": "Vista de semana ocupa a largura; mini-mês à esquerda e painel lateral à direita com 'próxima reunião'; eventos curtos em uma linha.",
+      "application": "Agenda: grade em largura total nos modos Semana/Mês/Ano, próximos eventos como faixa compacta; blocos curtos em linha única (título · hora)."
+    },
+    {
+      "file": "styles/referencias/imagens/gloock-specimen.jpg",
+      "url": "https://fonts.google.com/specimen/Gloock",
+      "capturedAt": "2026-10-22",
+      "license": "Fonte sob SIL OFL 1.1; Captura própria (Playwright, 1280×800, movimento reduzido) de página pública, só como referência interna de design; não redistribuir nem usar no produto. Direitos do conteúdo pertencem ao titular do site.",
+      "observed": "Serifa display de alto contraste (Duarte Pinto), um peso (400), Latin Plus.",
+      "application": "Candidata livre semelhante a Lenora/Vogue para títulos, ao lado de Bodoni Moda. Não aplicada nos tokens (mudança de identidade depende do proprietário)."
+    }
+  ],
+  "fontCandidates": [
+    {
+      "name": "Gloock",
+      "file": "styles/referencias/fontes/gloock-latin-400-normal.woff2",
+      "licenseFile": "styles/referencias/fontes/OFL-Gloock.txt",
+      "license": "SIL OFL 1.1",
+      "source": "https://cdn.jsdelivr.net/npm/@fontsource/gloock@5.3.0/files/gloock-latin-400-normal.woff2",
+      "licenseSource": "https://raw.githubusercontent.com/google/fonts/main/ofl/gloock/OFL.txt",
+      "upstream": "https://github.com/duartp/gloock",
+      "sha256": "9389ada8d35754635432c5565f03e8e3ce0f37f529207356426d1d9983b1bc29",
+      "downloadedAt": "2026-10-22",
+      "note": "Só referência; o app continua com Silvex (local, fora do Git) → Instrument Serif. Subconjunto latin do Fontsource: conferir acentos pt-BR antes de adotar."
+    }
+  ]
 }

@@ -12,7 +12,8 @@ import { usePageTitle } from "./lib/use-page-title";
 import type { NoteOutput } from "./lib/notes-api";
 
 const periods = [7, 30, 90] as const;
-const periodOptions = periods.map((days) => ({ value: days, label: `${days}d`, accessibleLabel: `${days} dias` }));
+// Texto visível = nome acessível (WCAG 2.5.3): "30d" com aria-label "30 dias" divergia.
+const periodOptions = periods.map((days) => ({ value: days, label: `${days} dias` }));
 const numberFormat = new Intl.NumberFormat("pt-BR");
 const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
 const spaces = [

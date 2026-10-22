@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./fonts.css";
 @import "./typography.css";
+@import "./components/controls.css";
 
 * { box-sizing: border-box; }
 html, body, #root { min-width: 320px; height: 100%; margin: 0; overflow: hidden; }

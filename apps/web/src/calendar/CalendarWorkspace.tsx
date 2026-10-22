@@ -61,22 +61,31 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
     return () => abort.abort();
   }, [loadNotes, google, ownerId, calendar.connectivity]);
 
-  // Troca de período/modo: entrada curta da vista; sem movimento quando o sistema pede movimento reduzido.
+  // Troca de período/modo (ease-in-out): anterior/próximo desliza no sentido da navegação; troca de modo ou
+  // "Hoje" só funde. Sem movimento quando o sistema pede movimento reduzido; o contexto é revertido a cada troca.
   const viewKey = `${mode}:${anchor.year}-${anchor.month}-${anchor.day}`;
+  const direction = useRef(0);
+  const periodRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const element = viewRef.current;
     if (!element) return;
+    const offset = direction.current * 28;
+    direction.current = 0;
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.fromTo(element, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .2, ease: "power2.out", clearProps: "opacity,transform" });
+      gsap.fromTo(element, { opacity: 0, x: offset, y: offset ? 0 : 6 }, { opacity: 1, x: 0, y: 0, duration: .32, ease: "power2.inOut", clearProps: "opacity,transform" });
+      if (periodRef.current) gsap.fromTo(periodRef.current, { opacity: 0, x: offset / 2 }, { opacity: 1, x: 0, duration: .28, ease: "power2.inOut", clearProps: "opacity,transform" });
     });
     return () => media.revert();
   }, [viewKey]);
+  const go = (step: -1 | 1) => { direction.current = step; setAnchor(shift(mode, anchor, step)); };
 
   const events = useMemo(() => calendar.events.map((item) => item.event), [calendar.events]);
   const open = useCallback((event: CalendarEventOutput) => { setEditing({ key: ++counter.current, entry: calendar.statusOf.get(event.id) ?? null, day: anchor }); setFormOpen(true); }, [calendar.statusOf, anchor]);
   const openNew = (day: CalendarDate = anchor) => { setEditing({ key: ++counter.current, entry: null, day }); setFormOpen(true); };
-  const pickDay = (day: CalendarDate) => { setAnchor(day); setMode("day"); };
+  // Callbacks estáveis: as vistas são memo e não re-renderizam quando só o modal ou o status do Google mudam.
+  const pickDay = useCallback((day: CalendarDate) => { setAnchor(day); setMode("day"); }, [setAnchor, setMode]);
+  const pickMonth = useCallback((month: number) => { setAnchor((current) => ({ ...current, month, day: 1 })); setMode("month"); }, [setAnchor, setMode]);
 
   const submit = async (draft: EventDraft) => {
     const entry = editing?.entry;
@@ -84,14 +93,12 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
     else await calendar.submit({ kind: "create", eventId: crypto.randomUUID(), draft });
   };
 
-  const pending = calendar.ops.filter((op) => op.state === "pending").length;
-  const conflicts = calendar.ops.filter((op) => op.state === "conflict").length;
-  const rejected = calendar.ops.filter((op) => op.state === "rejected").length;
+  const { pending, conflicts, rejected } = useMemo(() => calendar.ops.reduce((count, op) => ({ ...count, pending: count.pending + Number(op.state === "pending"), conflicts: count.conflicts + Number(op.state === "conflict"), rejected: count.rejected + Number(op.state === "rejected") }), { pending: 0, conflicts: 0, rejected: 0 }), [calendar.ops]);
   const offline = calendar.connectivity === "offline";
   // Piso do servidor (Retry-After): "Tentar agora" não o antecipa, então a tela diz até quando ele vale.
   const waitUntil = Math.max(0, ...calendar.ops.filter((op) => op.state === "pending").map((op) => op.notBefore));
 
-  const days = mode === "day" ? [anchor] : Array.from({ length: 7 }, (_, index) => addDays(visibleDays("week", anchor).first, index));
+  const days = useMemo(() => mode === "day" ? [anchor] : Array.from({ length: 7 }, (_, index) => addDays(visibleDays("week", anchor).first, index)), [mode, anchor]);
   const today = todayLocal();
   const isToday = anchor.year === today.year && anchor.month === today.month && anchor.day === today.day;
 
@@ -115,28 +122,28 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       <div className="calendar-toolbar">
         <ButtonGroup label="Visualização" options={modes} value={mode} onChange={setMode as (value: ViewMode) => void} />
         <div className="calendar-nav" role="group" aria-label="Período">
-          <button type="button" className="calendar-icon-button" aria-label="Período anterior" onClick={() => setAnchor(shift(mode, anchor, -1))}><ChevronLeft size={16} aria-hidden="true" /></button>
+          <button type="button" className="calendar-icon-button" aria-label="Período anterior" onClick={() => go(-1)}><ChevronLeft size={16} aria-hidden="true" /></button>
           <button type="button" className="calendar-today" onClick={() => setAnchor(today)} disabled={isToday && mode === "day"}>Hoje</button>
-          <button type="button" className="calendar-icon-button" aria-label="Próximo período" onClick={() => setAnchor(shift(mode, anchor, 1))}><ChevronRight size={16} aria-hidden="true" /></button>
-          <strong className="calendar-period" aria-live="polite">{periodLabel(mode, anchor)}</strong>
+          <button type="button" className="calendar-icon-button" aria-label="Próximo período" onClick={() => go(1)}><ChevronRight size={16} aria-hidden="true" /></button>
+          <strong className="calendar-period" ref={periodRef} aria-live="polite">{periodLabel(mode, anchor)}</strong>
         </div>
         <button type="button" className="button calendar-new" onClick={() => openNew()}><Plus size={14} aria-hidden="true" />&nbsp;Novo evento</button>
       </div>
 
-      <div className="calendar-layout">
+      <div className="calendar-layout" data-mode={mode}>
         <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} />
         <div className="calendar-view" ref={viewRef} aria-label={`Visualização por ${modes.find((item) => item.value === mode)?.label.toLowerCase()}`}>
           {(mode === "day" || mode === "week") && <TimeGrid days={days} events={events} statusOf={calendar.statusOf} onOpen={open} onPickDay={mode === "week" ? pickDay : undefined} />}
           {mode === "month" && <MonthView anchor={anchor} events={events} statusOf={calendar.statusOf} onOpen={open} onPickDay={pickDay} />}
-          {mode === "year" && <YearView anchor={anchor} events={events} onPickMonth={(month) => { setAnchor({ ...anchor, month, day: 1 }); setMode("month"); }} onPickDay={pickDay} />}
+          {mode === "year" && <YearView anchor={anchor} events={events} onPickMonth={pickMonth} onPickDay={pickDay} />}
         </div>
-      </div>
 
       <GooglePanel status={status} error={statusError}
         onConnect={google.connect ? async (mode, onFinalizing) => { const connected = await google.connect!(mode, onFinalizing); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
         onCancel={google.cancelConnect}
         onDisconnect={google.disconnect ? async () => { const disconnected = await google.disconnect!(); if (isCurrent?.() === false) return; setStatus(disconnected); calendar.refreshNow(); } : undefined}
         onSync={async () => { const result = await google.sync(); setStatus(await google.getStatus().catch(() => status)); calendar.refreshNow(); return result; }} />
+      </div>
 
       {editing && (
         <EventForm

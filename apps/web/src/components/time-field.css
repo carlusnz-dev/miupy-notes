@@ -1,0 +1,8 @@
+.time-field { position: relative; display: grid; gap: 8px; min-width: 0; }
+.time-control { display: flex; align-items: center; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); background: var(--color-background); }
+.time-control:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.time-control[data-invalid] { border-color: var(--color-text); }
+.time-field .time-control input, .time-field .time-control input:focus-visible { flex: 1; width: 100%; min-width: 0; padding: 10px 12px; border: 0; outline: 0; color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; }
+.time-field button.time-toggle { flex: none; display: grid; place-items: center; width: 40px; height: 38px; padding: 0; border: 0; border-radius: 0 var(--radius-small) var(--radius-small) 0; color: var(--color-muted); background: transparent; cursor: pointer; }
+.time-field button.time-toggle:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-raised); }
+.time-list .select-option { font-variant-numeric: tabular-nums; }

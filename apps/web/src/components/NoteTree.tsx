@@ -6,6 +6,7 @@ import { MAX_FOLDER_NAME, type FolderOutput } from "../lib/notes-folders-api";
 import { reducedMotion } from "../lib/notes-motion";
 import { folderChoices, type NotesTree, type TreeFolder } from "../lib/notes-tree";
 import Badge from "./Badge";
+import Select from "./Select";
 import "./note-tree.css";
 
 type Action<T extends unknown[]> = (...args: T) => Promise<void> | void;
@@ -146,21 +147,14 @@ export default function NoteTree({ tree, renameRequest = null, disabled = false,
       notes.find((note) => note.id === id) ?? folders.reduce<NoteMetadataOutput | undefined>((found, node) => found ?? walk(node.notes, node.folders), undefined);
     return walk(tree.notes, tree.folders);
   }
-  // Função (não componente): definida por render, um componente remontaria o <select> e perderia o foco.
+  // Função (não componente): definida por render, um componente remontaria o seletor e perderia o foco.
   function moveSelect({ label, current, onPick }: { label: string; current: string | null; onPick: (folderId: string | null) => void }) {
+    const options = [{ value: "", label: "Raiz" }, ...folderChoices(tree).map((choice) => ({ value: choice.id, label: `${"\u00a0\u00a0".repeat(choice.depth)}${choice.name}` }))];
     return (
-      <select
-        className="tree-move"
-        aria-label={`Mover ${label} para`}
-        autoFocus
-        value={current ?? ""}
-        onChange={(event) => { setMoving(null); onPick(event.target.value || null); }}
-        onBlur={() => setMoving(null)}
-        onKeyDown={(event) => { if (event.key === "Escape") setMoving(null); }}
-      >
-        <option value="">Raiz</option>
-        {folderChoices(tree).map((choice) => <option key={choice.id} value={choice.id}>{"  ".repeat(choice.depth)}{choice.name}</option>)}
-      </select>
+      <div className="tree-move">
+        <Select label={`Mover ${label} para`} hideLabel autoFocus defaultOpen value={current ?? ""} options={options}
+          onChange={(value) => { setMoving(null); onPick(value || null); }} onDismiss={() => setMoving(null)} />
+      </div>
     );
   }
 

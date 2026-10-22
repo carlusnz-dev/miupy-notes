@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { ArrowLeft, Save, Trash2, Settings, Type } from "lucide-react";
 import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
 import TagInput from "./components/TagInput";
-import Modal from "./components/Modal";
+import ConfirmDialog from "./components/ConfirmDialog";
 import { SkeletonBody } from "./components/Skeleton";
 import type { ApiError } from "./lib/api-client";
 import { getAuthSessionVersion, useAuth } from "./lib/auth";
@@ -52,7 +52,6 @@ function NoteEditorSession() {
   const sample = useMemo(() => previewNote(searchParams.get("estado")), [searchParams]);
   const editorRef = useRef<LiveMarkdownEditorHandle>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const noteQuery = useNote(id);
   const deleteMutation = useDeleteNote();
   const preferences = useEditorPreferences();
@@ -263,14 +262,9 @@ function NoteEditorSession() {
         </div>
       </div>
 
-      <Modal open={confirmDelete} title="Excluir esta nota?" onClose={() => setConfirmDelete(false)} busy={deleting} initialFocusRef={cancelDeleteRef}>
+      <ConfirmDialog open={confirmDelete} title="Excluir esta nota?" confirmLabel="Excluir definitivamente" busyLabel="Excluindo…" busy={deleting} error={deleteError} onConfirm={() => void remove()} onCancel={() => setConfirmDelete(false)}>
         <p>A exclusão é definitiva: ainda não há lixeira.</p>
-        {deleteError && <p role="alert">{deleteError}</p>}
-        <div className="modal-actions">
-          <button ref={cancelDeleteRef} type="button" className="button button-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancelar</button>
-          <button type="button" className="button" onClick={() => void remove()} disabled={deleting}>{deleting ? "Excluindo…" : "Excluir definitivamente"}</button>
-        </div>
-      </Modal>
+      </ConfirmDialog>
 
       {recovered && (dirty || (view && view.status !== "synced")) && (
         <div className="state-panel editor-banner" role="status">

@@ -1,3 +1,5 @@
 # Estilo
 
 `tokens.json` é a base visual provisória para o frontend; `referencias.json` registra fontes externas e a interpretação aplicada ao produto. As fontes Inter (variável, 100–900) e Instrument Serif (romano e itálico) estão em WOFF2 local em `apps/web/src/assets/fonts/`, com licenças OFL ao lado. O tema é flat: preto, branco e cinzas, superfícies sólidas e estado por fundo/borda; o mesh é uma camada decorativa discreta. Validação visual feita em 2026-10-18 com Chromium headless (ver `docs/relatorios/2026-10-18_sessao-03.md`). Ao desenhar telas, verifique contraste, teclado, larguras diferentes e movimento reduzido.
+
+`referencias/` guarda material de pesquisa, não usado pelo app: `imagens/` com capturas próprias de páginas públicas (origem, data e uso em `referencias.json` → `capturedReferences`) e `fontes/` só com fontes OFL/Apache acompanhadas do arquivo de licença (`fontCandidates`). Silvex e fontes comerciais nunca entram aqui.
