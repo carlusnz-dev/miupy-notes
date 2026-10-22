@@ -70,9 +70,11 @@ test("o state é de uso único, expira e deve casar com o redirectUri", async ()
   await assert.rejects(kit.integration.connect("bob", { state: fourth.state, code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
 });
 
-test("consentimento granular: sem o escopo pedido não conecta e revoga o token recebido", async () => {
+test("consentimento granular: sem o escopo pedido não conecta e revoga o token recebido", async (t) => {
   const kit = createKit();
+  const put = t.mock.method(kit.credentials, "put");
   await assert.rejects(connect(kit, "reflect", ["openid"]), { code: "SCOPE_NOT_GRANTED" });
+  assert.equal(put.mock.callCount(), 0);
   assert.deepEqual(kit.oauth.revoked, ["refresh-secret"]);
   assert.equal(await kit.credentials.get(owner), null);
   assert.equal((await kit.integration.status(owner)).state, "not_connected");

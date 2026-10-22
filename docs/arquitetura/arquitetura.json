@@ -68,7 +68,7 @@
       "id": "calendar",
       "path": "apps/api/src/modules/calendar",
       "status": "partial",
-      "role": "Planner web, CRUD autenticado/versionado, criação idempotente por UUID, relações e cache/outbox IndexedDB por conta. Composição local Linux opt-in com Secret Service backend e consentimento Calendar separado no Tauri (PKCE/state atômico/loopback/cancelamento até a fase final). Modo leitura ou escrita consentida: editar/excluir espelhos com ETag/PATCH e enviar cópias locais; salvar/excluir acompanha vínculo ativo. PATCH preserva campos remotos inalterados, inclusive textos truncados na exibição. Retry-After preservado. Carga inicial de 30 dias passados e 366 futuros, incremental sob demanda; não é espelho completo nem janela móvel automática. Connect/disconnect serializados somente por proprietário no processo local. Sessão 13: API 163 aprovados/9 ignorados, web 160/160, Rust 9/9 e Chromium sintético; sem conta Google/cofre/consentimento nativo real, DynamoDB Local nesta frente ou AWS. Lambda sem adaptador; faltam coordenação distribuída, aviso de pendências no logout e exportação/restauração."
+      "role": "Planner web, CRUD autenticado/versionado, criação idempotente por UUID, relações e cache/outbox IndexedDB por conta. Composição local Linux opt-in com Secret Service backend e consentimento Calendar separado no Tauri (PKCE/state atômico/loopback/cancelamento até a fase final). Modo leitura ou escrita consentida: editar/excluir espelhos com ETag/PATCH e enviar cópias locais; salvar/excluir acompanha vínculo ativo. PATCH preserva campos remotos inalterados, inclusive textos truncados na exibição. Retry-After preservado. Carga inicial de 30 dias passados e 366 futuros, incremental sob demanda; não é espelho completo nem janela móvel automática. Connect/disconnect serializados somente por proprietário no processo local. Sessão 13: API 163 aprovados/9 ignorados, web 160/160, Rust 9/9 e Chromium sintético; sem conta Google/cofre/consentimento nativo real, DynamoDB Local nesta frente ou AWS. Lambda sem adaptador; faltam coordenação distribuída, aviso de pendências no logout e exportação/restauração. Configuração local pode reutilizar cliente OAuth Desktop do login com opt-in secret-service; fallback de segredo somente entre IDs iguais. Consentimento e cofres separados, sem migração de tokens; revogação Google pode invalidar login/Calendar do mesmo projeto. Fallback e formulários OAuth verificados com fetch falso; sem diagnóstico do ambiente real."
     }
   ],
   "contracts": {
@@ -84,7 +84,8 @@
     "docs/decisoes/2026-10-18_identidade.md",
     "docs/decisoes/2026-10-19_fluxo-git-e-interface.md",
     "docs/decisoes/2026-10-20_autosave-duravel.md",
-    "docs/decisoes/2026-10-22_calendar-local-oauth.md"
+    "docs/decisoes/2026-10-22_calendar-local-oauth.md",
+    "docs/decisoes/2026-10-22_calendar-oauth-client-reuse.md"
   ],
   "deployedResources": []
 }
