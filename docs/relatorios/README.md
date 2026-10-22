@@ -37,3 +37,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Calendar — revisão independente do snapshot | [relatório](2026-10-22_calendar-revisao.md) |
 | 2026-10-22 | Calendar — validação final independente | [relatório](2026-10-22_calendar-validacao-final.md) |
 | 2026-10-22 | Continuidade — AWS, Terraform e IAM | [prompt](2026-10-22_prompt-aws-terraform.md) |
+| 2026-10-22 | 15 — integração das pendências Git | [relatório](2026-10-22_sessao-15.md) |

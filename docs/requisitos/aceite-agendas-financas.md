@@ -6,7 +6,7 @@ Checklist de experiência solicitado em 2026-10-21. Os itens abaixo são critér
 |---|---|
 | Agendas — planner | Entrada prioriza próximos eventos; hoje e navegação de período são claros. Modos dia, semana, mês e ano funcionam sem perder seleção. |
 | Cronograma | Dia/semana exibem duração, horário e sobreposição em blocos; eventos de dia inteiro ficam separados. Evento atravessando meia-noite aparece nos dias corretos. |
-| Formulário | Criar/editar título, descrição, local, início/fim, fuso e dia inteiro; rejeitar fim anterior/igual ao início. Não normalizar silenciosamente horários inválidos. |
+| Formulário | Criar/editar título, descrição, local, início/fim, fuso e dia inteiro; com hora, rejeitar fim anterior/igual ao início; dia inteiro usa intervalo inclusivo, podendo começar e terminar na mesma data. Não normalizar silenciosamente horários inválidos. |
 | Relações internas | Vincular somente notas autorizadas. Biblioteca indisponível não aparece como relação funcional; IDs de outro usuário não revelam existência. |
 | Calendar — espelho | Consentimento de leitura separado do login; calendário/origem, última sincronização e erro visíveis. Paginar até o fim e avançar cursor só após proteção dos dados. |
 | Calendar — refletor | Escrita consentida separadamente; criação repetida não duplica, atualização respeita versão/ETag e conflito fica visível. Desconectar interrompe novas escritas. |
