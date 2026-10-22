@@ -30,3 +30,9 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-21 | Finanças — contas e balanços | [relatório](2026-10-21_finance-planner.md) |
 | 2026-10-21 | Calendar — planner e adaptadores Google | [relatório](2026-10-21_calendar-planner.md) |
 | 2026-10-21 | 12 — Calendar, correções e integração | [relatório](2026-10-21_sessao-12.md) |
+| 2026-10-22 | 13 — limpeza Orca/Git e continuidade | [relatório](2026-10-22_sessao-13.md) |
+| 2026-10-22 | Calendar — sync e consentimento desktop | [relatório](2026-10-22_calendar-sync.md) |
+| 2026-10-22 | Design — desktop, mobile e movimento | [relatório](2026-10-22_design-validacao.md) |
+| 2026-10-22 | Calendar — revisão independente do snapshot | [relatório](2026-10-22_calendar-revisao.md) |
+| 2026-10-22 | Calendar — validação final independente | [relatório](2026-10-22_calendar-validacao-final.md) |
+| 2026-10-22 | Continuidade — AWS, Terraform e IAM | [prompt](2026-10-22_prompt-aws-terraform.md) |
