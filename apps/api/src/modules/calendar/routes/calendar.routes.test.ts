@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createKit, createTestServer, knownNote } from "../calendar.test-kit.js";
 import { GoogleApiError } from "../google/google-calendar.client.js";
-import { SCOPE_MIRROR } from "../google/google-oauth.js";
+import { SCOPE_MIRROR, SCOPE_REFLECT } from "../google/google-oauth.js";
 
 const kit = createKit();
 const server = createTestServer(kit);
@@ -183,4 +183,41 @@ test("sync expõe Retry-After do Google no HTTP 429 e 502 sem mudar o envelope",
     assert.equal(typeof body.error.requestId, "string");
     assert.equal(JSON.stringify(body).includes("refresh-secret"), false);
   }
+});
+
+test("redirect OAuth recusa destino externo, userinfo, path, query e fragmento", async () => {
+  for (const redirectUri of ["https://example.test/callback", "http://localhost:1234/callback", "http://user@127.0.0.1:1234/callback", "http://127.0.0.1:1234/other", "http://127.0.0.1:1234/callback?x=1", "http://127.0.0.1:1234/callback#x"]) {
+    const response = await call("redirect-test", "/google/authorization", { method: "POST", body: { mode: "mirror", codeChallenge: "a".repeat(43), redirectUri } });
+    assert.equal(response.status, 400, redirectUri);
+  }
+});
+
+
+test("POST/PATCH com envio explícito reconcilia falha Google e DELETE refletido aceita repetição remota", async () => {
+  const owner = "writer";
+  kit.oauth.grantedScopes = [SCOPE_REFLECT];
+  const redirectUri = "http://127.0.0.1:1234/callback";
+  const { state } = await kit.integration.authorize(owner, { mode: "reflect", redirectUri, codeChallenge: "a".repeat(43) });
+  await kit.integration.connect(owner, { state, redirectUri, codeVerifier: "b".repeat(43), code: "synthetic-code" });
+  const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  kit.google.failures.insert = [new GoogleApiError("unavailable")];
+  const body = timed({ id, sendToGoogle: true });
+  assert.equal((await call(owner, "/events", { method: "POST", body })).status, 502);
+  assert.equal((await call(owner, "/events", { method: "POST", body })).status, 200);
+  let current = await kit.repository.findById(owner, id); assert.ok(current?.reflection);
+  kit.google.failures.update = [new GoogleApiError("unavailable")];
+  const patch = { version: current.version, title: "Editado", sendToGoogle: true };
+  assert.equal((await call(owner, `/events/${id}`, { method: "PATCH", body: patch })).status, 502);
+  assert.equal((await call(owner, `/events/${id}`, { method: "PATCH", body: patch })).status, 200);
+  current = await kit.repository.findById(owner, id); assert.ok(current?.reflection);
+  // DELETE remoto confirmado, mas falha local: a referência permanece e o retry tolera 404 remoto.
+  const remove = kit.repository.delete.bind(kit.repository);
+  let failed = false;
+  kit.repository.delete = async (...args) => { if (args[1] === id && !failed) { failed = true; throw new Error("synthetic persistence failure"); } return remove(...args); };
+  try {
+    assert.equal((await call(owner, `/events/${id}?version=${current.version}`, { method: "DELETE" })).status, 500);
+    assert.ok((await kit.repository.findById(owner, id))?.reflection);
+    assert.equal((await call(owner, `/events/${id}?version=${current.version}`, { method: "DELETE" })).status, 204);
+  } finally { kit.repository.delete = remove; }
+  assert.equal(await kit.repository.findById(owner, id), null);
 });

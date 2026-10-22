@@ -24,7 +24,7 @@ export const draftOf = (event: CalendarEventOutput): EventDraft => ({
 const linkKeys = (draft: Pick<EventDraft, "links">) => draft.links.map((link) => `${link.kind}:${link.id}`).sort().join(",");
 /** Mesmo conteúdo editável (ignora versão e datas de gravação): decide se um envio já aconteceu. */
 export function sameContent(event: CalendarEventOutput, draft: EventDraft): boolean {
-  return event.title === draft.title && event.description === draft.description && event.location === draft.location && event.allDay === draft.allDay
+  return ((!draft.sendToGoogle && !event.reflection) || event.reflection?.inSync === true) && event.title === draft.title && event.description === draft.description && event.location === draft.location && event.allDay === draft.allDay
     && event.start === draft.start && event.end === draft.end && event.timeZone === draft.timeZone && linkKeys(event) === linkKeys(draft);
 }
 
@@ -165,7 +165,7 @@ async function classify(store: CalendarStore, remote: CalendarRemote, op: Outbox
       else { await save({ attempts: op.attempts + 1, lastError: errorCode(lookup), nextAttemptAt: Math.max(at + backoff(op.attempts + 1), op.notBefore) }); return "retry"; }
     }
     if (op.kind === "delete" && server === null) { await store.removeEvents(op.ownerId, [op.eventId]); await store.removeOp(op.ownerId, op.eventId, op.rev); return "done"; }
-    if (op.draft && server && sameContent(server, op.draft)) { await store.putEvents(op.ownerId, [server]); await store.removeOp(op.ownerId, op.eventId, op.rev); return "done"; }
+    if (errorCode(error) !== "GOOGLE_CONFLICT" && op.draft && server && sameContent(server, op.draft)) { await store.putEvents(op.ownerId, [server]); await store.removeOp(op.ownerId, op.eventId, op.rev); return "done"; }
     await save({ state: "conflict", lastError: errorCode(error), serverCopy: server, nextAttemptAt: 0 });
     return "conflict";
   }

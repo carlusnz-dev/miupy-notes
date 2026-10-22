@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
+import { normalizeTimes } from "../domain/event-time.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
 import type { GoogleConnection, GoogleMode } from "../domain/google-connection.js";
-import type { AuthorizeGoogleInput, ConnectGoogleInput } from "../dto/input.js";
+import type { AuthorizeGoogleInput, ConnectGoogleInput, UpdateEventInput } from "../dto/input.js";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../dto/output.js";
 import { GoogleApiError, type GoogleCalendarClient, type GoogleEvent } from "../google/google-calendar.client.js";
 import { OWN_EVENT_PROPERTY, googleIdFor, mirrorId, sameRemoteContent, toGoogleBody, toMirrorEvent } from "../google/google-mapping.js";
@@ -16,8 +17,6 @@ const CALENDAR_ID = "primary";
 const AUTHORIZATION_TTL_MS = 10 * 60_000;
 /** Teto de páginas por sincronização: acima disso o cursor não é gravado e o usuário vê o erro, em vez de um espelho parcial "em dia". */
 const MAX_PAGES = 40;
-/** Janela da primeira sincronização completa (o Google proíbe `timeMin` nas incrementais, então ela só vale aqui). */
-const FULL_SYNC_PAST_DAYS = 30;
 
 const notConfigured = () => new AppError(409, "INTEGRATION_NOT_CONFIGURED", "A integração com o Google Calendar não está configurada neste servidor.");
 const notConnected = () => new AppError(409, "INTEGRATION_NOT_CONNECTED", "Conecte o Google Calendar antes de continuar.");
@@ -26,9 +25,14 @@ const googleConflict = () => new AppError(409, "GOOGLE_CONFLICT", "O evento mudo
 const versionConflict = () => new AppError(409, "CONFLICT", "O evento foi alterado por outra operação. Recarregue e tente de novo.");
 
 const scopesFor = (mode: GoogleMode) => (mode === "reflect" ? [SCOPE_REFLECT] : [SCOPE_MIRROR]);
-const sameSecret = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const sameSecret = (a: string, b: string) => {
+  const left = Buffer.from(a), right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+};
 
 export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
+  private readonly authorizationRuns = new Map<string, Promise<unknown>>();
+
   constructor(repository: CalendarRepository, private readonly google: GoogleIntegrationDeps | null, private readonly now: () => Date = () => new Date()) { super(repository); }
 
   async status(ownerId: string): Promise<GoogleStatusOutput> {
@@ -49,11 +53,14 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return { authorizationUrl: google.oauth.authorizationUrl({ state, codeChallenge: input.codeChallenge, redirectUri: input.redirectUri, scopes: scopesFor(input.mode) }), state, expiresAt };
   }
 
-  async connect(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
+  connect(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
+    return this.serializeAuthorization(ownerId, () => this.connectGrant(ownerId, input));
+  }
+
+  private async connectGrant(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
     const google = this.require();
-    const pending = await this.repository.getPending(ownerId);
+    const pending = await this.repository.takePending(ownerId);
     // Uso único: some antes da troca, então um `code` repetido não passa duas vezes.
-    await this.repository.clearPending(ownerId);
     if (!pending || pending.expiresAt <= this.now().toISOString() || !sameSecret(pending.state, input.state) || pending.redirectUri !== input.redirectUri) {
       throw new AppError(400, "VALIDATION_ERROR", "Autorização inválida ou expirada. Comece de novo.");
     }
@@ -73,7 +80,11 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return this.status(ownerId);
   }
 
-  async disconnect(ownerId: string): Promise<GoogleStatusOutput> {
+  disconnect(ownerId: string): Promise<GoogleStatusOutput> {
+    return this.serializeAuthorization(ownerId, () => this.disconnectGrant(ownerId));
+  }
+
+  private async disconnectGrant(ownerId: string): Promise<GoogleStatusOutput> {
     const google = this.require();
     const token = await google.credentials.get(ownerId);
     if (token) await google.oauth.revoke(token);
@@ -83,6 +94,15 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     // Os espelhos saem junto: sem conexão não há como mantê-los atualizados. Cópias enviadas ao Google permanecem lá.
     await this.repository.deleteAllMirrors(ownerId);
     return this.status(ownerId);
+  }
+
+  /** A composição local tem um processo: desconectar aguarda a troca em voo e remove também o grant recém-chegado. */
+  private async serializeAuthorization<T>(ownerId: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.authorizationRuns.get(ownerId);
+    const current = (previous ?? Promise.resolve()).catch(() => undefined).then(run);
+    this.authorizationRuns.set(ownerId, current);
+    try { return await current; }
+    finally { if (this.authorizationRuns.get(ownerId) === current) this.authorizationRuns.delete(ownerId); }
   }
 
   async sync(ownerId: string): Promise<GoogleSyncOutput> {
@@ -146,6 +166,83 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return saved;
   }
 
+  /** Mantém o vínculo até excluir o registro: uma edição concorrente preserva a referência para retry. */
+  async deleteReflected(ownerId: string, id: string, version: number): Promise<void> {
+    const google = this.require();
+    const connection = await this.connected(ownerId);
+    const event = await this.local(ownerId, id);
+    if (event.version !== version || !event.reflection) throw versionConflict();
+    try {
+      try { await google.client.deleteEvent(ownerId, event.reflection.calendarId, event.reflection.googleEventId, event.reflection.etag); }
+      catch (error) { if (!(error instanceof GoogleApiError) || !["not_found", "gone"].includes(error.kind)) throw error; }
+      await this.assertCurrent(ownerId, connection);
+      if (await this.repository.delete(ownerId, id, version) === "conflict") throw versionConflict();
+    } catch (error) { throw await this.failed(ownerId, connection, error, false); }
+  }
+
+  /** Escrita explícita de um espelho: usa o ETag que foi lido, preservando campos remotos fora do formulário. */
+  async updateMirror(ownerId: string, id: string, input: UpdateEventInput): Promise<CalendarEvent> {
+    const google = this.require();
+    const connection = await this.writable(ownerId);
+    const event = await this.mirror(ownerId, id, input.version, connection);
+    if (input.links?.length) throw new AppError(400, "VALIDATION_ERROR", "Relações não são suportadas em eventos do Google.");
+    const times = normalizeTimes({ allDay: input.allDay ?? event.allDay, start: input.start ?? event.start, end: input.end ?? event.end, timeZone: input.timeZone === undefined ? event.timeZone : input.timeZone });
+    const candidate = new CalendarEvent(id, ownerId, input.title ?? event.title, input.description ?? event.description, input.location ?? event.location, times.allDay, times.start, times.end, times.timeZone, [], "google", event.external, null, event.createdAt, this.now().toISOString(), event.version + 1);
+    const mapped = toGoogleBody(candidate);
+    // O espelho limita textos para exibição. Reenviar campos inalterados truncaria o original remoto.
+    const body = {
+      ...(candidate.title !== event.title ? { summary: mapped.summary } : {}),
+      ...(candidate.description !== event.description ? { description: mapped.description } : {}),
+      ...(candidate.location !== event.location ? { location: mapped.location } : {}),
+      ...(candidate.allDay !== event.allDay || candidate.start !== event.start || candidate.end !== event.end || candidate.timeZone !== event.timeZone
+        ? { start: mapped.start, end: mapped.end } : {}),
+    };
+    try {
+      let remote: GoogleEvent;
+      try { remote = await google.client.updateEvent(ownerId, connection.calendarId, event.external!.externalId, body, event.external!.etag); }
+      catch (error) {
+        if (!(error instanceof GoogleApiError) || error.kind !== "precondition_failed") throw error;
+        remote = await google.client.getEvent(ownerId, connection.calendarId, event.external!.externalId);
+        if (!sameRemoteContent(remote, { ...remote, ...body })) throw error;
+      }
+      await this.assertCurrent(ownerId, connection);
+      const saved = toMirrorEvent(remote, { ownerId, calendarId: connection.calendarId, connectionId: connection.connectionId, calendarTimeZone: candidate.timeZone ?? undefined, syncedAt: this.now().toISOString(), existing: event });
+      if (!saved) throw new GoogleApiError("invalid");
+      const result = await this.repository.update(saved, event.version);
+      if (!result) throw versionConflict();
+      return result;
+    } catch (error) { throw await this.failed(ownerId, connection, error, false); }
+  }
+
+  async deleteMirror(ownerId: string, id: string, version: number): Promise<void> {
+    const google = this.require();
+    const connection = await this.writable(ownerId);
+    const event = await this.mirror(ownerId, id, version, connection);
+    try {
+      try { await google.client.deleteEvent(ownerId, connection.calendarId, event.external!.externalId, event.external!.etag); }
+      catch (error) { if (!(error instanceof GoogleApiError) || !["not_found", "gone"].includes(error.kind)) throw error; }
+      await this.assertCurrent(ownerId, connection);
+      const result = await this.repository.delete(ownerId, id, version);
+      if (result === "conflict") throw versionConflict();
+    } catch (error) { throw await this.failed(ownerId, connection, error, false); }
+  }
+
+  private async writable(ownerId: string) {
+    const connection = await this.repository.getConnection(ownerId);
+    if (!connection || connection.mode !== "reflect") throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
+    if (connection.status === "needs_reauth") throw reauth();
+    return connection;
+  }
+
+  private async mirror(ownerId: string, id: string, version: number, connection: GoogleConnection) {
+    const event = await this.repository.findById(ownerId, id);
+    if (!event) throw new AppError(404, "NOT_FOUND", "Evento não encontrado.");
+    if (event.source !== "google" || !event.external || event.external.connectionId !== connection.connectionId) throw versionConflict();
+    if (event.version !== version) throw versionConflict();
+    if (!event.external.etag) throw googleConflict();
+    return event;
+  }
+
   /** A conexão desta operação foi desconectada ou refeita no meio: remove o que ela gravou e informa. */
   private async dropped(ownerId: string, connection: GoogleConnection): Promise<AppError> {
     await this.repository.deleteAllMirrors(ownerId, connection.connectionId);
@@ -207,12 +304,14 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   private async pull(google: GoogleIntegrationDeps, ownerId: string, connection: GoogleConnection, syncToken: string | null) {
     const kind = syncToken ? "incremental" as const : "full" as const;
-    const timeMin = kind === "full" ? new Date(this.now().getTime() - FULL_SYNC_PAST_DAYS * 86_400_000).toISOString() : undefined;
+
+    const timeMin = syncToken ? undefined : new Date(this.now().getTime() - 30 * 86_400_000).toISOString();
+    const timeMax = syncToken ? undefined : new Date(this.now().getTime() + 366 * 86_400_000).toISOString();
     let pageToken: string | undefined;
     let pages = 0, upserted = 0, deleted = 0;
     for (;;) {
       if (pages >= MAX_PAGES) throw new AppError(502, "SYNC_TOO_LARGE", "A sincronização excedeu o limite de páginas. Nada foi marcado como em dia.");
-      const page = await google.client.listEvents(ownerId, connection.calendarId, { syncToken: syncToken ?? undefined, pageToken, timeMin });
+      const page = await google.client.listEvents(ownerId, connection.calendarId, { syncToken: syncToken ?? undefined, pageToken, timeMin, timeMax });
       pages++;
       // Desconectar no meio da sincronização: nada desta página é gravado.
       await this.assertCurrent(ownerId, connection);
@@ -234,7 +333,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     const id = mirrorId(ownerId, calendarId, item.id);
     if (item.status === "cancelled") return (await this.repository.deleteMirror(ownerId, id)) ? "deleted" : "skipped";
     const existing = await this.repository.findById(ownerId, id);
-    if (existing?.external?.etag && existing.external.etag === item.etag) return "skipped";
+    if (existing?.external?.connectionId === connection.connectionId && existing.external.etag && existing.external.etag === item.etag) return "skipped";
     const mirror = toMirrorEvent(item, { ownerId, calendarId, connectionId: connection.connectionId, calendarTimeZone, syncedAt: this.now().toISOString(), existing });
     if (!mirror) return "skipped";
     await this.repository.upsertMirror(mirror);

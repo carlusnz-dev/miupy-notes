@@ -1,10 +1,13 @@
 import { BaseService } from "../../../core/services/base.service.js";
 import type { CalendarEvent } from "../domain/calendar-event.js";
-import type { AuthorizeGoogleInput, ConnectGoogleInput } from "../dto/input.js";
+import type { AuthorizeGoogleInput, ConnectGoogleInput, UpdateEventInput } from "../dto/input.js";
 import type { GoogleAuthorizationOutput, GoogleStatusOutput, GoogleSyncOutput } from "../dto/output.js";
 import { CalendarRepository } from "../repository/calendar.repository.js";
 
 export abstract class GoogleIntegrationService extends BaseService<CalendarEvent, CalendarRepository> {
+  abstract updateMirror(ownerId: string, id: string, input: UpdateEventInput): Promise<CalendarEvent>;
+  abstract deleteReflected(ownerId: string, id: string, version: number): Promise<void>;
+  abstract deleteMirror(ownerId: string, id: string, version: number): Promise<void>;
   abstract status(ownerId: string): Promise<GoogleStatusOutput>;
   abstract authorize(ownerId: string, input: AuthorizeGoogleInput): Promise<GoogleAuthorizationOutput>;
   abstract connect(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput>;

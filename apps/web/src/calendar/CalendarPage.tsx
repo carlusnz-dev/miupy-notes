@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { signIn, useAuth, getOwnerId, getAuthSessionVersion, isCurrentAuthSession } from "../lib/auth";
-import { createCalendarEvent, deleteCalendarEvent, getCalendarEvent, getGoogleStatus, listEventsInRange, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent } from "../lib/calendar-api";
+import { connectGoogle, cancelGoogleConnection, disconnectGoogle, createCalendarEvent, deleteCalendarEvent, getCalendarEvent, getGoogleStatus, listEventsInRange, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent } from "../lib/calendar-api";
 import { listNotesMetadata } from "../lib/notes-api";
 import { usePageTitle } from "../lib/use-page-title";
 import CalendarWorkspace, { type GoogleApi } from "./CalendarWorkspace";
@@ -28,7 +28,7 @@ const remote: RangeRemote = {
   get: (id) => getCalendarEvent(id),
   listRange: (range, signal) => listEventsInRange(range, signal),
 };
-const google: GoogleApi = { getStatus: getGoogleStatus, sync: syncGoogle, reflect: reflectEvent, unreflect: unreflectEvent };
+const google: GoogleApi = { connect: connectGoogle, cancelConnect: cancelGoogleConnection, disconnect: disconnectGoogle, getStatus: getGoogleStatus, sync: syncGoogle, reflect: reflectEvent, unreflect: unreflectEvent };
 
 export default function CalendarPage() {
   usePageTitle("Agendas");

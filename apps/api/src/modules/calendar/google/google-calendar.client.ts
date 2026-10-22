@@ -11,9 +11,9 @@ export type GoogleEvent = {
   end?: GoogleEventTime;
   extendedProperties?: { private?: Record<string, string> };
 };
-export type GoogleEventBody = Omit<GoogleEvent, "etag" | "status"> & { id?: string };
+export type GoogleEventBody = Omit<GoogleEvent, "id" | "etag" | "status"> & { id?: string };
 export type GoogleEventsPage = { items: GoogleEvent[]; nextPageToken?: string; nextSyncToken?: string; timeZone?: string };
-export type ListParams = { syncToken?: string; pageToken?: string; timeMin?: string };
+export type ListParams = { syncToken?: string; pageToken?: string; timeMin?: string; timeMax?: string };
 
 export type GoogleErrorKind =
   | "gone"                 // 410: syncToken inválido (`fullSyncRequired`)

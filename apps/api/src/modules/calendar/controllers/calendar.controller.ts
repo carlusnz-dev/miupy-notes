@@ -2,6 +2,8 @@ import type { Router } from "express";
 import { z } from "zod";
 import { BaseController } from "../../../core/controllers/base.controller.js";
 import { requirePrincipal } from "../../../core/http/principal.js";
+import { normalizeTimes } from "../domain/event-time.js";
+import { AppError } from "../../../core/domain/app-error.js";
 import { CalendarDtoAdapter } from "../dto/adapter.js";
 import { authorizeGoogleInputSchema, connectGoogleInputSchema, createEventInputSchema, deleteEventQuerySchema, listEventsQuerySchema, updateEventInputSchema } from "../dto/input.js";
 import { googleAuthorizationOutputSchema, googleStatusOutputSchema, googleSyncOutputSchema } from "../dto/output.js";
@@ -21,17 +23,43 @@ export class CalendarController extends BaseController<CalendarService> {
       res.json(CalendarDtoAdapter.toListOutput(await this.service.list(owner(res), listEventsQuerySchema.parse(req.query))));
     });
     router.post("/events", async (req, res) => {
-      const { event, created } = await this.service.create(owner(res), createEventInputSchema.parse(req.body));
-      res.status(created ? 201 : 200).json(CalendarDtoAdapter.toOutput(event));
+      const input = createEventInputSchema.parse(req.body);
+      const { event, created } = await this.service.create(owner(res), input);
+      const saved = input.sendToGoogle ? await this.google.reflect(owner(res), event.id) : event;
+      res.status(created ? 201 : 200).json(CalendarDtoAdapter.toOutput(saved));
     });
     router.get("/events/:id", async (req, res) => {
       res.json(CalendarDtoAdapter.toOutput(await this.service.findById(owner(res), idParam(req.params.id))));
     });
     router.patch("/events/:id", async (req, res) => {
-      res.json(CalendarDtoAdapter.toOutput(await this.service.update(owner(res), idParam(req.params.id), updateEventInputSchema.parse(req.body))));
+      const ownerId = owner(res), id = idParam(req.params.id), input = updateEventInputSchema.parse(req.body);
+      const current = await this.service.findById(ownerId, id);
+      let saved;
+      if (current.source === "google") saved = await this.google.updateMirror(ownerId, id, input);
+      else {
+        const send = input.sendToGoogle === true || current.reflection !== null;
+        // Reenvio de gravação local cujo envio ao Google falhou: não repete a edição nem perde a intenção.
+        if (send && current.version !== input.version) {
+          const times = normalizeTimes({ allDay: input.allDay ?? current.allDay, start: input.start ?? current.start, end: input.end ?? current.end, timeZone: input.timeZone === undefined ? current.timeZone : input.timeZone });
+          const fields = { ...input, ...times };
+          const same = (["title", "description", "location", "allDay", "start", "end", "timeZone", "links"] as const).every((key) => fields[key] === undefined || JSON.stringify(fields[key]) === JSON.stringify(current[key]));
+          if (!same) throw new AppError(409, "CONFLICT", "O evento mudou. Recarregue antes de enviar.");
+          saved = current.reflection?.reflectedVersion === current.version ? current : await this.google.reflect(ownerId, id);
+        } else {
+          saved = await this.service.update(ownerId, id, input);
+          if (send) saved = await this.google.reflect(ownerId, id);
+        }
+      }
+      res.json(CalendarDtoAdapter.toOutput(saved));
     });
     router.delete("/events/:id", async (req, res) => {
-      await this.service.delete(owner(res), idParam(req.params.id), deleteEventQuerySchema.parse(req.query).version);
+      const ownerId = owner(res), id = idParam(req.params.id), version = deleteEventQuerySchema.parse(req.query).version;
+      const current = await this.service.findById(ownerId, id);
+      if (current.source === "google") await this.google.deleteMirror(ownerId, id, version);
+      else if (current.reflection) {
+        if (current.version !== version) throw new AppError(409, "CONFLICT", "O evento mudou. Recarregue antes de excluir.");
+        await this.google.deleteReflected(ownerId, id, version);
+      } else await this.service.delete(ownerId, id, version);
       res.status(204).end();
     });
 

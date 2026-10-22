@@ -45,18 +45,20 @@ async function ready() {
 test("incremental envia syncToken e pageToken sem timeMin; completa usa timeMin; sempre singleEvents", async () => {
   const make = await ready();
   const incremental = await make([json(200, { items: [], nextSyncToken: "n" })]);
-  await incremental.client.listEvents("alice", "primary", { syncToken: "s1", pageToken: "p2", timeMin: "2026-01-01T00:00:00Z" });
+  await incremental.client.listEvents("alice", "primary", { syncToken: "s1", pageToken: "p2", timeMin: "2026-01-01T00:00:00Z", timeMax: "2027-01-01T00:00:00Z" });
   const url = new URL(incremental.calls[0].url);
   assert.equal(url.searchParams.get("syncToken"), "s1");
   assert.equal(url.searchParams.get("pageToken"), "p2");
   assert.equal(url.searchParams.get("timeMin"), null);
+  assert.equal(url.searchParams.get("timeMax"), null);
   assert.equal(url.searchParams.get("singleEvents"), "true");
   assert.equal(incremental.calls[0].headers.authorization, "Bearer token-1");
 
   const full = await make([json(200, { items: [], nextSyncToken: "n" })]);
-  await full.client.listEvents("alice", "primary", { timeMin: "2026-01-01T00:00:00Z" });
+  await full.client.listEvents("alice", "primary", { timeMin: "2026-01-01T00:00:00Z", timeMax: "2027-01-01T00:00:00Z" });
   assert.equal(new URL(full.calls[0].url).searchParams.get("timeMin"), "2026-01-01T00:00:00Z");
   assert.equal(new URL(full.calls[0].url).searchParams.get("syncToken"), null);
+  assert.equal(new URL(full.calls[0].url).searchParams.get("timeMax"), "2027-01-01T00:00:00Z");
 });
 
 test("429 e 403 rateLimitExceeded repetem com backoff exponencial e respeitam Retry-After", async () => {
@@ -92,7 +94,7 @@ test("atualizar e excluir enviam If-Match com o ETag; 412 chega como preconditio
   const make = await ready();
   const ok = await make([json(200, event)]);
   await ok.client.updateEvent("alice", "primary", "e1", { id: "e1", summary: "x" }, "\"7\"");
-  assert.equal(ok.calls[0].method, "PUT");
+  assert.equal(ok.calls[0].method, "PATCH");
   assert.equal(ok.calls[0].headers["if-match"], "\"7\"");
   assert.equal(new URL(ok.calls[0].url).searchParams.get("sendUpdates"), "none");
   const removed = await make([new Response(null, { status: 204 })]);
@@ -170,4 +172,29 @@ test("Retry-After de 5xx também volta ao chamador; cabeçalho inválido usa bac
     await invalid.client.listEvents("alice", "primary", {});
     assert.deepEqual(invalid.sleeps, [500]);
   }
+});
+
+
+test("PATCH omite id e limpa o tipo anterior ao trocar entre hora e dia inteiro", async () => {
+  const make = await ready();
+  for (const [start, end, expected] of [
+    [{ date: "2026-11-02" }, { date: "2026-11-03" }, { date: "2026-11-02", dateTime: null, timeZone: null }],
+    [{ dateTime: "2026-11-02T10:00:00Z", timeZone: "UTC" }, { dateTime: "2026-11-02T11:00:00Z", timeZone: "UTC" }, { dateTime: "2026-11-02T10:00:00Z", timeZone: "UTC", date: null }],
+  ] as const) {
+    const s = await make([json(200, event)]);
+    await s.client.updateEvent("alice", "primary", "e1", { summary: "x", start, end }, '"7"');
+    const body = JSON.parse(s.calls[0].body!);
+    assert.deepEqual(body.start, expected);
+    assert.equal("id" in body, false);
+    assert.equal("attendees" in body, false);
+    assert.equal("recurrence" in body, false);
+  }
+});
+
+test("cofre indisponível preserva 503 e não provoca chamada/retry Google", async () => {
+  const { AppError } = await import("../../../core/domain/app-error.js");
+  const s = setup([]);
+  s.credentials.get = async () => { throw new AppError(503, "CREDENTIAL_STORE_UNAVAILABLE", "Cofre indisponível."); };
+  await assert.rejects(s.client.listEvents("alice", "primary", {}), { status: 503, code: "CREDENTIAL_STORE_UNAVAILABLE" });
+  assert.deepEqual(s.calls, []); assert.deepEqual(s.sleeps, []);
 });

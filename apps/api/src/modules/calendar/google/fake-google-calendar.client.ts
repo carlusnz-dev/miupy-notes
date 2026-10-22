@@ -76,7 +76,7 @@ export class FakeGoogleCalendarClient extends GoogleCalendarClient {
     const current = this.events.get(eventId);
     if (!current) throw new GoogleApiError("not_found");
     if (current.etag !== etag) throw new GoogleApiError("precondition_failed");
-    return this.seed({ ...body, id: eventId });
+    return this.seed({ ...current, ...body, id: eventId });
   }
 
   async deleteEvent(_o: string, _c: string, eventId: string, etag: string): Promise<void> {

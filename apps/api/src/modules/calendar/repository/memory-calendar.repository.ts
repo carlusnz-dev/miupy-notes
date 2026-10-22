@@ -73,6 +73,7 @@ export class MemoryCalendarRepository extends CalendarRepository {
     return true;
   }
   async deleteConnection(ownerId: string) { this.connections.delete(ownerId); }
+  async takePending(ownerId: string) { const pending = this.pending.get(ownerId) ?? null; this.pending.delete(ownerId); return pending; }
   async getPending(ownerId: string) { return this.pending.get(ownerId) ?? null; }
   async savePending(ownerId: string, pending: PendingAuthorization) { this.pending.set(ownerId, pending); }
   async clearPending(ownerId: string) { this.pending.delete(ownerId); }
