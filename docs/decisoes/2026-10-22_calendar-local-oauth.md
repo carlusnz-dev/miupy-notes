@@ -1,5 +1,7 @@
 # Calendar local: cofre Linux e consentimento próprio
 
+> Consentimento e cofre superados por [login único](2026-10-22_calendar-login-unico.md).
+
 Estado: aceito para o recorte local, sem conta Google real verificada. RF-05/RF-12 permanecem parciais; RNF-02/RNF-05 orientam as fronteiras.
 
 A API local opta explicitamente por Secret Service via `secret-tool`, separado do keyring de login do Tauri. A chave combina namespace Calendar e hash do proprietário autenticado; refresh tokens trafegam por stdin/pipe e access tokens permanecem em memória. Não adicionamos dependência nativa Node nem gravamos tokens no DynamoDB/frontend. A execução exige sessão Linux com Secret Service desbloqueado e um único processo da API; Lambda não recebe esse adaptador. Secret Service da sessão protege o armazenamento local, mas não constitui isolamento entre processos comprometidos do mesmo usuário do sistema.

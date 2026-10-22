@@ -18,8 +18,10 @@ import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
 
 export type GoogleApi = {
-  connect?: (mode: "mirror" | "reflect", onFinalizing?: () => void) => Promise<GoogleStatusOutput>;
-  cancelConnect?: () => Promise<void>;
+  /** Ativa com os escopos que o login já concedeu. */
+  connect?: () => Promise<GoogleStatusOutput>;
+  /** Refaz o login do Google com o Calendar no modo escolhido (consentimento único, sem OAuth separado). */
+  grant?: (mode: "mirror" | "reflect") => Promise<void>;
   disconnect?: () => Promise<GoogleStatusOutput>;
   getStatus: (signal?: AbortSignal) => Promise<GoogleStatusOutput>;
   sync: () => Promise<GoogleSyncOutput>;
@@ -133,8 +135,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       </div>
 
       <GooglePanel status={status} error={statusError}
-        onConnect={google.connect ? async (mode, onFinalizing) => { const connected = await google.connect!(mode, onFinalizing); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
-        onCancel={google.cancelConnect}
+        onConnect={google.connect ? async (mode) => { if (mode) await google.grant!(mode); const connected = await google.connect!(); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
         onDisconnect={google.disconnect ? async () => { const disconnected = await google.disconnect!(); if (isCurrent?.() === false) return; setStatus(disconnected); calendar.refreshNow(); } : undefined}
         onSync={async () => { const result = await google.sync(); setStatus(await google.getStatus().catch(() => status)); calendar.refreshNow(); return result; }} />
 

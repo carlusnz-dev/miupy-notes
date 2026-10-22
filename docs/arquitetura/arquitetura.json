@@ -20,7 +20,7 @@
       "id": "tauri",
       "path": "src-tauri",
       "status": "partial",
-      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev no Hyprland/Wayland com NVIDIA: npm run tauri:dev:wayland (__NV_DISABLE_EXPLICIT_SYNC=1, mantém DMABUF/GPU); npm run tauri:dev:software (WEBKIT_DISABLE_DMABUF_RENDERER=1) fica como fallback lento, por software. Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth. Sessão 13: comando Calendar OAuth separado do login, PKCE/state/loopback com validação estrita de callback/URL, fase final explícita sem cancelamento; código/verifier passam Rust→API local. 9 testes Rust offline; sem consentimento Calendar real ou execução manual WebKit nesta sessão. Endpoint Calendar restrito a API loopback."
+      "role": "Casca desktop. Login Google em src/auth.rs (PKCE S256, state, loopback 127.0.0.1 efêmero, navegador do sistema, refresh token no keyring, ID token em memória); 7 testes cargo. tauri dev no Hyprland/Wayland com NVIDIA: npm run tauri:dev:wayland (__NV_DISABLE_EXPLICIT_SYNC=1, mantém DMABUF/GPU); npm run tauri:dev:software (WEBKIT_DISABLE_DMABUF_RENDERER=1) fica como fallback lento, por software. Login real verificado em 2026-10-18 (iss https://accounts.google.com; entrada no Secret Service criada); criar nota pela janela verificado pelo proprietário. 404 na janela nativa não verificada; release sem configuração de cliente OAuth. Calendar sem OAuth separado: auth_sign_in aceita calendar (mirror|reflect) e, com GOOGLE_CALENDAR_CREDENTIAL_STORE=login-keyring, o login padrão já pede calendar.events.owned.readonly; comando calendar_oauth removido. 9 testes cargo (login_scopes cobre os escopos); sem consentimento Calendar real, leitura real do keyring pela API ou execução manual WebKit."
     },
     {
       "id": "api",
@@ -68,7 +68,7 @@
       "id": "calendar",
       "path": "apps/api/src/modules/calendar",
       "status": "partial",
-      "role": "Planner web, CRUD autenticado/versionado, criação idempotente por UUID, relações e cache/outbox IndexedDB por conta. Composição local Linux opt-in com Secret Service backend e consentimento Calendar separado no Tauri (PKCE/state atômico/loopback/cancelamento até a fase final). Modo leitura ou escrita consentida: editar/excluir espelhos com ETag/PATCH e enviar cópias locais; salvar/excluir acompanha vínculo ativo. PATCH preserva campos remotos inalterados, inclusive textos truncados na exibição. Retry-After preservado. Carga inicial de 30 dias passados e 366 futuros, incremental sob demanda; não é espelho completo nem janela móvel automática. Connect/disconnect serializados somente por proprietário no processo local. Sessão 13: API 163 aprovados/9 ignorados, web 160/160, Rust 9/9 e Chromium sintético; sem conta Google/cofre/consentimento nativo real, DynamoDB Local nesta frente ou AWS. Lambda sem adaptador; faltam coordenação distribuída, aviso de pendências no logout e exportação/restauração. Configuração local pode reutilizar cliente OAuth Desktop do login com opt-in secret-service; fallback de segredo somente entre IDs iguais. Consentimento e cofres separados, sem migração de tokens; revogação Google pode invalidar login/Calendar do mesmo projeto. Fallback e formulários OAuth verificados com fetch falso; sem diagnóstico do ambiente real."
+      "role": "Planner web, CRUD autenticado/versionado, criação idempotente por UUID, relações e cache/outbox IndexedDB por conta. Composição local Linux opt-in (login-keyring) com login Google único: Calendar pedido no login do Tauri e refresh token do login lido pela API; GooglePanel mostra \"Conectado via sua conta Google\", ativa sem outra tela e só oferece refazer o login se faltarem escopos. Modo leitura ou escrita consentida: editar/excluir espelhos com ETag/PATCH e enviar cópias locais; salvar/excluir acompanha vínculo ativo. PATCH preserva campos remotos inalterados, inclusive textos truncados na exibição. Retry-After preservado. Carga inicial de 30 dias passados e 366 futuros, incremental sob demanda; não é espelho completo nem janela móvel automática. Connect/disconnect serializados somente por proprietário no processo local. Login único (2026-10-22): API 170/9 ignorados, web 160/160, Rust 9/9. Sessão 13: API 163 aprovados/9 ignorados, web 160/160, Rust 9/9 e Chromium sintético; sem conta Google/cofre/consentimento nativo real, DynamoDB Local nesta frente ou AWS. Lambda sem adaptador; faltam coordenação distribuída, aviso de pendências no logout e exportação/restauração. Sempre o cliente OAuth e o refresh token do login (GOOGLE_CALENDAR_CLIENT_ID/SECRET e secret-service removidos); desconectar não revoga, sair da conta revoga login e Calendar. Renovação, escopos e sub verificados com fetch falso; sem diagnóstico do ambiente real."
     }
   ],
   "contracts": {
@@ -85,7 +85,8 @@
     "docs/decisoes/2026-10-19_fluxo-git-e-interface.md",
     "docs/decisoes/2026-10-20_autosave-duravel.md",
     "docs/decisoes/2026-10-22_calendar-local-oauth.md",
-    "docs/decisoes/2026-10-22_calendar-oauth-client-reuse.md"
+    "docs/decisoes/2026-10-22_calendar-oauth-client-reuse.md",
+    "docs/decisoes/2026-10-22_calendar-login-unico.md"
   ],
   "deployedResources": []
 }

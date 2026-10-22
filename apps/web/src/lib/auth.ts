@@ -70,6 +70,22 @@ export async function signIn() {
   }
 }
 
+/**
+ * Refaz o login do Google pedindo o Calendar (`mirror` leitura, `reflect` escrita). É o mesmo consentimento do login,
+ * não um segundo OAuth: o refresh token do cofre é substituído e a sessão continua a mesma conta.
+ */
+export async function grantCalendar(mode: "mirror" | "reflect") {
+  if (state.status !== "signed-in" || state.signingIn) throw new Error(errorMessages.NOT_SIGNED_IN);
+  update({ signingIn: true, error: null });
+  try {
+    await invoke("auth_sign_in", { calendar: mode });
+  } catch (code) {
+    throw new Error(messageFor(code));
+  } finally {
+    update({ signingIn: false });
+  }
+}
+
 export type SignOutResult =
   | { status: "signed-out"; draftsPurged: boolean }
   /** Há rascunhos não sincronizados (`unsynced`; `null` = não foi possível verificar). Repita com `discardDrafts: true` após o usuário confirmar. */

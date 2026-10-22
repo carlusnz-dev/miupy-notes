@@ -169,9 +169,8 @@ async function seedMirror(): Promise<EventBody> {
 
 test("sync expõe Retry-After do Google no HTTP 429 e 502 sem mudar o envelope", async () => {
   kit.oauth.grantedScopes = [SCOPE_MIRROR];
-  const redirectUri = "http://127.0.0.1:53682/callback";
-  const auth = await kit.integration.authorize("alice", { mode: "mirror", redirectUri, codeChallenge: "a".repeat(43) });
-  await kit.integration.connect("alice", { state: auth.state, code: "fake-code", codeVerifier: "b".repeat(43), redirectUri });
+  await kit.credentials.put("alice", "login-refresh-secret");
+  await kit.integration.connect("alice");
   for (const [kind, status, code] of [["rate_limited", 429, "RATE_LIMITED"], ["unavailable", 502, "UPSTREAM_UNAVAILABLE"]] as const) {
     kit.google.failures.list = [new GoogleApiError(kind, 600_001)];
     const response = await call("alice", "/google/sync", { method: "POST", body: {} });
@@ -185,20 +184,36 @@ test("sync expõe Retry-After do Google no HTTP 429 e 502 sem mudar o envelope",
   }
 });
 
-test("redirect OAuth recusa destino externo, userinfo, path, query e fragmento", async () => {
-  for (const redirectUri of ["https://example.test/callback", "http://localhost:1234/callback", "http://user@127.0.0.1:1234/callback", "http://127.0.0.1:1234/other", "http://127.0.0.1:1234/callback?x=1", "http://127.0.0.1:1234/callback#x"]) {
-    const response = await call("redirect-test", "/google/authorization", { method: "POST", body: { mode: "mirror", codeChallenge: "a".repeat(43), redirectUri } });
-    assert.equal(response.status, 400, redirectUri);
-  }
+test("POST /google/connection ativa pelo login sem corpo, recusa corpo extra e o fluxo de autorização por navegador não existe mais", async () => {
+  kit.oauth.grantedScopes = [SCOPE_MIRROR];
+  kit.oauth.subject = "connector";
+  await kit.credentials.put("connector", "login-refresh-secret");
+  assert.equal((await call("connector", "/google/connection", { method: "POST", body: { code: "x", state: "y" } })).status, 400);
+  const connected = await call("connector", "/google/connection", { method: "POST", body: {} });
+  assert.equal(connected.status, 200);
+  const body = await connected.json() as { state: string; mode: string; scopes: string[] };
+  assert.deepEqual([body.state, body.mode, body.scopes], ["connected", "mirror", [SCOPE_MIRROR]]);
+  assert.equal(JSON.stringify(body).includes("login-refresh-secret"), false);
+  assert.equal((await call("connector", "/google/authorization", { method: "POST", body: {} })).status, 404);
 });
 
+test("sem Calendar no login, POST /google/connection responde 409 SCOPE_NOT_GRANTED com mensagem acionável", async () => {
+  kit.oauth.grantedScopes = [];
+  kit.oauth.subject = "no-calendar";
+  await kit.credentials.put("no-calendar", "login-refresh-secret");
+  const response = await call("no-calendar", "/google/connection", { method: "POST", body: {} });
+  assert.equal(response.status, 409);
+  const body = await response.json() as { error: { code: string; message: string } };
+  assert.equal(body.error.code, "SCOPE_NOT_GRANTED");
+  assert.match(body.error.message, /login do Google/);
+});
 
 test("POST/PATCH com envio explícito reconcilia falha Google e DELETE refletido aceita repetição remota", async () => {
   const owner = "writer";
   kit.oauth.grantedScopes = [SCOPE_REFLECT];
-  const redirectUri = "http://127.0.0.1:1234/callback";
-  const { state } = await kit.integration.authorize(owner, { mode: "reflect", redirectUri, codeChallenge: "a".repeat(43) });
-  await kit.integration.connect(owner, { state, redirectUri, codeVerifier: "b".repeat(43), code: "synthetic-code" });
+  kit.oauth.subject = owner;
+  await kit.credentials.put(owner, "login-refresh-secret");
+  await kit.integration.connect(owner);
   const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   kit.google.failures.insert = [new GoogleApiError("unavailable")];
   const body = timed({ id, sendToGoogle: true });

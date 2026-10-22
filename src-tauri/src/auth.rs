@@ -2,6 +2,7 @@
 //! navegador do sistema e redirect loopback. Veja docs/decisoes/2026-10-18_identidade.md.
 //!
 //! Só o refresh token vai para o cofre do sistema; o ID token fica em memória.
+//! O mesmo login pede o escopo Calendar (consentimento único): a API local lê o refresh token deste cofre.
 
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -19,6 +20,9 @@ const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const REVOKE_ENDPOINT: &str = "https://oauth2.googleapis.com/revoke";
 const SCOPES: &str = "openid email profile";
+/// Escopos Calendar do modo espelho (leitura) e refletor (escrita); iguais a `SCOPE_MIRROR`/`SCOPE_REFLECT` da API.
+const CALENDAR_SCOPE_MIRROR: &str = "https://www.googleapis.com/auth/calendar.events.owned.readonly";
+const CALENDAR_SCOPE_REFLECT: &str = "https://www.googleapis.com/auth/calendar.events.owned";
 const KEYRING_SERVICE: &str = "com.miupy.notes";
 const KEYRING_USER: &str = "google-refresh-token";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -93,6 +97,26 @@ pub fn load_dev_env() {
     }
 }
 
+/// Escopos do login. Sem `calendar` explícito, `GOOGLE_CALENDAR_CREDENTIAL_STORE=login-keyring` (o mesmo opt-in da API)
+/// inclui o Calendar somente leitura; o refletor só vem de uma escolha explícita na tela do Calendar.
+fn login_scopes(calendar: Option<&str>, calendar_enabled: bool) -> Result<String, String> {
+    let calendar = match calendar {
+        Some("mirror") => Some(CALENDAR_SCOPE_MIRROR),
+        Some("reflect") => Some(CALENDAR_SCOPE_REFLECT),
+        Some(_) => return Err(AUTH_FAILED.to_string()),
+        None if calendar_enabled => Some(CALENDAR_SCOPE_MIRROR),
+        None => None,
+    };
+    Ok(match calendar {
+        Some(scope) => format!("{SCOPES} {scope}"),
+        None => SCOPES.to_string(),
+    })
+}
+
+fn calendar_login_enabled() -> bool {
+    std::env::var("GOOGLE_CALENDAR_CREDENTIAL_STORE").is_ok_and(|value| value.trim() == "login-keyring")
+}
+
 fn config() -> Result<Config, String> {
     let client_id = std::env::var("GOOGLE_CLIENT_ID")
         .ok()
@@ -107,7 +131,7 @@ fn config() -> Result<Config, String> {
     })
 }
 
-pub(crate) fn generate_verifier() -> Result<String, String> {
+fn generate_verifier() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|_| {
         eprintln!("auth: falha ao gerar bytes aleatórios");
@@ -116,7 +140,7 @@ pub(crate) fn generate_verifier() -> Result<String, String> {
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
-pub(crate) fn code_challenge(verifier: &str) -> String {
+fn code_challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
@@ -125,13 +149,14 @@ fn authorization_url(
     redirect_uri: &str,
     challenge: &str,
     state: &str,
+    scopes: &str,
     prompt_consent: bool,
 ) -> String {
     let mut params = vec![
         ("client_id", client_id),
         ("redirect_uri", redirect_uri),
         ("response_type", "code"),
-        ("scope", SCOPES),
+        ("scope", scopes),
         ("code_challenge", challenge),
         ("code_challenge_method", "S256"),
         ("state", state),
@@ -337,7 +362,7 @@ async fn read_request_line(stream: &mut TcpStream) -> Option<String> {
 }
 
 /// Espera o redirect do Google até receber um callback com o state esperado.
-pub(crate) async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
+async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
     loop {
         let Ok((mut stream, _)) = listener.accept().await else {
             continue;
@@ -394,9 +419,14 @@ pub async fn auth_status(auth: State<'_, AuthState>) -> Result<AuthStatus, Strin
 }
 
 #[tauri::command]
-pub async fn auth_sign_in(auth: State<'_, AuthState>) -> Result<(), String> {
+pub async fn auth_sign_in(
+    auth: State<'_, AuthState>,
+    calendar: Option<String>,
+) -> Result<(), String> {
     let config = config()?;
-    // Sem refresh token no cofre, força a tela de consentimento para que o Google emita um.
+    let scopes = login_scopes(calendar.as_deref(), calendar_login_enabled())?;
+    // Sem refresh token no cofre, ou ao escolher o Calendar na tela dele, força o consentimento: o Google só
+    // emite refresh token com os escopos novos (apps instalados não têm autorização incremental).
     let has_refresh = blocking(read_refresh_token).await.ok().flatten().is_some();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|err| {
@@ -415,7 +445,8 @@ pub async fn auth_sign_in(auth: State<'_, AuthState>) -> Result<(), String> {
         &redirect_uri,
         &code_challenge(&verifier),
         &state,
-        !has_refresh,
+        &scopes,
+        !has_refresh || calendar.is_some(),
     );
 
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|err| {
@@ -529,7 +560,7 @@ mod tests {
 
     #[test]
     fn authorization_url_has_pkce_redirect_and_scope() {
-        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", false);
+        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", SCOPES, false);
         assert!(url.starts_with(AUTH_ENDPOINT));
         assert!(url.contains("code_challenge_method=S256"));
         assert!(url.contains("code_challenge=chal"));
@@ -538,8 +569,29 @@ mod tests {
         assert!(url.contains("access_type=offline"));
         assert!(url.contains("state=st"));
         assert!(!url.contains("prompt="));
-        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", true);
+        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", SCOPES, true);
         assert!(with_consent.contains("prompt=consent"));
+    }
+
+    #[test]
+    fn login_scopes_add_calendar_only_when_enabled_or_chosen() {
+        assert_eq!(login_scopes(None, false).unwrap(), "openid email profile");
+        assert_eq!(
+            login_scopes(None, true).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_MIRROR}")
+        );
+        assert_eq!(
+            login_scopes(Some("reflect"), false).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_REFLECT}")
+        );
+        assert_eq!(
+            login_scopes(Some("mirror"), true).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_MIRROR}")
+        );
+        assert_eq!(login_scopes(Some("owner"), true), Err(AUTH_FAILED.to_string()));
+        let url = authorization_url("c", "http://127.0.0.1:1", "c", "s", &login_scopes(Some("reflect"), false).unwrap(), true);
+        assert!(url.contains("calendar.events.owned"));
+        assert!(!url.contains("include_granted_scopes"));
     }
 
     #[test]

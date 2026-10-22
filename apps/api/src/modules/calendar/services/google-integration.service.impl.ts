@@ -1,34 +1,32 @@
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
 import { normalizeTimes } from "../domain/event-time.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
-import type { GoogleConnection, GoogleMode } from "../domain/google-connection.js";
-import type { AuthorizeGoogleInput, ConnectGoogleInput, UpdateEventInput } from "../dto/input.js";
+import type { GoogleConnection } from "../domain/google-connection.js";
+import type { UpdateEventInput } from "../dto/input.js";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../dto/output.js";
 import { GoogleApiError, type GoogleCalendarClient, type GoogleEvent } from "../google/google-calendar.client.js";
 import { OWN_EVENT_PROPERTY, googleIdFor, mirrorId, sameRemoteContent, toGoogleBody, toMirrorEvent } from "../google/google-mapping.js";
-import { SCOPE_MIRROR, SCOPE_REFLECT, type CredentialStore, type GoogleOAuth } from "../google/google-oauth.js";
+import { SCOPE_MIRROR, SCOPE_REFLECT, type AccessTokenSource } from "../google/google-oauth.js";
 import { CalendarRepository } from "../repository/calendar.repository.js";
 import { GoogleIntegrationService } from "./google-integration.service.js";
 
-export type GoogleIntegrationDeps = { oauth: GoogleOAuth; credentials: CredentialStore; client: GoogleCalendarClient };
+/** `tokens` lê o refresh token do login: o Calendar não tem consentimento próprio. */
+export type GoogleIntegrationDeps = { tokens: AccessTokenSource; client: GoogleCalendarClient };
 
 const CALENDAR_ID = "primary";
-const AUTHORIZATION_TTL_MS = 10 * 60_000;
 /** Teto de páginas por sincronização: acima disso o cursor não é gravado e o usuário vê o erro, em vez de um espelho parcial "em dia". */
 const MAX_PAGES = 40;
 
 const notConfigured = () => new AppError(409, "INTEGRATION_NOT_CONFIGURED", "A integração com o Google Calendar não está configurada neste servidor.");
+const scopeMissing = () => new AppError(409, "SCOPE_NOT_GRANTED", "O login do Google não concedeu acesso ao Calendar. Conceda o Calendar no login do Google.");
 const notConnected = () => new AppError(409, "INTEGRATION_NOT_CONNECTED", "Conecte o Google Calendar antes de continuar.");
 const reauth = () => new AppError(409, "REAUTH_REQUIRED", "O Google recusou o acesso. Conecte o Google Calendar de novo.");
 const googleConflict = () => new AppError(409, "GOOGLE_CONFLICT", "O evento mudou no Google depois do último envio. Nada foi sobrescrito.");
 const versionConflict = () => new AppError(409, "CONFLICT", "O evento foi alterado por outra operação. Recarregue e tente de novo.");
 
-const scopesFor = (mode: GoogleMode) => (mode === "reflect" ? [SCOPE_REFLECT] : [SCOPE_MIRROR]);
-const sameSecret = (a: string, b: string) => {
-  const left = Buffer.from(a), right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-};
+/** Escopos Calendar concedidos ao login; o de escrita vale também para leitura. */
+const calendarScopes = (granted: readonly string[]) => [SCOPE_REFLECT, SCOPE_MIRROR].filter((scope) => granted.includes(scope));
 
 export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   private readonly authorizationRuns = new Map<string, Promise<unknown>>();
@@ -45,36 +43,23 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     };
   }
 
-  async authorize(ownerId: string, input: AuthorizeGoogleInput) {
-    const google = this.require();
-    const state = randomBytes(24).toString("base64url");
-    const expiresAt = new Date(this.now().getTime() + AUTHORIZATION_TTL_MS).toISOString();
-    await this.repository.savePending(ownerId, { state, mode: input.mode, redirectUri: input.redirectUri, expiresAt });
-    return { authorizationUrl: google.oauth.authorizationUrl({ state, codeChallenge: input.codeChallenge, redirectUri: input.redirectUri, scopes: scopesFor(input.mode) }), state, expiresAt };
+  /** Ativa o Calendar com o consentimento que o login já deu: nenhuma tela do Google, só a conferência dos escopos. */
+  connect(ownerId: string): Promise<GoogleStatusOutput> {
+    return this.serializeAuthorization(ownerId, () => this.connectGrant(ownerId));
   }
 
-  connect(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
-    return this.serializeAuthorization(ownerId, () => this.connectGrant(ownerId, input));
-  }
-
-  private async connectGrant(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
+  private async connectGrant(ownerId: string): Promise<GoogleStatusOutput> {
     const google = this.require();
-    const pending = await this.repository.takePending(ownerId);
-    // Uso único: some antes da troca, então um `code` repetido não passa duas vezes.
-    if (!pending || pending.expiresAt <= this.now().toISOString() || !sameSecret(pending.state, input.state) || pending.redirectUri !== input.redirectUri) {
-      throw new AppError(400, "VALIDATION_ERROR", "Autorização inválida ou expirada. Comece de novo.");
-    }
-    let grant;
-    try { grant = await google.oauth.exchangeCode({ code: input.code, codeVerifier: input.codeVerifier, redirectUri: input.redirectUri }); }
+    // Novo login pode ter trocado os escopos do mesmo refresh token: confere o Google, não o cache.
+    google.tokens.invalidate(ownerId);
+    let granted;
+    try { granted = await google.tokens.grant(ownerId); }
     catch (error) { throw this.translate(error); }
-    // Consentimento granular: o usuário pode desmarcar o escopo; sem ele não há conexão.
-    if (!scopesFor(pending.mode).every((scope) => grant.scopes.includes(scope))) {
-      await google.oauth.revoke(grant.refreshToken);
-      throw new AppError(409, "SCOPE_NOT_GRANTED", "O acesso pedido ao Google Calendar não foi concedido.");
-    }
-    await google.credentials.put(ownerId, grant.refreshToken);
+    // Consentimento granular: o usuário pode desmarcar o Calendar no login; sem o escopo não há conexão.
+    const scopes = calendarScopes(granted.scopes);
+    if (scopes.length === 0) throw scopeMissing();
     await this.repository.saveConnection(ownerId, {
-      connectionId: randomUUID(), status: "connected", mode: pending.mode, scopes: grant.scopes, calendarId: CALENDAR_ID,
+      connectionId: randomUUID(), status: "connected", mode: scopes[0] === SCOPE_REFLECT ? "reflect" : "mirror", scopes, calendarId: CALENDAR_ID,
       connectedAt: this.now().toISOString(), syncToken: null, lastSyncAt: null, lastError: null,
     });
     return this.status(ownerId);
@@ -84,19 +69,17 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return this.serializeAuthorization(ownerId, () => this.disconnectGrant(ownerId));
   }
 
+  /** O token é o do login: desconectar para de usar o Calendar neste app, mas não o revoga (isso é sair da conta). */
   private async disconnectGrant(ownerId: string): Promise<GoogleStatusOutput> {
     const google = this.require();
-    const token = await google.credentials.get(ownerId);
-    if (token) await google.oauth.revoke(token);
-    await google.credentials.delete(ownerId);
+    google.tokens.invalidate(ownerId);
     await this.repository.deleteConnection(ownerId);
-    await this.repository.clearPending(ownerId);
     // Os espelhos saem junto: sem conexão não há como mantê-los atualizados. Cópias enviadas ao Google permanecem lá.
     await this.repository.deleteAllMirrors(ownerId);
     return this.status(ownerId);
   }
 
-  /** A composição local tem um processo: desconectar aguarda a troca em voo e remove também o grant recém-chegado. */
+  /** A composição local tem um processo: conectar e desconectar não se intercalam para o mesmo proprietário. */
   private async serializeAuthorization<T>(ownerId: string, run: () => Promise<T>): Promise<T> {
     const previous = this.authorizationRuns.get(ownerId);
     const current = (previous ?? Promise.resolve()).catch(() => undefined).then(run);

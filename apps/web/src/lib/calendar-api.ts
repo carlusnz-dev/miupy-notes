@@ -1,5 +1,3 @@
-import { listen } from "@tauri-apps/api/event";
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import { calendarEventListOutputSchema, calendarEventOutputSchema, googleStatusOutputSchema, googleSyncOutputSchema,
   type CalendarEventOutput, type GoogleStatusOutput, type GoogleSyncOutput } from "../../../api/src/modules/calendar/contract";
 import { apiClient, toApiError } from "./api-client";
@@ -73,25 +71,9 @@ export function unreflectEvent(id: string, keepRemote: boolean) {
   return guard(async () => calendarEventOutputSchema.parse((await apiClient.delete(`${base}/events/${encodeURIComponent(id)}/google-reflection`, { params: { keepRemote } })).data));
 }
 
-const connectMessages: Record<string, string> = {
-  AUTH_DENIED: "Você recusou a conexão com o Google Calendar.",
-  AUTH_TIMEOUT: "O tempo para conectar expirou. Tente de novo.",
-  CALENDAR_FINALIZING: "A autorização já está sendo gravada. Aguarde; depois use Desconectar para revogar o acesso.",
-  CALENDAR_CANCELLED: "Conexão cancelada.",
-  CALENDAR_CONNECT_BUSY: "Já existe uma conexão em andamento.",
-  CALENDAR_SESSION_CHANGED: "A sessão mudou. Comece a conexão de novo.",
-  CREDENTIAL_STORE_UNAVAILABLE: "Desbloqueie o cofre da sessão para guardar a autorização.",
-};
-export async function connectGoogle(mode: "mirror" | "reflect", onFinalizing?: () => void) {
-  if (!isTauri()) throw new Error("Abra o aplicativo desktop para conectar o Google Calendar.");
-  const unlisten = await listen("calendar-google-finalizing", () => onFinalizing?.());
-  try { return googleStatusOutputSchema.parse(await invoke("calendar_google_connect", { mode })); }
-  catch (error) { throw new Error(connectMessages[String(error)] ?? "Não foi possível conectar. Verifique a configuração da API e tente de novo."); }
-  finally { unlisten(); }
-}
-export async function cancelGoogleConnection() {
-  try { if (isTauri()) await invoke("calendar_google_cancel"); }
-  catch (error) { throw new Error(connectMessages[String(error)] ?? "Não foi possível cancelar a espera."); }
+/** Ativa o Calendar com os escopos que o login já concedeu: nenhuma tela do Google (409 `SCOPE_NOT_GRANTED` se faltarem). */
+export function connectGoogle() {
+  return guard(async () => googleStatusOutputSchema.parse((await apiClient.post(`${base}/google/connection`, {})).data));
 }
 export function disconnectGoogle() {
   return guard(async () => googleStatusOutputSchema.parse((await apiClient.delete(`${base}/google/connection`)).data));

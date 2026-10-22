@@ -1,6 +1,6 @@
 import { BaseRepository } from "../../../core/repository/base.repository.js";
 import type { CalendarEvent } from "../domain/calendar-event.js";
-import type { GoogleConnection, PendingAuthorization } from "../domain/google-connection.js";
+import type { GoogleConnection } from "../domain/google-connection.js";
 
 export type EventPage = { readonly items: CalendarEvent[]; readonly nextCursor: string | null };
 /** `from`/`to` são instantes UTC normalizados; o filtro é a sobreposição `startsAt < to && endsAt > from`. */
@@ -25,8 +25,4 @@ export abstract class CalendarRepository extends BaseRepository<CalendarEvent> {
   /** Grava somente se a conexão persistida ainda tem este `connectionId`; `false` = foi desconectada/refeita. */
   abstract saveConnectionIf(ownerId: string, connectionId: string, connection: GoogleConnection): Promise<boolean>;
   abstract deleteConnection(ownerId: string): Promise<void>;
-  abstract takePending(ownerId: string): Promise<PendingAuthorization | null>;
-  abstract getPending(ownerId: string): Promise<PendingAuthorization | null>;
-  abstract savePending(ownerId: string, pending: PendingAuthorization): Promise<void>;
-  abstract clearPending(ownerId: string): Promise<void>;
 }

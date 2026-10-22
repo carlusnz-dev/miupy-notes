@@ -2,16 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GoogleApiError } from "./google-calendar.client.js";
 import { HttpGoogleCalendarClient } from "./http-google-calendar.client.js";
-import { AccessTokenSource, HttpGoogleOAuth, MemoryCredentialStore, GoogleOAuth, type AccessToken, type TokenGrant } from "./google-oauth.js";
+import { AccessTokenSource, HttpGoogleOAuth, MemoryCredentialStore, GoogleOAuth, type AccessToken } from "./google-oauth.js";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body?: string };
 
 class CountingOAuth extends GoogleOAuth {
   refreshes = 0;
-  authorizationUrl(): string { return ""; }
-  async exchangeCode(): Promise<TokenGrant> { throw new Error("não usado"); }
-  async refreshAccessToken(): Promise<AccessToken> { this.refreshes++; return { accessToken: `token-${this.refreshes}`, expiresInSec: 3600 }; }
-  async revoke() {}
+  subject = "alice";
+  async refreshAccessToken(): Promise<AccessToken> { this.refreshes++; return { accessToken: `token-${this.refreshes}`, expiresInSec: 3600, scopes: ["openid"], subject: this.subject }; }
 }
 
 function setup(responses: Array<Response | Error>) {
@@ -125,25 +123,37 @@ test("erros do provedor não carregam corpo nem token na mensagem", async () => 
   await assert.rejects(s.client.listEvents("alice", "primary", {}), (error: Error) => !error.message.includes("segredo") && !error.message.includes("token"));
 });
 
-test("token OAuth: URL de consentimento separada do login e troca de código com PKCE e segredo no servidor", async () => {
+const idToken = (claims: object) => `h.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.s`;
+
+test("refresh: segredo do cliente do login só no corpo do POST; devolve escopos concedidos e o sub do ID token", async () => {
   const seen: Array<{ url: string; body: string }> = [];
   const oauth = new HttpGoogleOAuth({ clientId: "cid", clientSecret: "csecret" }, async (url, init) => {
     seen.push({ url, body: String(init.body) });
-    return json(200, { refresh_token: "r", scope: "https://www.googleapis.com/auth/calendar.events.owned.readonly", access_token: "a", expires_in: 10 });
+    return json(200, { access_token: "a", expires_in: 10, scope: "openid email https://www.googleapis.com/auth/calendar.events.owned.readonly", id_token: idToken({ sub: "alice" }) });
   });
-  const url = new URL(oauth.authorizationUrl({ state: "st", codeChallenge: "ch", redirectUri: "http://127.0.0.1:1/cb", scopes: ["https://www.googleapis.com/auth/calendar.events.owned.readonly"] }));
-  assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
-  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
-  assert.equal(url.searchParams.get("include_granted_scopes"), "false");
-  assert.equal(url.searchParams.get("access_type"), "offline");
-  assert.equal(url.searchParams.get("scope")?.includes("openid"), false);
-  assert.equal(url.href.includes("csecret"), false);
-  const grant = await oauth.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "http://127.0.0.1:1/cb" });
-  assert.equal(grant.refreshToken, "r");
+  assert.deepEqual(await oauth.refreshAccessToken("r"), { accessToken: "a", expiresInSec: 10, scopes: ["openid", "email", "https://www.googleapis.com/auth/calendar.events.owned.readonly"], subject: "alice" });
   const form = new URLSearchParams(seen[0].body);
-  assert.equal(form.get("client_secret"), "csecret");
-  assert.equal(form.get("code_verifier"), "v");
+  assert.deepEqual(Object.fromEntries(form), { client_id: "cid", client_secret: "csecret", grant_type: "refresh_token", refresh_token: "r" });
   assert.equal(seen[0].url, "https://oauth2.googleapis.com/token");
+});
+
+test("refresh sem scope, sem id_token ou com sub vazio é resposta inválida", async () => {
+  for (const body of [{ access_token: "a", id_token: idToken({ sub: "alice" }) }, { access_token: "a", scope: "openid" }, { access_token: "a", scope: "openid", id_token: idToken({ sub: "" }) }, { access_token: "a", scope: "openid", id_token: "sem-pontos" }]) {
+    const oauth = new HttpGoogleOAuth({ clientId: "c", clientSecret: "s" }, async () => json(200, body));
+    await assert.rejects(oauth.refreshAccessToken("r"), { kind: "invalid" });
+  }
+});
+
+test("token do cofre emitido para outra conta não gera access token para o proprietário", async () => {
+  const s = setup([]);
+  await s.credentials.put("alice", "refresh");
+  s.oauth.subject = "bob";
+  const tokens = new AccessTokenSource(s.oauth, s.credentials);
+  await assert.rejects(tokens.get("alice"), { kind: "unauthorized" });
+  s.oauth.subject = "alice";
+  assert.deepEqual(await tokens.grant("alice"), { accessToken: "token-2", scopes: ["openid"] });
+  tokens.invalidate("alice");
+  assert.equal(await tokens.get("alice"), "token-3");
 });
 
 test("refresh recusado (invalid_grant) vira unauthorized e não é repetido", async () => {

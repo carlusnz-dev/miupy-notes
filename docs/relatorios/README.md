@@ -39,3 +39,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Continuidade — AWS, Terraform e IAM | [prompt](2026-10-22_prompt-aws-terraform.md) |
 | 2026-10-22 | 15 — integração das pendências Git | [relatório](2026-10-22_sessao-15.md) |
 | 2026-10-22 | 16 — reutilização do cliente OAuth Calendar local | [relatório](2026-10-22_sessao-16.md) |
+| 2026-10-22 | Calendar — OAuth unificado no login | [relatório](2026-10-22_calendar-oauth-unificado.md) |
