@@ -26,6 +26,7 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-20 | 07 — logs seguros da API | [relatório](2026-10-20_sessao-07-logs.md) |
 | 2026-10-20 | 08 — validação final de persistência e aceite | [relatório](2026-10-20_sessao-08.md) |
 | 2026-10-20 | 09 — logs legíveis e coloridos | [relatório](2026-10-20_sessao-09.md) |
+| 2026-10-21 | 10 — coordenação de planner, finanças e durabilidade | [relatório](2026-10-21_sessao-10.md) |
 | 2026-10-21 | Notas — revisão de durabilidade | [relatório](2026-10-21_notas-revisao.md) |
 | 2026-10-21 | Finanças — contas e balanços | [relatório](2026-10-21_finance-planner.md) |
 | 2026-10-21 | Calendar — planner e adaptadores Google | [relatório](2026-10-21_calendar-planner.md) |
@@ -36,3 +37,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Calendar — revisão independente do snapshot | [relatório](2026-10-22_calendar-revisao.md) |
 | 2026-10-22 | Calendar — validação final independente | [relatório](2026-10-22_calendar-validacao-final.md) |
 | 2026-10-22 | Continuidade — AWS, Terraform e IAM | [prompt](2026-10-22_prompt-aws-terraform.md) |
+| 2026-10-22 | 15 — integração das pendências Git | [relatório](2026-10-22_sessao-15.md) |

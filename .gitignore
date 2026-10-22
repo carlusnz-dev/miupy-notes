@@ -39,6 +39,10 @@ override.tf.json
 # Saída do Playwright MCP (capturas, snapshots, console)
 .playwright-mcp/
 
+# Resultados locais do Graphify; skills e documentação continuam versionáveis.
+graphify-out/
+.graphify/
+
 # Fontes de licença restrita para teste pessoal; nunca versionar.
 apps/web/src/assets/fonts/local/
 
