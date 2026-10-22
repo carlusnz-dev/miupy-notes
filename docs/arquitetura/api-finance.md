@@ -47,3 +47,38 @@ Integração web: `FinancePage` em `apps/web/src/finance/FinancePage.tsx`, clien
 Em PATCH, o corpo continua exigindo os demais campos de domínio e a versão: omitir parcelas preserva o valor existente quando continua despesa por cartão; ao mudar para entrada ou outro método, omissão limpa para `null`. `null` explícito limpa também um cartão. Concorrência e isolamento continuam seguindo as condições de versão e principal já documentadas.
 
 `amountCents` permanece o valor TOTAL: não se divide automaticamente o valor, não se geram lançamentos futuros, nem se alteram os totais globais. CSV acrescenta a coluna `Parcelas` ao final, vazia para `null`; mantém todas as páginas do usuário e o escape de fórmulas/aspas. Exemplo: cartão com `amountCents: 12000, installmentCount: 3` representa uma única despesa de R$ 120,00, informada como três parcelas.
+
+## Contas e balanço (2026-10-21)
+
+Instituição (`bank`) e conta (`account`) são entidades distintas: várias contas podem apontar para uma instituição. Os endpoints anteriores e o CSV conservam comportamento e colunas. Todas as novas rotas usam a mesma autenticação; proprietário exclusivamente do principal, schemas estritos, `Cache-Control: no-store`, IDs alheios como `404`.
+
+| Método | Caminho | Entrada | Saída |
+|---|---|---|---|
+| GET | `/accounts` | `limit=1..50`, `cursor` opcional | `{ items, nextCursor }` |
+| POST | `/accounts` | `{ title, bankId, currency, openingBalanceCents, openingDate }` | `201` conta |
+| GET | `/accounts/:id` | UUID | conta |
+| PATCH | `/accounts/:id` | mesmos campos + `version` | conta com versão incrementada |
+| GET | `/balances` | nenhuma query | balanço completo do proprietário |
+
+Conta: título 1–120 caracteres, instituição própria existente, moeda `BRL|USD|EUR`, referência em centavos inteiros seguros (inclusive zero e negativos), data real `AAAA-MM-DD`. Resposta acrescenta `id`, `source: "manual"`, `createdAt`, `updatedAt`, `version`; a origem é fixada pelo backend. Instituição e moeda da conta são imutáveis (`400` ao alterar): crie outra conta para outra combinação. Não há exclusão de contas nesta etapa (`404` HTTP); excluir instituição com conta vinculada retorna `409`. Alterações continuam com escrita condicional (`409` para versão obsoleta ou corrida).
+
+`openingBalanceCents` é o saldo **no início de `openingDate`**, já incluindo o histórico anterior. Saldo calculado da conta = referência + entradas − saídas vinculadas àquela conta com `date >= openingDate`. Os registros anteriores continuam no resumo de movimentações, mas não são novamente somados ao saldo. São considerados todos os lançamentos gravados depois do corte, inclusive os datados no futuro; não é uma previsão com calendário de parcelas nem um saldo bancário certificado.
+
+Lançamentos passam a aceitar `accountId?: UUID | null`. Legado sem atributo lê como `null`. Conta não-nula exige mesma instituição (`bankId`) e moeda; conta alheia/inexistente dá `404`, combinação incompatível dá `400`. No PATCH, omitir mantém a conta se a instituição não mudou; trocar instituição com omissão limpa a conta. `null` explícito retira o vínculo. Nenhum registro antigo é migrado automaticamente.
+
+`GET /balances` retorna:
+
+```json
+{
+  "calculatedAt": "2026-10-21T12:00:00.000Z",
+  "accounts": [{ "id": "uuid", "title": "Corrente", "bankId": "uuid", "currency": "BRL", "openingBalanceCents": 10000, "openingDate": "2026-10-01", "source": "manual", "movementCents": -2000, "balanceCents": 8000, "createdAt": "2026-10-21T12:00:00.000Z", "updatedAt": "2026-10-21T12:00:00.000Z", "version": 1 }],
+  "banks": [{ "bankId": "uuid", "title": "Instituição", "currencies": [{ "currency": "BRL", "balanceCents": 8000 }] }],
+  "currencies": [{ "currency": "BRL", "balanceCents": 8000, "unallocatedCents": 0 }]
+}
+```
+
+Cada instituição agrega saldos calculados das suas contas e movimentos sem conta ligados a ela, por moeda. Sem instituição usa `bankId: null`; instituição removida mantém o nome histórico do lançamento. `currencies` agrega contas e movimentos sem conta exatamente uma vez; `unallocatedCents` identifica a parcela sem conta, que representa movimento líquido, não saldo inicial conhecido. Moedas nunca são somadas ou convertidas. Vínculo de conta inconsistente durante leitura retorna `409`, em vez de ignorar valores. Qualquer soma fora de inteiro seguro retorna `422 TOTAL_OVERFLOW`; não há total parcial.
+
+Balanço e resumo percorrem todas as páginas do proprietário, sem teto silencioso. `/summary` conserva somente entradas, saídas, movimento líquido e contagem globais; o Perfil usa esse endpoint existente. Não carrega lançamentos para somar no React nem exibe caminhos de API na interface. O balanço não é snapshot transacional: leituras sequenciais podem refletir gravações em instantes diferentes. `calculatedAt` informa a conclusão do cálculo; `source` e `updatedAt` da conta identificam origem e última edição da referência.
+
+A interface oferece cadastro/edição de contas dentro de “Instituições e contas”, seleção de conta nos lançamentos e formulário em duas etapas. Valores e parcelas sobrevivem ao retorno entre etapas; somente a etapa visível participa da validação nativa. O backend continua validando o payload completo.

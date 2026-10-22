@@ -24,3 +24,4 @@
   .shell-sidebar .sidebar-footer a { padding: 4px 7px; margin: 0; min-height: 32px; }
   .shell-sidebar nav a { gap: 6px; }
 }
+.sidebar-letter { display: inline-block; }

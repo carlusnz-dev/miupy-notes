@@ -12,6 +12,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 
 ## Regras de implementação
 
+- Branches e commits descrevem a mudança, sem identificador de sessão: use `feat/calendar-planner`, `fix/notes-concurrency` e `fix(notes): preservar rascunhos concorrentes`; não use `feat/s06...`, `fix/s07...` ou sessão no título do commit. Relatórios podem manter a numeração de sessão.
 - Interface e documentação em pt-BR; identificadores de código em inglês.
 - Títulos de página e da nota seguem a serif principal e escala responsiva coerente; corpo/labels em sans. Preferências do proprietário de 2026-10-19: Silvex para uso pessoal local (arquivo fora do Git público), alternativa livre semelhante à referência Lenora/Vogue; selects e modais reutilizáveis, com GSAP nas animações.
 - Use GSAP nas animações de interação (incluindo seleção deslizante de grupos de botões e troca de períodos); respeite `prefers-reduced-motion` e remova animações/listeners ao desmontar. Preferência do proprietário registrada em 2026-10-19.
@@ -24,8 +25,10 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 
 ## Navegação e segurança do repositório
 
+- Orca neste Linux: o CLI dedicado está em `/home/cabeto/.config/orca/linux-orca-cli-shim/orca` e chama `/usr/lib/orca-ide/bin/orca-ide`. Use `ORCA_CLI_COMMAND` quando configurado. `/usr/bin/orca-ide` é launcher gráfico e injeta `--app`, incompatível com o parser CLI desta instalação. Confirme o runtime com `status --json`; acesso ao socket pode exigir execução fora do sandbox.
 - Para localizar código, faça buscas direcionadas com `rg` e leia apenas os arquivos relevantes. Use o Graphify local quando houver um grafo disponível para navegar relações; não faça varredura geral do repositório.
 - Ao gerar ou atualizar um grafo, limite a extração a `apps/web/src` e `apps/api/src`, use `--code-only` e não processe documentos, notas, PDFs, imagens ou vídeo. Não envie o repositório nem notas a provedores LLM.
+- Mantenha resultados do Graphify no cache externo ao checkout, nunca no Git. Versione apenas skills e instruções de uso, sem grafos, índices, visualizações ou logs de consulta.
 - Não abra nem indexe arquivos de dados pessoais, `.env*`, credenciais, tokens, arquivos locais ou estado de Terraform. A configuração TOML do Codex define sandbox e aprovações, mas não garante por si só bloqueio de leitura de cada arquivo; siga esta instrução e os limites do sandbox.
 - Não faça chamadas a contas AWS reais, `terraform apply`/`destroy`, deploys ou resets destrutivos. Comandos locais de build e teste estão permitidos.
 

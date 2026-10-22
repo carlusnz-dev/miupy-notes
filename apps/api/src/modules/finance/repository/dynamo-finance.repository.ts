@@ -2,7 +2,7 @@ import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
 import { AppError } from "../../../core/domain/app-error.js";
-import { bankOutputSchema, transactionOutputSchema } from "../contract.js";
+import { accountOutputSchema, bankOutputSchema, transactionOutputSchema } from "../contract.js";
 import { FinanceRecord, type RecordKind } from "../domain/finance-record.js";
 import { FinanceRepository, type FinancePage } from "./finance.repository.js";
 
@@ -13,7 +13,7 @@ function cursorId(cursor: string): string {
 }
 function read(ownerId: string, kind: RecordKind, item: Record<string, unknown>): FinanceRecord {
   const { pk: _pk, sk: _sk, ownerId: _owner, kind: _kind, ...data } = item;
-  return new FinanceRecord(ownerId, kind === "bank" ? { kind, ...bankOutputSchema.parse(data) } : { kind, ...transactionOutputSchema.parse(data) });
+  return new FinanceRecord(ownerId, kind === "account" ? { kind, ...accountOutputSchema.parse(data) } : kind === "bank" ? { kind, ...bankOutputSchema.parse(data) } : { kind, ...transactionOutputSchema.parse(data) });
 }
 export class DynamoFinanceRepository extends FinanceRepository {
   constructor(private readonly client: DynamoDBDocumentClient, private readonly tableName: string) { super(); }

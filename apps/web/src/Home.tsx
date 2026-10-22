@@ -17,7 +17,7 @@ const numberFormat = new Intl.NumberFormat("pt-BR");
 const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" });
 const spaces = [
   { path: "/notes", label: "Notas", description: "Ideias e conexões" },
-  { path: "/events", label: "Agenda", description: "Tempo com contexto" },
+  { path: "/agendas", label: "Agenda", description: "Tempo com contexto" },
   { path: "/finance", label: "Finanças", description: "Movimentos e decisões" },
   { path: "/library", label: "Biblioteca", description: "Obras que ficaram" },
 ];

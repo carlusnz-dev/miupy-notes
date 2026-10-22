@@ -93,6 +93,42 @@ test("logs HTTP correlacionam erros e sucesso sem dados pessoais", async () => {
   } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
 });
 
+test("logs da agenda registram o template /v1/calendar sem UUID, query nem identidade", async () => {
+  const { Router } = await import("express");
+  const { Logger } = await import("./core/logging/logger.js");
+  const { AppError } = await import("./core/domain/app-error.js");
+  const lines: string[] = [];
+  const log = new Logger("info", (line) => { lines.push(line); }, { format: "json" });
+  const router = Router();
+  router.get("/events/:id", () => { throw new AppError(404, "NOT_FOUND", "Evento não encontrado."); });
+  router.patch("/events/:id", () => { throw new AppError(409, "CONFLICT", "Conflito."); });
+  router.get("/google", () => { throw new Error("private google"); });
+  router.get("/events", (_req, res) => { res.json({ items: [], nextCursor: null }); });
+  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: Router(), calendarRouter: router }, log));
+  await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
+  const address = local.address();
+  assert.ok(address && typeof address !== "string");
+  const url = `http://127.0.0.1:${address.port}`;
+  const secretId = "00000000-0000-4000-8000-0000000000aa";
+  try {
+    for (const [method, path, status, route] of [
+      ["GET", `/v1/calendar/events/${secretId}?from=private@example.com`, 404, "/v1/calendar/events/:id"],
+      ["PATCH", `/v1/calendar/events/${secretId}`, 409, "/v1/calendar/events/:id"],
+      ["GET", "/v1/calendar/google", 500, "/v1/calendar/google"],
+      ["GET", "/v1/calendar/events?cursor=TOKEN", 200, "/v1/calendar/events"],
+    ] as const) {
+      const response = await fetch(`${url}${path}`, { method, headers: { Authorization: "Bearer TOKEN", "content-type": "application/json" }, body: method === "PATCH" ? "{}" : undefined });
+      assert.equal(response.status, status);
+      const id = response.headers.get("x-request-id");
+      const entries = lines.map((line) => JSON.parse(line)).filter((entry) => entry.requestId === id);
+      const completed = entries.find((entry) => entry.event === "request.completed");
+      assert.equal(completed.route, route);
+      if (status >= 400) assert.equal(entries.find((entry) => entry.event === "request.failed").route, route);
+    }
+    assert.doesNotMatch(lines.join("\n"), /private|TOKEN|00000000-0000-4000-8000-0000000000aa|alice/);
+  } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
+});
+
 test("níveis filtram debug e classificação trata causas cíclicas", async () => {
   const { Logger, classifyError } = await import("./core/logging/logger.js");
   const lines: string[] = [];
