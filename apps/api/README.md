@@ -51,6 +51,13 @@ Em falhas nas rotas montadas, o template completo é capturado antes de o Expres
 
 ## Calendar
 
-`/v1/calendar` usa o mesmo principal de notas/finanças. CRUD de eventos é local e versionado; contrato em `docs/arquitetura/api-calendar.md`. A composição padrão informa Google `not_configured`: os adaptadores existem, mas faltam `CredentialStore` de produção e consentimento desktop separado do login. Não use o ID token do login como token Calendar.
+`/v1/calendar` usa o mesmo principal de notas/finanças. CRUD de eventos é local e versionado; contrato em `docs/arquitetura/api-calendar.md`. A composição padrão informa Google `not_configured`. A API local Linux aceita opt-in com Secret Service e consentimento Tauri separado; Lambda permanece sem adaptador de credenciais. Não use o ID token do login como token Calendar.
 
 Retry-After do provedor aceita segundos/HTTP-date; esperas longas retornam ao cliente com o prazo intacto em cabeçalho HTTP, sem prender o pedido nem reduzir para 60 s. Testes usam fakes e HTTP local, sem Google real.
+
+
+Para configurar Calendar local, o proprietário deve habilitar a Calendar API e criar cliente OAuth **Desktop**, mantendo seus valores fora do Git. No ambiente da API: `GOOGLE_CALENDAR_CREDENTIAL_STORE=secret-service`, `GOOGLE_CALENDAR_CLIENT_ID` e, quando exigido pelo cliente Desktop, `GOOGLE_CALENDAR_CLIENT_SECRET`. Instale `secret-tool` (libsecret) e desbloqueie o Secret Service da sessão. Nenhum segredo é enviado ao frontend. No processo Tauri, `MIUPY_API_BASE_URL` é opcional (padrão `http://127.0.0.1:4000`); o adaptador aceita somente HTTP em `127.0.0.1`, sem userinfo/query/fragmento. Login do app continua com sua configuração própria.
+
+Abra Agendas → escolha leitura ou leitura e escrita → Conectar Google Calendar. Cancelar vale durante a espera pelo navegador; o POST final mostra Finalizando e exige Desconectar para revogar depois. A carga inicial cobre 30 dias passados e 366 futuros, com cursor incremental sob demanda; não representa todo o calendário nem avança a janela automaticamente. Escrita de espelhos usa PATCH/If-Match, preservando campos fora do formulário; novos eventos locais só são enviados pela escolha explícita do usuário. Cópias já enviadas acompanham salvar/excluir.
+
+Este cofre e a serialização OAuth atendem **um processo da API local Linux**. Não habilite várias instâncias contra o mesmo cofre/repositório sem coordenação persistida. Não há implantação AWS, conexão Google real ou consentimento nativo verificado nesta frente; veja `docs/relatorios/2026-10-22_calendar-sync.md`.

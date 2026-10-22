@@ -119,3 +119,14 @@ test("cadastro da integração fica em chave própria e sem token", async () => 
   assert.deepEqual([item.pk, item.sk], ["USER#alice", "CALENDAR#GOOGLE"]);
   assert.equal(Object.keys(item).some((key) => /token$/i.test(key) && key !== "syncToken"), false);
 });
+
+test("takePending consome state atomicamente com Delete ALL_OLD na partição do proprietário", async () => {
+  const pending = { state: "s", mode: "mirror", redirectUri: "http://127.0.0.1:1234/callback", expiresAt: now };
+  const fake = fakeClient((_c, index) => index === 0 ? { Attributes: pending } : {});
+  const repository = new DynamoCalendarRepository(fake.client, "t");
+  assert.deepEqual(await repository.takePending("alice"), pending);
+  assert.equal(await repository.takePending("alice"), null);
+  assert.equal(fake.sent[0].constructor.name, "DeleteCommand");
+  assert.deepEqual(fake.sent[0].input.Key, { pk: "USER#alice", sk: "CALENDAR#GOOGLE#PENDING" });
+  assert.equal(fake.sent[0].input.ReturnValues, "ALL_OLD");
+});

@@ -36,7 +36,9 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
   const [noteToAdd, setNoteToAdd] = useState("");
   const [eventToAdd, setEventToAdd] = useState("");
   const ids = { title: useId(), description: useId(), location: useId(), startTime: useId(), endTime: useId() };
-  const readOnly = event?.readOnly === true;
+  const canWriteGoogle = google?.state === "connected" && google.mode === "reflect";
+  const readOnly = event?.readOnly === true && !canWriteGoogle;
+  const [sendToGoogle, setSendToGoogle] = useState(event?.reflection !== null && event?.reflection !== undefined);
   const set = <K extends keyof Fields>(key: K, value: Fields[K]) => setFields((current) => ({ ...current, [key]: value }));
   const zones = useMemo(() => zoneChoices(fields.timeZone, event?.timeZone, browserZone()), [fields.timeZone, event?.timeZone]);
   const op = entry?.op ?? null;
@@ -53,7 +55,7 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
     submitEvent.preventDefault();
     const built = buildDraft(fields);
     if ("error" in built) { setError(built.error); return; }
-    void run(async () => { await onSubmit(built.draft); onClose(); });
+    void run(async () => { await onSubmit({ ...built.draft, ...(event?.source !== "google" && canWriteGoogle ? { sendToGoogle } : {}) }); onClose(); });
   }
 
   const linkLabel = (link: EventLink) => link.kind === "note" ? (notes.find((note) => note.id === link.id)?.title ?? "Nota indisponível") : (events.find((item) => item.id === link.id)?.title ?? "Evento indisponível");
@@ -114,18 +116,20 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
             <label htmlFor={ids.description}>Descrição</label>
             <textarea id={ids.description} rows={3} value={fields.description} maxLength={8000} onChange={(e) => set("description", e.target.value)} />
           </div>
-          <fieldset className="calendar-links">
+          {event?.source !== "google" && <fieldset className="calendar-links">
             <legend>Relações</legend>
             {fields.links.length > 0 && <div className="calendar-link-list">{fields.links.map((link) => <Badge key={`${link.kind}:${link.id}`} onRemove={() => set("links", fields.links.filter((item) => item !== link))}>{`${link.kind === "note" ? "Nota" : "Evento"}: ${linkLabel(link)}`}</Badge>)}</div>}
             <Select label="Nota" value={noteToAdd} options={noteOptions} disabled={notesState !== "ready"} onChange={(id) => { addLink("note", id); setNoteToAdd(""); }} />
             <Select label="Outro evento" value={eventToAdd} options={eventOptions} onChange={(id) => { addLink("event", id); setEventToAdd(""); }} />
             <p className="calendar-note">Biblioteca: módulo ainda indisponível, sem relações por enquanto.</p>
-          </fieldset>
-          {event && google?.state === "connected" && google.mode === "reflect" && reflector && (
+          </fieldset>}
+          {canWriteGoogle && event?.source !== "google" && <label className="calendar-check"><input type="checkbox" checked={sendToGoogle || !!event?.reflection} disabled={!!event?.reflection} onChange={(e) => setSendToGoogle(e.target.checked)} /> {event?.reflection ? "Salvar também atualiza no Google; excluir remove de lá." : "Enviar este evento ao Google ao salvar"}</label>}
+          {event?.source === "google" && canWriteGoogle && <p className="calendar-note">Salvar altera este evento no Google. Excluir também o remove do Google. Mudanças remotas concorrentes geram conflito.</p>}
+          {event && event.source !== "google" && google?.state === "connected" && google.mode === "reflect" && reflector && (
             <div className="calendar-reflect">
               <strong>Google Calendar</strong>
               {event.reflection
-                ? <p>{event.reflection.inSync ? "Enviado ao Google." : "O Google está com uma versão anterior deste evento."}</p>
+                ? <p>{event.reflection.inSync ? "Enviado ao Google. Alterações salvas serão enviadas novamente." : "O Google está com uma versão anterior deste evento."}</p>
                 : <p>Este evento não está no Google. Enviar é uma ação sua, evento a evento.</p>}
               {op ? <p className="calendar-note">Há alterações só neste dispositivo: envie-as ao servidor antes de enviar ao Google.</p>
                 : <div className="calendar-alert-actions">

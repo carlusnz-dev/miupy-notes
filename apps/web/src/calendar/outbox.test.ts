@@ -421,3 +421,23 @@ for (const adapter of ["memory", "indexeddb"] as const) {
     assert.equal((await store.listOps(owner)).length, 0);
   });
 }
+
+test("replay não conclui conteúdo local igual enquanto a cópia Google está atrasada", async () => {
+  for (const explicit of [false, true]) {
+    const store = createMemoryCalendarStore();
+    const event = server({ version: 2, reflection: { reflectedAt: iso, inSync: false } });
+    const r = remote([event]);
+    await enqueue(store, owner, { kind: "update", event: { ...event, version: 1 }, draft: draft({ ...(explicit ? { sendToGoogle: true } : {}) }) });
+    r.failures.push(http(409, "INTEGRATION_NOT_CONNECTED"));
+    await flushOutbox(store, r.api, owner);
+    assert.equal((await store.getOp(owner, idA))?.state, "conflict");
+  }
+});
+
+test("GOOGLE_CONFLICT mantém intenção mesmo se cache local já tiver o mesmo conteúdo", async () => {
+  const store = createMemoryCalendarStore(); const event = server(); const r = remote([event]);
+  await enqueue(store, owner, { kind: "update", event, draft: draft() });
+  r.failures.push(http(409, "GOOGLE_CONFLICT"));
+  await flushOutbox(store, r.api, owner);
+  assert.equal((await store.getOp(owner, idA))?.lastError, "GOOGLE_CONFLICT");
+});

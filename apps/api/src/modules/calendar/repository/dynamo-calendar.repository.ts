@@ -186,6 +186,10 @@ export class DynamoCalendarRepository extends CalendarRepository {
   async deleteConnection(ownerId: string): Promise<void> {
     await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: CONNECTION_SK } }));
   }
+  async takePending(ownerId: string): Promise<PendingAuthorization | null> {
+    const result = await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: PENDING_SK }, ReturnValues: "ALL_OLD" }));
+    return result.Attributes ? pendingSchema.parse(result.Attributes) : null;
+  }
   async getPending(ownerId: string): Promise<PendingAuthorization | null> {
     const result = await this.client.send(new GetCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: PENDING_SK }, ConsistentRead: true }));
     return result.Item ? pendingSchema.parse(result.Item) : null;

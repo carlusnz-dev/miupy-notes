@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Select from "../components/Select";
+import Modal from "../components/Modal";
 import { RefreshCw } from "lucide-react";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../lib/calendar-api";
 
@@ -10,7 +12,7 @@ const stateText: Record<GoogleStatusOutput["state"], string> = {
 };
 const stateHelp: Record<GoogleStatusOutput["state"], string> = {
   not_configured: "O servidor não tem credenciais do Google protegidas. Nada é lido do Google nem enviado a ele.",
-  not_connected: "A conexão é um consentimento separado do login e só pede o acesso mínimo. O fluxo de consentimento ainda não existe no app desktop; por isso não há botão de conectar.",
+  not_connected: "Conecte no navegador com um consentimento separado do login. Você escolhe leitura ou leitura e escrita.",
   connected: "",
   needs_reauth: "O Google recusou o acesso. É preciso conceder o consentimento de novo.",
 };
@@ -21,7 +23,30 @@ const errorText: Record<string, string> = {
   SYNC_TOO_LARGE: "Eventos demais para uma sincronização.",
 };
 
-export default function GooglePanel({ status, error, onSync }: { status: GoogleStatusOutput | null; error: string | null; onSync: () => Promise<GoogleSyncOutput> }) {
+export default function GooglePanel({ status, error, onSync, onConnect, onCancel, onDisconnect }: {
+  status: GoogleStatusOutput | null; error: string | null; onSync: () => Promise<GoogleSyncOutput>;
+  onConnect?: (mode: "mirror" | "reflect", onFinalizing?: () => void) => Promise<GoogleSyncOutput | void>;
+  onCancel?: () => Promise<void>;
+  onDisconnect?: () => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"mirror" | "reflect">("mirror");
+  const [connecting, setConnecting] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  useEffect(() => () => { void onCancel?.().catch(() => undefined); }, [onCancel]);
+  async function connect() {
+    setConnecting(true); setFinalizing(false); setFailure(null); setResult(null);
+    try { await onConnect?.(mode, () => setFinalizing(true)); setResult("Google Calendar conectado e sincronizado."); }
+    catch (e) { setFailure(e instanceof Error ? e.message : "Falha ao conectar."); }
+    finally { setConnecting(false); setFinalizing(false); }
+  }
+  async function disconnect() {
+    setDisconnecting(true); setFailure(null);
+    try { await onDisconnect?.(); setResult("Google Calendar desconectado."); setConfirmDisconnect(false); }
+    catch (e) { setFailure(e instanceof Error ? e.message : "Falha ao desconectar."); }
+    finally { setDisconnecting(false); }
+  }
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -37,13 +62,26 @@ export default function GooglePanel({ status, error, onSync }: { status: GoogleS
       <div>
         <h2 id="calendar-google-title">Google Calendar</h2>
         <p className="calendar-google-state">{status ? stateText[status.state] : error ?? "Verificando…"}</p>
-        {status && status.state === "connected" && <p className="calendar-note">{status.mode === "reflect" ? "Espelho (leitura) e refletor (escrita consentida, evento a evento)." : "Espelho somente leitura."} {status.lastSyncAt ? `Última sincronização: ${new Date(status.lastSyncAt).toLocaleString("pt-BR")}.` : "Ainda não sincronizado."}</p>}
+        {status && status.state === "connected" && <p className="calendar-note">{status.mode === "reflect" ? "Leitura e escrita. Eventos do Google podem ser editados e excluídos; novos envios dependem da sua escolha." : "Espelho somente leitura."} {status.lastSyncAt ? `Última sincronização: ${new Date(status.lastSyncAt).toLocaleString("pt-BR")}.` : "Ainda não sincronizado."}</p>}
         {status && stateHelp[status.state] && <p className="calendar-note">{stateHelp[status.state]}</p>}
         {status?.lastError && <p className="calendar-note">Último erro: {errorText[status.lastError] ?? status.lastError}</p>}
+        {status?.state === "connected" && <p className="calendar-note">A carga inicial traz de 30 dias atrás até um ano à frente. Sincronize para receber novas mudanças; não há atualização automática do Google.</p>}
         {result && <p className="calendar-note" role="status">{result}</p>}
         {failure && <p className="calendar-error" role="alert">{failure}</p>}
       </div>
-      {status?.state === "connected" && <button type="button" className="button button-secondary" onClick={() => void sync()} disabled={syncing}><RefreshCw size={14} aria-hidden="true" />&nbsp;{syncing ? "Sincronizando…" : "Sincronizar agora"}</button>}
+      <div className="calendar-google-actions">
+      {status && status.state !== "not_configured" && onConnect && <>
+        <Select label="Permissão do Google" value={mode} options={[{ value: "mirror", label: "Somente leitura" }, { value: "reflect", label: "Leitura e escrita" }]} onChange={(value) => setMode(value as "mirror" | "reflect")} disabled={connecting || syncing || disconnecting} />
+        {connecting ? finalizing ? <p role="status" className="calendar-note">Finalizando autorização… Depois, use Desconectar para revogar o acesso.</p> : <button type="button" className="button button-secondary" onClick={() => void onCancel?.().catch((e) => setFailure(e instanceof Error ? e.message : "Não foi possível cancelar."))}>Cancelar espera</button> : <button type="button" className="button button-secondary" onClick={() => void connect()} disabled={syncing || disconnecting}>{status.state === "connected" ? "Alterar permissão" : "Conectar Google Calendar"}</button>}
+        {connecting && !finalizing && <p role="status" className="calendar-note">Conclua o consentimento no navegador… Cancelar interrompe a espera; após a gravação final, use Desconectar para revogar o acesso.</p>}
+      </>}
+      {status?.state === "connected" && <button type="button" className="button button-secondary" onClick={() => void sync()} disabled={syncing || connecting || disconnecting}><RefreshCw size={14} aria-hidden="true" />&nbsp;{syncing ? "Sincronizando…" : "Sincronizar agora"}</button>}
+      {onDisconnect && (status?.state === "connected" || status?.state === "needs_reauth") && <button type="button" className="button button-secondary" disabled={connecting || syncing || disconnecting} onClick={() => setConfirmDisconnect(true)}>Desconectar</button>}
+      </div>
+      <Modal open={confirmDisconnect} title="Desconectar Google Calendar?" onClose={() => setConfirmDisconnect(false)} busy={disconnecting}>
+        <p>O acesso será revogado e os espelhos serão removidos deste app. Eventos locais e cópias enviadas ao Google permanecem. Envie ou descarte as alterações pendentes antes de desconectar.</p>
+        <div className="modal-actions"><button type="button" className="button button-secondary" disabled={disconnecting} onClick={() => setConfirmDisconnect(false)}>Manter conexão</button><button type="button" className="button" disabled={disconnecting} onClick={() => void disconnect()}>{disconnecting ? "Desconectando…" : "Desconectar"}</button></div>
+      </Modal>
     </section>
   );
 }

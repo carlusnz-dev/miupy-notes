@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AppError } from "../../../core/domain/app-error.js";
 import { GoogleApiError, GoogleCalendarClient, type GoogleEvent, type GoogleEventBody, type GoogleEventsPage, type ListParams } from "./google-calendar.client.js";
 import type { AccessTokenSource, FetchLike } from "./google-oauth.js";
 
@@ -42,7 +43,10 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
     const query = new URLSearchParams({ singleEvents: "true", maxResults: "250" });
     // Com syncToken, timeMin/timeMax/orderBy/q... são proibidos (400); o conjunto de parâmetros é o mesmo em todas as páginas.
     if (params.syncToken) query.set("syncToken", params.syncToken);
-    else if (params.timeMin) query.set("timeMin", params.timeMin);
+    else {
+      if (params.timeMin) query.set("timeMin", params.timeMin);
+      if (params.timeMax) query.set("timeMax", params.timeMax);
+    }
     if (params.pageToken) query.set("pageToken", params.pageToken);
     return pageSchema.parse(await this.call(ownerId, "GET", `${this.events(calendarId)}?${query}`));
   }
@@ -56,7 +60,10 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
   }
 
   async updateEvent(ownerId: string, calendarId: string, eventId: string, body: GoogleEventBody, etag: string): Promise<GoogleEvent> {
-    return eventSchema.parse(await this.call(ownerId, "PUT", `${this.events(calendarId)}/${encodeURIComponent(eventId)}?sendUpdates=none`, body, etag));
+    // PATCH conserva convidados, lembretes, recorrência e metadados que este formulário não edita.
+    const { id: _id, ...fields } = body;
+    const clearOtherKind = (value: GoogleEvent["start"]) => value?.date ? { ...value, dateTime: null, timeZone: null } : { ...value, date: null };
+    return eventSchema.parse(await this.call(ownerId, "PATCH", `${this.events(calendarId)}/${encodeURIComponent(eventId)}?sendUpdates=none`, { ...fields, ...(body.start ? { start: clearOtherKind(body.start) } : {}), ...(body.end ? { end: clearOtherKind(body.end) } : {}) }, etag));
   }
 
   async deleteEvent(ownerId: string, calendarId: string, eventId: string, etag: string): Promise<void> {
@@ -75,7 +82,7 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
         if (etag) headers["if-match"] = etag;
         response = await this.doFetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
       } catch (error) {
-        if (error instanceof GoogleApiError) throw error;
+        if (error instanceof GoogleApiError || error instanceof AppError) throw error;
         if (attempt >= MAX_ATTEMPTS) throw new GoogleApiError("unavailable");
         await this.sleep(this.delay(attempt));
         continue;

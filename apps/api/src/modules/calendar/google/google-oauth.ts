@@ -14,7 +14,7 @@ export abstract class GoogleOAuth {
   abstract revoke(refreshToken: string): Promise<void>;
 }
 
-/** Cofre do refresh token. Não há implementação de produção ainda: exige KMS/Secrets Manager (decisão pendente). */
+/** Cofre do refresh token; adaptador local Secret Service, adaptador AWS ainda pendente. */
 export abstract class CredentialStore {
   abstract get(ownerId: string): Promise<string | null>;
   abstract put(ownerId: string, refreshToken: string): Promise<void>;
@@ -83,16 +83,16 @@ export class HttpGoogleOAuth extends GoogleOAuth {
 
 /** Access token em memória por proprietário, renovado pelo refresh token do cofre; nada vai a disco. */
 export class AccessTokenSource {
-  private readonly cache = new Map<string, { token: string; expiresAt: number }>();
+  private readonly cache = new Map<string, { token: string; expiresAt: number; refreshToken: string }>();
   constructor(private readonly oauth: GoogleOAuth, private readonly credentials: CredentialStore, private readonly now: () => number = Date.now) {}
 
   async get(ownerId: string): Promise<string> {
-    const cached = this.cache.get(ownerId);
-    if (cached && cached.expiresAt - 30_000 > this.now()) return cached.token;
     const refreshToken = await this.credentials.get(ownerId);
     if (!refreshToken) throw new GoogleApiError("unauthorized");
+    const cached = this.cache.get(ownerId);
+    if (cached?.refreshToken === refreshToken && cached.expiresAt - 30_000 > this.now()) return cached.token;
     const { accessToken, expiresInSec } = await this.oauth.refreshAccessToken(refreshToken);
-    this.cache.set(ownerId, { token: accessToken, expiresAt: this.now() + expiresInSec * 1000 });
+    this.cache.set(ownerId, { token: accessToken, expiresAt: this.now() + expiresInSec * 1000, refreshToken });
     return accessToken;
   }
 

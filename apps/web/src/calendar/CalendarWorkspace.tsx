@@ -18,6 +18,9 @@ import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
 
 export type GoogleApi = {
+  connect?: (mode: "mirror" | "reflect", onFinalizing?: () => void) => Promise<GoogleStatusOutput>;
+  cancelConnect?: () => Promise<void>;
+  disconnect?: () => Promise<GoogleStatusOutput>;
   getStatus: (signal?: AbortSignal) => Promise<GoogleStatusOutput>;
   sync: () => Promise<GoogleSyncOutput>;
   reflect: (id: string) => Promise<unknown>;
@@ -129,7 +132,11 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
         </div>
       </div>
 
-      <GooglePanel status={status} error={statusError} onSync={async () => { const result = await google.sync(); setStatus(await google.getStatus().catch(() => status)); calendar.refreshNow(); return result; }} />
+      <GooglePanel status={status} error={statusError}
+        onConnect={google.connect ? async (mode, onFinalizing) => { const connected = await google.connect!(mode, onFinalizing); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
+        onCancel={google.cancelConnect}
+        onDisconnect={google.disconnect ? async () => { const disconnected = await google.disconnect!(); if (isCurrent?.() === false) return; setStatus(disconnected); calendar.refreshNow(); } : undefined}
+        onSync={async () => { const result = await google.sync(); setStatus(await google.getStatus().catch(() => status)); calendar.refreshNow(); return result; }} />
 
       {editing && (
         <EventForm

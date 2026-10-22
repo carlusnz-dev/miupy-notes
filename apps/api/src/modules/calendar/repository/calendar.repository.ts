@@ -25,6 +25,7 @@ export abstract class CalendarRepository extends BaseRepository<CalendarEvent> {
   /** Grava somente se a conexão persistida ainda tem este `connectionId`; `false` = foi desconectada/refeita. */
   abstract saveConnectionIf(ownerId: string, connectionId: string, connection: GoogleConnection): Promise<boolean>;
   abstract deleteConnection(ownerId: string): Promise<void>;
+  abstract takePending(ownerId: string): Promise<PendingAuthorization | null>;
   abstract getPending(ownerId: string): Promise<PendingAuthorization | null>;
   abstract savePending(ownerId: string, pending: PendingAuthorization): Promise<void>;
   abstract clearPending(ownerId: string): Promise<void>;

@@ -364,3 +364,92 @@ test("regressão: insert 409 com conteúdo remoto divergente é conflito explíc
   assert.equal(kit.google.calls.includes("update"), false);
   assert.equal((await kit.repository.findById(owner, event.id))!.reflection, null);
 });
+
+
+test("duas conclusões simultâneas consomem o state uma única vez", async () => {
+  const kit = createKit(); kit.oauth.grantedScopes = [SCOPE_MIRROR];
+  const { state } = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
+  let exchanges = 0;
+  const exchange = kit.oauth.exchangeCode.bind(kit.oauth);
+  kit.oauth.exchangeCode = async () => { exchanges++; return exchange(); };
+  const results = await Promise.allSettled([1, 2].map(() => kit.integration.connect(owner, { state, code: "c", codeVerifier: verifier, redirectUri })));
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(exchanges, 1);
+});
+
+test("janela inicial é estável entre páginas e incremental omite ambos limites", async () => {
+  const kit = createKit({ now: () => at(12) }); await connect(kit, "mirror");
+  ["a", "b", "c"].forEach((id) => kit.google.seed(gEvent(id)));
+  const seen: Array<import("../google/google-calendar.client.js").ListParams> = [];
+  const list = kit.google.listEvents.bind(kit.google);
+  kit.google.listEvents = async (o, c, params) => { seen.push(params); return list(o, c, params); };
+  await kit.integration.sync(owner);
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0].timeMin, new Date(at(12).getTime() - 30 * 86400000).toISOString());
+  assert.equal(seen[0].timeMax, new Date(at(12).getTime() + 366 * 86400000).toISOString());
+  assert.equal(seen[0].timeMax, seen[1].timeMax);
+  seen.length = 0; await kit.integration.sync(owner);
+  assert.equal(seen[0].timeMin, undefined); assert.equal(seen[0].timeMax, undefined);
+});
+
+test("espelho exige escrita, versão e ETag; conflito remoto não sobrescreve e retry idêntico reconcilia", async () => {
+  const kit = createKit(); await connect(kit, "mirror"); kit.google.seed(gEvent("a")); await kit.integration.sync(owner);
+  let event = (await kit.repository.list(owner, { limit: 10 })).items[0];
+  await assert.rejects(kit.integration.updateMirror(owner, event.id, { version: event.version, title: "x" }), { code: "READ_ONLY_EVENT" });
+  await connect(kit, "reflect"); await kit.integration.sync(owner);
+  event = (await kit.repository.list(owner, { limit: 10 })).items[0];
+  await assert.rejects(kit.integration.updateMirror(owner, event.id, { version: event.version + 1, title: "x" }), { code: "CONFLICT" });
+  const saved = await kit.integration.updateMirror(owner, event.id, { version: event.version, title: "x" });
+  assert.equal(saved.title, "x"); assert.equal(saved.version, event.version + 1);
+  // Simula resposta perdida depois do PATCH: o remoto já contém a intenção, mas o espelho mantém o ETag antigo.
+  kit.google.seed(gEvent("a", { summary: "y" }));
+  const replay = await kit.integration.updateMirror(owner, saved.id, { version: saved.version, title: "y" });
+  assert.equal(replay.title, "y");
+  kit.google.seed(gEvent("a", { summary: "edição remota" }));
+  await assert.rejects(kit.integration.deleteMirror(owner, replay.id, replay.version), { code: "GOOGLE_CONFLICT" });
+  assert.equal(kit.google.events.get("a")?.summary, "edição remota");
+});
+
+test("exclusão refletida conserva vínculo se edição local vencer após DELETE remoto", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  const reflected = await kit.integration.reflect(owner, local.id);
+  const remove = kit.google.deleteEvent.bind(kit.google);
+  let edited = false;
+  kit.google.deleteEvent = async (...args) => {
+    await remove(...args);
+    if (!edited) { edited = true; await kit.service.update(owner, local.id, { version: reflected.version, title: "edição concorrente" }); }
+  };
+  await assert.rejects(kit.integration.deleteReflected(owner, local.id, reflected.version), { code: "CONFLICT" });
+  const current = await kit.repository.findById(owner, local.id);
+  assert.ok(current?.reflection); assert.equal(current.title, "edição concorrente");
+  await kit.integration.deleteReflected(owner, local.id, current.version);
+  assert.equal(await kit.repository.findById(owner, local.id), null);
+});
+
+test("desconectar durante a troca OAuth aguarda e remove o grant tardio no processo local", async () => {
+  const kit = createKit(); kit.oauth.grantedScopes = [SCOPE_MIRROR];
+  const { state } = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
+  let release!: () => void, started!: () => void;
+  const entered = new Promise<void>((r) => { started = r; });
+  const wait = new Promise<void>((r) => { release = r; });
+  kit.oauth.exchangeCode = async () => { started(); await wait; return { refreshToken: "late-synthetic", scopes: [SCOPE_MIRROR] }; };
+  const connecting = kit.integration.connect(owner, { state, code: "c", codeVerifier: verifier, redirectUri });
+  await entered;
+  const disconnecting = kit.integration.disconnect(owner);
+  release(); await connecting; await disconnecting;
+  assert.equal(await kit.credentials.get(owner), null);
+  assert.equal((await kit.integration.status(owner)).state, "not_connected");
+  assert.deepEqual(kit.oauth.revoked, ["late-synthetic"]);
+});
+
+test("editar só título preserva descrição/local remotos maiores que o espelho", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  kit.google.seed(gEvent("long", { description: "d".repeat(9000), location: "l".repeat(400) }));
+  await kit.integration.sync(owner);
+  const event = (await kit.repository.list(owner, { limit: 10 })).items[0];
+  // O formulário manda o rascunho completo, incluindo a descrição truncada que não foi editada.
+  await kit.integration.updateMirror(owner, event.id, { version: event.version, title: "novo título", description: event.description, location: event.location });
+  assert.equal(kit.google.events.get("long")?.description?.length, 9000);
+  assert.equal(kit.google.events.get("long")?.location?.length, 400);
+});
