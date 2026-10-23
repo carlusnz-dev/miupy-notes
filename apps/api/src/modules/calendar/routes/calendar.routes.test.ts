@@ -221,3 +221,31 @@ test("POST/PATCH com envio explícito reconcilia falha Google e DELETE refletido
   } finally { kit.repository.delete = remove; }
   assert.equal(await kit.repository.findById(owner, id), null);
 });
+
+test("regressão HTTP: evento apagado no Google vira deleted_remote, PATCH não dá conflito e DELETE/desvincular concluem", async () => {
+  const owner = "writer";
+  kit.oauth.grantedScopes = [SCOPE_REFLECT];
+  const redirectUri = "http://127.0.0.1:1234/callback";
+  const { state } = await kit.integration.authorize(owner, { mode: "reflect", redirectUri, codeChallenge: "a".repeat(43) });
+  await kit.integration.connect(owner, { state, redirectUri, codeVerifier: "b".repeat(43), code: "synthetic-code" });
+  type Reflected = EventBody & { reflection: { state: string; inSync: boolean } | null };
+  const ids = ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"];
+  for (const id of ids) assert.equal((await call(owner, "/events", { method: "POST", body: timed({ id, sendToGoogle: true }) })).status, 201);
+  await call(owner, "/google/sync", { method: "POST", body: {} });
+  for (const id of ids) kit.google.remove(id.replaceAll("-", ""));
+  assert.equal((await call(owner, "/google/sync", { method: "POST", body: {} })).status, 200);
+
+  const [first, second] = await Promise.all(ids.map(async (id) => await (await call(owner, `/events/${id}`)).json() as Reflected));
+  assert.deepEqual([first.reflection?.state, first.reflection?.inSync], ["deleted_remote", false]);
+  const patched = await call(owner, `/events/${first.id}`, { method: "PATCH", body: { version: first.version, title: "Só local" } });
+  assert.equal(patched.status, 200);
+  const edited = await patched.json() as Reflected;
+  assert.equal(edited.title, "Só local"); assert.equal(edited.reflection?.state, "deleted_remote");
+
+  assert.equal((await call(owner, `/events/${first.id}?version=${edited.version}`, { method: "DELETE" })).status, 204);
+  assert.equal((await call(owner, `/events/${first.id}`)).status, 404);
+  const detached = await call(owner, `/events/${second.id}/google-reflection?keepRemote=false`, { method: "DELETE" });
+  assert.equal(detached.status, 200);
+  assert.equal((await detached.json() as Reflected).reflection, null);
+  assert.equal((await call(owner, `/events/${second.id}`)).status, 200);
+});
