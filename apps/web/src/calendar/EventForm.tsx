@@ -1,4 +1,5 @@
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import ButtonGroup from "../components/ButtonGroup";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DatePicker from "../components/DatePicker";
 import Modal from "../components/Modal";
@@ -12,13 +13,18 @@ import { buildDraft, initialFields, type Fields } from "./draft";
 import { browserZone, zoneChoices } from "./time";
 
 export type NoteChoice = { id: string; title: string };
+const kinds = [{ value: "event", label: "Evento" }, { value: "task", label: "Tarefa" }] as const;
 type Reflector = { reflect: (id: string) => Promise<void>; unreflect: (id: string, keepRemote: boolean) => Promise<void> };
 
-export default function EventForm({ open, entry, day, notes, notesState, events, google, reflector, onClose, onSubmit, onDelete, onResolve, onDiscard }: {
+export default function EventForm({ open, entry, day, seed, kind, notes, notesState, events, google, reflector, onClose, onSubmit, onDelete, onResolve, onDiscard }: {
   open: boolean;
   /** Evento aberto; nulo = novo. */
   entry: DisplayEvent | null;
   day: { year: number; month: number; day: number };
+  /** Campos já preenchidos (vindos do cartão de criação rápida). */
+  seed?: Partial<Fields>;
+  /** Só na criação: alterna entre evento e tarefa; `task` é o formulário da tarefa, no mesmo Modal. */
+  kind?: { value: "event" | "task"; onChange: (value: "event" | "task") => void; task: ReactNode };
   notes: NoteChoice[];
   notesState: "loading" | "ready" | "unavailable";
   events: CalendarEventOutput[];
@@ -31,7 +37,7 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
   onDiscard: () => Promise<void>;
 }) {
   const event = entry?.event ?? null;
-  const [fields, setFields] = useState<Fields>(() => initialFields(event, day));
+  const [fields, setFields] = useState<Fields>(() => ({ ...initialFields(event, day), ...seed }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -69,8 +75,9 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
 
   return (
     <>
-    <Modal open={open} title={readOnly ? "Evento do Google" : event ? "Editar evento" : "Novo evento"} onClose={onClose} busy={busy} className="calendar-modal">
-      {readOnly && event ? (
+    <Modal open={open} title={readOnly ? "Evento do Google" : event ? "Editar evento" : kind?.value === "task" ? "Nova tarefa" : "Novo evento"} onClose={onClose} busy={busy} className="calendar-modal">
+      {kind && <ButtonGroup label="Tipo" options={kinds} value={kind.value} onChange={kind.onChange} />}
+      {kind?.value === "task" ? kind.task : readOnly && event ? (
         <div className="calendar-readonly">
           <h3>{event.title}</h3>
           <p>{timeRange(event)}{zoneInfo ? ` · ${zoneInfo}` : ""}</p>

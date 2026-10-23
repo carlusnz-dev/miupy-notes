@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { signIn, useAuth, getOwnerId, getAuthSessionVersion, isCurrentAuthSession } from "../lib/auth";
-import { connectGoogle, cancelGoogleConnection, disconnectGoogle, createCalendarEvent, deleteCalendarEvent, getCalendarEvent, getGoogleStatus, listEventsInRange, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent } from "../lib/calendar-api";
+import { connectGoogle, cancelGoogleConnection, disconnectGoogle, createCalendarEvent, createTask, deleteCalendarEvent, deleteTask, getCalendarEvent, getGoogleStatus, listEventsInRange, listTasks, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent, updateTask } from "../lib/calendar-api";
 import { listNotesMetadata } from "../lib/notes-api";
 import { usePageTitle } from "../lib/use-page-title";
 import CalendarWorkspace, { type GoogleApi } from "./CalendarWorkspace";
 import type { NoteChoice } from "./EventForm";
 import { createIndexedDbCalendarStore } from "./store";
+import type { TasksApi } from "./tasks";
 import type { RangeRemote } from "./use-calendar";
 
 const MAX_NOTE_PAGES = 5;
@@ -28,6 +29,7 @@ const remote: RangeRemote = {
   get: (id) => getCalendarEvent(id),
   listRange: (range, signal) => listEventsInRange(range, signal),
 };
+const tasksApi: TasksApi = { list: listTasks, create: createTask, update: updateTask, remove: deleteTask };
 const google: GoogleApi = { connect: connectGoogle, cancelConnect: cancelGoogleConnection, disconnect: disconnectGoogle, getStatus: getGoogleStatus, sync: syncGoogle, reflect: reflectEvent, unreflect: unreflectEvent };
 
 export default function CalendarPage() {
@@ -58,5 +60,5 @@ export default function CalendarPage() {
     );
   }
   if (!ownerId) return <section className="calendar-page"><p role="status">Preparando suas agendas…</p></section>;
-  return <CalendarWorkspace key={ownerId} ownerId={ownerId} store={store} remote={remote} loadNotes={loadNotes} google={google} isCurrent={() => isCurrentAuthSession(session)} />;
+  return <CalendarWorkspace key={ownerId} ownerId={ownerId} store={store} remote={remote} loadNotes={loadNotes} google={google} tasksApi={tasksApi} isCurrent={() => isCurrentAuthSession(session)} />;
 }

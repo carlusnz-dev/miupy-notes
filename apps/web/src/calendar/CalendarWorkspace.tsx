@@ -3,17 +3,22 @@ import gsap from "gsap";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import ButtonGroup from "../components/ButtonGroup";
 import { addDays, todayLocal, type CalendarDate } from "../lib/calendar-date";
-import type { CalendarEventOutput, EventDraft, GoogleStatusOutput, GoogleSyncOutput } from "../lib/calendar-api";
+import type { CalendarEventOutput, EventDraft, GoogleStatusOutput, GoogleSyncOutput, TaskOutput } from "../lib/calendar-api";
+import type { Fields } from "./draft";
 import EventForm, { type NoteChoice } from "./EventForm";
 import GooglePanel from "./GooglePanel";
 import MonthView from "./MonthView";
-import TimeGrid from "./TimeGrid";
+import QuickCreate, { type ItemKind, type MoreSeed } from "./QuickCreate";
+import TaskForm, { TaskFormBody, type TaskFields } from "./TaskForm";
+import TasksPanel from "./TasksPanel";
+import TimeGrid, { type NewTimes, type Slot } from "./TimeGrid";
 import UpcomingList from "./UpcomingList";
 import YearView from "./YearView";
 import { periodLabel } from "./format";
 import { shift, visibleDays, type ViewMode } from "./layout";
-import type { DisplayEvent } from "./outbox";
+import { draftOf, type DisplayEvent } from "./outbox";
 import type { CalendarStore } from "./store";
+import { useTasks, type TasksApi } from "./tasks";
 import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
 
@@ -31,21 +36,31 @@ const modes = [
   { value: "day", label: "Dia" }, { value: "week", label: "Semana" }, { value: "month", label: "Mês" }, { value: "year", label: "Ano" },
 ] as const;
 
-type Editing = { key: number; entry: DisplayEvent | null; day: CalendarDate };
+type Editing = { key: number; entry: DisplayEvent | null; day: CalendarDate; seed?: Partial<Fields> };
 
-export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, isCurrent }: {
+export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, tasksApi, isCurrent }: {
   ownerId: string;
   store: CalendarStore;
   remote: RangeRemote;
   loadNotes: () => Promise<NoteChoice[]>;
   google: GoogleApi;
+  /** Ausente = sem tarefas (o formulário não oferece "Tarefa"). */
+  tasksApi?: TasksApi;
   isCurrent?: () => boolean;
 }) {
   const calendar = useCalendar({ ownerId, store, remote, isCurrent });
+  const tasks = useTasks(tasksApi, ownerId, calendar.connectivity);
+  const overdueIds = useMemo(() => new Set(tasks.overdue.map((task) => task.id)), [tasks.overdue]);
   const { mode, anchor, setAnchor, setMode } = calendar;
   const [editing, setEditing] = useState<Editing | null>(null);
   // O formulário fica montado com `open` controlado: o Modal compartilhado faz a saída animada e devolve o foco ao botão que o abriu.
   const [formOpen, setFormOpen] = useState(false);
+  // Criação: evento ou tarefa no mesmo Modal; tarefa existente abre o próprio formulário; o cartão rápido nasce do toque na grade.
+  const [createKind, setCreateKind] = useState<ItemKind>("event");
+  const [taskSeed, setTaskSeed] = useState<Partial<TaskFields>>({});
+  const [taskEditing, setTaskEditing] = useState<{ key: number; task: TaskOutput } | null>(null);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [quick, setQuick] = useState<{ key: number; slot: Slot } | null>(null);
   const [notes, setNotes] = useState<NoteChoice[]>([]);
   const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">("loading");
   const [status, setStatus] = useState<GoogleStatusOutput | null>(null);
@@ -82,7 +97,17 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
 
   const events = useMemo(() => calendar.events.map((item) => item.event), [calendar.events]);
   const open = useCallback((event: CalendarEventOutput) => { setEditing({ key: ++counter.current, entry: calendar.statusOf.get(event.id) ?? null, day: anchor }); setFormOpen(true); }, [calendar.statusOf, anchor]);
-  const openNew = (day: CalendarDate = anchor) => { setEditing({ key: ++counter.current, entry: null, day }); setFormOpen(true); };
+  const openNew = (day: CalendarDate = anchor, seed?: Partial<Fields>, kind: ItemKind = "event", task: Partial<TaskFields> = {}) => {
+    setEditing({ key: ++counter.current, entry: null, day, seed }); setCreateKind(kind); setTaskSeed(task); setFormOpen(true);
+  };
+  const openTask = useCallback((task: TaskOutput) => { setTaskEditing({ key: ++counter.current, task }); setTaskFormOpen(true); }, []);
+  const pickSlot = useCallback((slot: Slot) => setQuick({ key: ++counter.current, slot }), []);
+  const moreOptions = (slot: Slot, seed: MoreSeed) => { setQuick(null); openNew(slot.day, seed.event, seed.kind, seed.task); };
+  // Uma gravação por gesto (a mesma fila de edição do formulário); o bloco volta ao lugar se ela falhar.
+  const reschedule = useCallback(async (event: CalendarEventOutput, times: NewTimes) => {
+    const shown = calendar.statusOf.get(event.id)?.event ?? event;
+    await calendar.submit({ kind: "update", event: shown, draft: { ...draftOf(shown), ...times } });
+  }, [calendar.statusOf, calendar.submit]); // eslint-disable-line react-hooks/exhaustive-deps
   // Callbacks estáveis: as vistas são memo e não re-renderizam quando só o modal ou o status do Google mudam.
   const pickDay = useCallback((day: CalendarDate) => { setAnchor(day); setMode("day"); }, [setAnchor, setMode]);
   const pickMonth = useCallback((month: number) => { setAnchor((current) => ({ ...current, month, day: 1 })); setMode("month"); }, [setAnchor, setMode]);
@@ -131,10 +156,13 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       </div>
 
       <div className="calendar-layout" data-mode={mode}>
-        <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} />
+        <div className="calendar-top">
+          <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} />
+          {tasksApi && tasks.state === "ready" && <TasksPanel pending={tasks.pending} overdue={tasks.overdue} onToggle={tasks.toggle} onOpen={openTask} error={tasks.error} onDismissError={tasks.dismissError} />}
+        </div>
         <div className="calendar-view" ref={viewRef} aria-label={`Visualização por ${modes.find((item) => item.value === mode)?.label.toLowerCase()}`}>
-          {(mode === "day" || mode === "week") && <TimeGrid days={days} events={events} statusOf={calendar.statusOf} onOpen={open} onPickDay={mode === "week" ? pickDay : undefined} />}
-          {mode === "month" && <MonthView anchor={anchor} events={events} statusOf={calendar.statusOf} onOpen={open} onPickDay={pickDay} />}
+          {(mode === "day" || mode === "week") && <TimeGrid days={days} events={events} tasks={tasks.tasks} overdueIds={overdueIds} statusOf={calendar.statusOf} onOpen={open} onPickDay={mode === "week" ? pickDay : undefined} onPickSlot={pickSlot} onReschedule={reschedule} onToggleTask={tasks.toggle} onOpenTask={openTask} />}
+          {mode === "month" && <MonthView anchor={anchor} events={events} tasks={tasks.tasks} overdueIds={overdueIds} statusOf={calendar.statusOf} onOpen={open} onPickDay={pickDay} onPickSlot={pickSlot} onToggleTask={tasks.toggle} onOpenTask={openTask} />}
           {mode === "year" && <YearView anchor={anchor} events={events} onPickMonth={pickMonth} onPickDay={pickDay} />}
         </div>
 
@@ -147,16 +175,25 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
 
       {editing && (
         <EventForm
-          key={editing.key} open={formOpen} entry={editing.entry} day={editing.day} notes={notes} notesState={notesState} events={events} google={status}
+          key={editing.key} open={formOpen} entry={editing.entry} day={editing.day} seed={editing.seed} notes={notes} notesState={notesState} events={events} google={status}
           reflector={editing.entry ? {
             reflect: async (id) => { await google.reflect(id); setFormOpen(false); calendar.refreshNow(); },
             unreflect: async (id, keepRemote) => { await google.unreflect(id, keepRemote); setFormOpen(false); calendar.refreshNow(); },
           } : null}
+          kind={!editing.entry && tasksApi ? { value: createKind, onChange: setCreateKind, task: <TaskFormBody open={formOpen} task={null} seed={taskSeed} onSubmit={tasks.create} onClose={() => setFormOpen(false)} /> } : undefined}
           onClose={() => setFormOpen(false)} onSubmit={submit}
           onDelete={async () => { if (editing.entry) await calendar.submit({ kind: "delete", event: editing.entry.event }); }}
           onResolve={async (choice) => { if (editing.entry) await calendar.resolve(editing.entry.event.id, choice); }}
           onDiscard={async () => { if (editing.entry) await calendar.discard(editing.entry.event.id); }}
         />
+      )}
+      {taskEditing && <TaskForm key={taskEditing.key} open={taskFormOpen} task={taskEditing.task} onClose={() => setTaskFormOpen(false)} onSubmit={(draft) => tasks.update(taskEditing.task.id, draft)} onDelete={() => tasks.remove(taskEditing.task.id)} />}
+      {quick && (
+        <QuickCreate key={quick.key} x={quick.slot.x} y={quick.slot.y} day={quick.slot.day} startMin={quick.slot.startMin} endMin={quick.slot.endMin}
+          onClose={() => setQuick(null)}
+          onSaveEvent={(draft) => calendar.submit({ kind: "create", eventId: crypto.randomUUID(), draft })}
+          onSaveTask={tasks.create}
+          onMore={(seed) => moreOptions(quick.slot, seed)} />
       )}
     </section>
   );

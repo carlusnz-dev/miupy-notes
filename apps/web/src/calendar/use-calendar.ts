@@ -8,6 +8,8 @@ import type { CalendarStore, OutboxOp } from "./store";
 
 /** Janela dos "próximos eventos", independente do modo de visualização. */
 export const UPCOMING_DAYS = 30;
+/** Eventos considerados para os próximos: o carrossel agrupa séries, então o limite conta ocorrências. */
+const UPCOMING_LIMIT = 60;
 const FLUSH_INTERVAL_MS = 15_000;
 
 export type Connectivity = "online" | "offline";
@@ -121,7 +123,7 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
   const retryNow = useCallback(() => { setConnectivity(typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "online"); setTick((value) => value + 1); void flush(true); }, [flush]);
 
   const events: DisplayEvent[] = useMemo(() => withOutbox(cache, ops), [cache, ops]);
-  const upcoming = useMemo(() => upcomingEvents(events.map((item) => item.event), new Date(), 8), [events]);
+  const upcoming = useMemo(() => upcomingEvents(events.map((item) => item.event), new Date(), UPCOMING_LIMIT), [events]);
   const statusOf = useMemo(() => new Map(events.map((item) => [item.event.id, item])), [events]);
 
   return { mode, setMode, anchor, setAnchor, events, upcoming, statusOf, ops, fetchState, connectivity, lastFlush, localError, submit, resolve, discard, retryNow, refreshNow: () => setTick((value) => value + 1) };
