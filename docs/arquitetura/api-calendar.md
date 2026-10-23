@@ -37,6 +37,32 @@ Campos desconhecidos (inclusive `ownerId`) respondem `400`. Limites: `title` 1�
 
 Ordem estável **por ID**, não cronológica (sem índice por data). Com `from`/`to` o DynamoDB aplica `Limit` antes do filtro; o repositório lê até 5 rodadas de 100 itens para juntar a página e devolve `nextCursor` (último item devolvido ou última chave avaliada). Uma página pode vir com menos itens ou vazia com `nextCursor` — continue até `null`. Custo proporcional ao acervo do proprietário (sem índice novo). Cursor inválido ou forjado → `400`; a partição vem sempre do principal.
 
+## Tarefas
+
+Entidade própria do módulo, na mesma tabela (chave `USER#{ownerId}` / `TASK#{id}`), com as mesmas regras de proprietário, versão e idempotência dos eventos. Tipos públicos em `task-contract.ts`; cliente web em `apps/web/src/lib/calendar-api.ts`. Tarefa de outro proprietário responde `404`.
+
+| Método | Caminho | Entrada | Saída |
+|---|---|---|---|
+| `GET` | `/tasks` | `limit` 1–100 (padrão 50), `cursor` opaco, `status` `pending`\|`completed` | `{ items, nextCursor }` |
+| `POST` | `/tasks` | `{ id?, title, description?, dueDate?, dueTime?, status? }` | `201` tarefa; `200` se é repetição idêntica |
+| `GET` | `/tasks/{id}` | — | tarefa |
+| `PATCH` | `/tasks/{id}` | `{ version, ...campos }` (ao menos um campo além de `version`) | tarefa atualizada |
+| `DELETE` | `/tasks/{id}?version=N` | `version` obrigatório | `204` |
+
+**Tarefa:** `{ id, title, description, dueDate, dueTime, status, completedAt, inGoogle, createdAt, updatedAt, version }`. `ownerId` e IDs do Google nunca saem. Limites: `title` 1–200 após `trim`; `description` ≤ 8 000. Campos desconhecidos → `400`.
+
+- **Prazo:** `dueDate` é uma data real `AAAA-MM-DD` ou `null`; `dueTime` é `HH:MM` de **relógio local** (sem fuso: lembrete pessoal) e exige `dueDate`. Inválido → `400`. Limpar a data exige limpar a hora no mesmo `PATCH`.
+- **Status:** `pending` ou `completed`. Concluir grava `completedAt`; reabrir limpa; editar outros campos de uma concluída preserva o instante original.
+- **Atrasada** não é campo: é pendente com prazo passado (sem hora, vale até o fim do dia). A regra é a função pura `isTaskOverdue` (`domain/task-schedule.ts`), exportada pelo contrato e usada pelo cliente com o relógio local; o servidor não adivinha fuso.
+- **Versão e idempotência:** `PATCH`/`DELETE` exigem a `version` lida (`409 CONFLICT` se divergir; escrita condicional no DynamoDB). `POST` com `id` repetido e mesmo conteúdo → `200`; conteúdo diferente → `409`.
+- **Listagem:** ordem estável por ID. Com `status` o DynamoDB aplica `Limit` antes do filtro; o repositório lê até 5 rodadas de 100 itens para juntar a página (como em `/events`) — continue até `nextCursor: null`.
+
+### Google Tasks (porta, desligada)
+
+Projetada, **não ativada**. `google-tasks/` tem a porta `GoogleTasksClient` (inserir, atualizar, excluir), o mapeamento (`completed` ↔ `status: "completed"` + `completed`; pendente ↔ `needsAction` com `completed: null`; só a data do prazo, pois a API descarta a hora), um cliente HTTP (`https://tasks.googleapis.com/tasks/v1/lists/…`) e um fake. `TaskGoogleSync` envia após cada gravação, guarda a referência (`external`, `inGoogle: true`) e nunca desfaz a gravação local se o Google falhar. Sem `TaskGoogleSync` (composição padrão em `module.ts`), nenhuma chamada acontece.
+
+**Pendente de autorização do proprietário:** (1) habilitar a Tasks API no projeto GCP; (2) pedir o escopo `https://www.googleapis.com/auth/tasks` no consentimento (hoje só Calendar); (3) fonte de token (`TasksTokenSource`) ligada ao cofre; (4) ligar `TaskGoogleSync` com `enabled: true` em `createCalendarModule`. Verificado só com fakes e `fetch` falso; nenhuma chamada a conta real, nenhum `gcloud`. Sem sincronização no sentido Google → app.
+
 ## Google Calendar (espelho e refletor)
 
 | Método | Caminho | Função |
