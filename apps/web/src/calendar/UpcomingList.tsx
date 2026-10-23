@@ -37,7 +37,7 @@ export default function UpcomingList({ events, statusOf, onOpen }: {
                     {note && <span className="calendar-upcoming-meta">{note}</span>}
                     <span className="calendar-upcoming-tags">
                       {event.source === "google" && <span className="calendar-tag">Google · leitura</span>}
-                      {event.reflection && <span className="calendar-tag">{event.reflection.inSync ? "No Google" : "Google desatualizado"}</span>}
+                      {event.reflection && <span className="calendar-tag">{event.reflection.state === "deleted_remote" ? "Excluído no Google" : event.reflection.inSync ? "No Google" : "Google desatualizado"}</span>}
                       <EventStatus status={statusOf.get(event.id)?.status ?? "synced"} />
                     </span>
                   </button>
