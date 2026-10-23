@@ -24,6 +24,12 @@ O login pedia `openid email profile`. O Calendar abria um segundo OAuth no naveg
 
 A API local já roda como o mesmo usuário do sistema do Tauri, então ler a entrada do chaveiro não amplia quem pode alcançá-la; amplia o que um comprometimento da API alcança, agora o refresh token do login. Mitigações: leitura sem escrita, `sub` conferido, segredo só por pipe/memória, Lambda sem esse adaptador. Revogação é por projeto no Google; com um só token, **Desconectar Calendar não revoga**, apenas apaga cadastro e espelhos e para de usar o acesso. Revogar é sair da conta ou remover o app na conta Google. Itens `CALENDAR#GOOGLE#PENDING` antigos ficam órfãos e inertes.
 
+## Ajustes após revisão (2026-10-23)
+
+- **Mesma conta ao refazer o login pelo Calendar:** o Tauri obtém o `sub` da sessão atual, envia `login_hint` e, se o ID token novo for de outra conta, retorna `ACCOUNT_CHANGED` sem gravar sessão nem refresh token e revoga o token recém-emitido. Antes, a sessão podia trocar de conta com o React, o cache e a outbox ainda montados para a anterior.
+- **Modo coerente com o token atual:** sincronizar e cada escrita reconferem os escopos do token (cache por refresh token). Login refeito só com leitura rebaixa `reflect` para `mirror` antes de chamar o Google; sem Calendar, `needs_reauth` + `SCOPE_NOT_GRANTED`. `403 insufficientPermissions` vira `409 SCOPE_NOT_GRANTED` e os demais `403` viram `403 UPSTREAM_FORBIDDEN`, em vez de `502` repetido indefinidamente pela outbox.
+- Reduzir escrita para leitura não revoga o token anterior (fica sem uso). A entrada antiga do Secret Service do fluxo separado (`application=com.miupy.notes.calendar`), se existir, pode ser removida manualmente com `secret-tool clear application com.miupy.notes.calendar`.
+
 ## Evidência e limites
 
 Testes com fakes: renovação, `scope`/`sub`, token de outra conta, escopo ausente, modo reflect/mirror, desconectar sem revogar, concorrência connect/disconnect, rota `{}`, `/google/authorization` inexistente, factory e leitura do chaveiro por executor falso, e `login_scopes` em Rust. Não verificados: chaveiro real (atributos `service`/`username` da crate `keyring` vistos só no código da crate), login e consentimento reais, janela Tauri, revogação efetiva. Fontes: [OAuth Desktop](https://developers.google.com/identity/protocols/oauth2/native-app), [revogação](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke), [validação de ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation).

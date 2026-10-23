@@ -41,3 +41,15 @@ Testes novos/ajustados (todos com fakes): renovação com `scope`/`sub`; respost
 - Quem logou antes precisa refazer o login uma vez (sem autorização incremental). Reflect só por escolha explícita; o escopo é o do último login.
 - Um único refresh token: Desconectar Calendar não revoga; sair da conta revoga login e Calendar. A API local passa a alcançar o refresh token do login (mitigado por leitura única, `sub` e Lambda sem adaptador).
 - Quando o proprietário autorizar, validar com conta real: login com Calendar, `secret-tool` no keyring do Hyprland, escopo granular e logout.
+
+## Adendo 2026-10-23 — correções da revisão e cache da Agenda
+
+Revisão independente (contrato/lógica) apontou dois problemas médios, corrigidos neste PR:
+
+- **M1, troca de conta ao refazer o login pelo Calendar:** `auth_sign_in` com `calendar` obtém o `sub` da sessão (renovando o ID token se preciso), envia `login_hint` e, se o ID token novo for de outra conta, retorna `ACCOUNT_CHANGED` sem gravar sessão nem refresh token e revoga o token recém-emitido (melhor esforço). Mensagem em `auth.ts`.
+- **M2, modo `reflect` obsoleto após novo login:** `scoped()` no serviço reconfere os escopos do token atual antes de sincronizar e de cada escrita; rebaixa para `mirror`, volta a `reflect` ou marca `needs_reauth` + `SCOPE_NOT_GRANTED`. `403 insufficientPermissions` → `409 SCOPE_NOT_GRANTED` (descarta o token em cache); demais `403` → `403 UPSTREAM_FORBIDDEN`. Antes viravam `502` repetido indefinidamente pela outbox.
+- Contrato: `api-calendar.md` (escopos por operação, novos erros, `login_hint`/`ACCOUNT_CHANGED`, `calendarId`/`connectedAt` em `GET /google`) e adendo na decisão de login único.
+
+Cache da Agenda (pedido do proprietário): `calendar/fetch-cache.ts`, memória por conta no módulo, sobrevive a trocar de página. Período reconciliado há menos de 2 min não vai à rede (eventos continuam vindo do IndexedDB); os "próximos" deixam de ser buscados a cada navegação; envio, conflito, mudança durante a busca e "atualizar" invalidam. Lista de notas e status do Google também ficam em memória por 2 min; status é rebuscado quando a rede volta. A última vista (modo/data) é restaurada ao voltar à página.
+
+Verificação (worktree, 2026-10-23): testes Calendar API 99 (94 ok, 5 ignorados); `test:api` 183 (174 ok, 9 ignorados DynamoDB, 0 falhas); `build:api`; `check:modules` (4 válidos); `tsc` web; `test:web` 162/162 (2 novos do cache); `vite build` ok (aviso de chunk do editor já existente); `cargo test --offline` 9/9. Playwright no `tests/calendar-harness.html` (vite 5184): chamadas `list` do remoto falso: inicial 2; Semana +1; Dia, Semana 0; Mês +1; Dia 0; próximo +1; anterior 0 (antes, 2 por navegação). Console: só `favicon.ico` 404. Não verificado: login/chaveiro/consentimento reais, revogação efetiva, escolha de outra conta na tela do Google, Tauri/WebKit. `cargo fmt --check` aponta diferenças já existentes no arquivo antes desta mudança (não reformatado para manter o diff pequeno).

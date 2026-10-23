@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
 import { normalizeTimes } from "../domain/event-time.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
-import type { GoogleConnection } from "../domain/google-connection.js";
+import type { GoogleConnection, GoogleMode } from "../domain/google-connection.js";
 import type { UpdateEventInput } from "../dto/input.js";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../dto/output.js";
 import { GoogleApiError, type GoogleCalendarClient, type GoogleEvent } from "../google/google-calendar.client.js";
@@ -27,6 +27,7 @@ const versionConflict = () => new AppError(409, "CONFLICT", "O evento foi altera
 
 /** Escopos Calendar concedidos ao login; o de escrita vale também para leitura. */
 const calendarScopes = (granted: readonly string[]) => [SCOPE_REFLECT, SCOPE_MIRROR].filter((scope) => granted.includes(scope));
+const modeFor = (scopes: readonly string[]): GoogleMode => (scopes[0] === SCOPE_REFLECT ? "reflect" : "mirror");
 
 export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   private readonly authorizationRuns = new Map<string, Promise<unknown>>();
@@ -59,7 +60,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     const scopes = calendarScopes(granted.scopes);
     if (scopes.length === 0) throw scopeMissing();
     await this.repository.saveConnection(ownerId, {
-      connectionId: randomUUID(), status: "connected", mode: scopes[0] === SCOPE_REFLECT ? "reflect" : "mirror", scopes, calendarId: CALENDAR_ID,
+      connectionId: randomUUID(), status: "connected", mode: modeFor(scopes), scopes, calendarId: CALENDAR_ID,
       connectedAt: this.now().toISOString(), syncToken: null, lastSyncAt: null, lastError: null,
     });
     return this.status(ownerId);
@@ -90,7 +91,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async sync(ownerId: string): Promise<GoogleSyncOutput> {
     const google = this.require();
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     try {
       let resynced = false;
       let result: Omit<GoogleSyncOutput, "resynced" | "lastSyncAt"> & { syncToken: string };
@@ -114,7 +115,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async reflect(ownerId: string, eventId: string): Promise<CalendarEvent> {
     const google = this.require();
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     if (connection.mode !== "reflect") throw new AppError(409, "REFLECTION_NOT_ENABLED", "Conecte o Google Calendar com permissão de escrita para enviar eventos.");
     const event = await this.local(ownerId, eventId);
     const body = toGoogleBody(event);
@@ -135,7 +136,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     if (!event.reflection) return event;
     if (!options.keepRemote) {
       const google = this.require();
-      const connection = await this.connected(ownerId);
+      const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
       try {
         await google.client.deleteEvent(ownerId, event.reflection.calendarId, event.reflection.googleEventId, event.reflection.etag);
       } catch (error) {
@@ -152,7 +153,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   /** Mantém o vínculo até excluir o registro: uma edição concorrente preserva a referência para retry. */
   async deleteReflected(ownerId: string, id: string, version: number): Promise<void> {
     const google = this.require();
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     const event = await this.local(ownerId, id);
     if (event.version !== version || !event.reflection) throw versionConflict();
     try {
@@ -166,7 +167,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   /** Escrita explícita de um espelho: usa o ETag que foi lido, preservando campos remotos fora do formulário. */
   async updateMirror(ownerId: string, id: string, input: UpdateEventInput): Promise<CalendarEvent> {
     const google = this.require();
-    const connection = await this.writable(ownerId);
+    const connection = await this.writable(google, ownerId);
     const event = await this.mirror(ownerId, id, input.version, connection);
     if (input.links?.length) throw new AppError(400, "VALIDATION_ERROR", "Relações não são suportadas em eventos do Google.");
     const times = normalizeTimes({ allDay: input.allDay ?? event.allDay, start: input.start ?? event.start, end: input.end ?? event.end, timeZone: input.timeZone === undefined ? event.timeZone : input.timeZone });
@@ -199,7 +200,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async deleteMirror(ownerId: string, id: string, version: number): Promise<void> {
     const google = this.require();
-    const connection = await this.writable(ownerId);
+    const connection = await this.writable(google, ownerId);
     const event = await this.mirror(ownerId, id, version, connection);
     try {
       try { await google.client.deleteEvent(ownerId, connection.calendarId, event.external!.externalId, event.external!.etag); }
@@ -210,11 +211,34 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     } catch (error) { throw await this.failed(ownerId, connection, error, false); }
   }
 
-  private async writable(ownerId: string) {
-    const connection = await this.repository.getConnection(ownerId);
-    if (!connection || connection.mode !== "reflect") throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
-    if (connection.status === "needs_reauth") throw reauth();
+  private async writable(google: GoogleIntegrationDeps, ownerId: string) {
+    const stored = await this.repository.getConnection(ownerId);
+    if (!stored) throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
+    if (stored.status === "needs_reauth") throw reauth();
+    const connection = await this.scoped(google, ownerId, stored);
+    if (connection.mode !== "reflect") throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
     return connection;
+  }
+
+  /**
+   * O modo gravado vem do login da época da conexão; um login novo pode ter trocado os escopos do mesmo cadastro.
+   * Confere o token atual (em cache enquanto o refresh token não muda) e corrige o cadastro antes de usar o modo.
+   * Sem nenhum escopo Calendar, a conexão passa a `needs_reauth` e a operação para com `SCOPE_NOT_GRANTED`.
+   */
+  private async scoped(google: GoogleIntegrationDeps, ownerId: string, connection: GoogleConnection): Promise<GoogleConnection> {
+    let granted;
+    try { granted = await google.tokens.grant(ownerId); }
+    catch (error) { throw await this.failed(ownerId, connection, error, false); }
+    const scopes = calendarScopes(granted.scopes);
+    if (scopes.length === 0) {
+      await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, status: "needs_reauth", lastError: "SCOPE_NOT_GRANTED" });
+      throw scopeMissing();
+    }
+    const mode = modeFor(scopes);
+    if (mode === connection.mode && scopes.join(" ") === connection.scopes.join(" ")) return connection;
+    const next = { ...connection, mode, scopes };
+    if (!(await this.repository.saveConnectionIf(ownerId, connection.connectionId, next))) throw await this.dropped(ownerId, connection);
+    return next;
   }
 
   private async mirror(ownerId: string, id: string, version: number, connection: GoogleConnection) {
@@ -345,6 +369,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     const translated = this.translate(error);
     if (translated instanceof AppError) {
       const needsReauth = translated.code === "REAUTH_REQUIRED";
+      // 403 de escopo com cache antigo: descarta o token para a próxima operação reconferir os escopos (`scoped`).
+      if (translated.code === "SCOPE_NOT_GRANTED") this.google?.tokens.invalidate(ownerId);
       // Condicionado à conexão: um erro tardio não ressuscita nem altera uma sessão desconectada/refeita.
       if (needsReauth || recordError) await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, status: needsReauth ? "needs_reauth" : connection.status, lastError: translated.code });
     }
@@ -355,6 +381,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     if (!(error instanceof GoogleApiError)) return error;
     switch (error.kind) {
       case "unauthorized": return reauth();
+      case "insufficient_scope": return scopeMissing();
+      case "forbidden": return new AppError(403, "UPSTREAM_FORBIDDEN", "O Google negou esta operação.");
       case "rate_limited": return new AppError(429, "RATE_LIMITED", "O Google limitou as requisições. Tente de novo em instantes.", error.retryAfterMs);
       case "precondition_failed": return googleConflict();
       case "not_found": return new AppError(409, "GOOGLE_EVENT_MISSING", "O evento não existe mais no Google. Desfaça o envio e envie de novo.");

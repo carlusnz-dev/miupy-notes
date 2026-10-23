@@ -431,3 +431,45 @@ test("editar só título preserva descrição/local remotos maiores que o espelh
   assert.equal(kit.google.events.get("long")?.description?.length, 9000);
   assert.equal(kit.google.events.get("long")?.location?.length, 400);
 });
+
+/** Novo login do Tauri: outro refresh token no chaveiro, com os escopos que esse login concedeu. */
+async function relogin(kit: ReturnType<typeof createKit>, scopes: string[]) {
+  kit.oauth.grantedScopes = scopes;
+  await kit.credentials.put(owner, `login-refresh-${scopes.length}-${kit.oauth.refreshes}`);
+}
+
+test("regressão: login refeito só com leitura rebaixa a conexão reflect antes de escrever, sem chamar o Google", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  await relogin(kit, [SCOPE_MIRROR]);
+  await assert.rejects(kit.integration.reflect(owner, event.id), { code: "REFLECTION_NOT_ENABLED" });
+  assert.deepEqual(kit.google.calls, []);
+  const status = await kit.integration.status(owner);
+  assert.deepEqual([status.state, status.mode, status.scopes], ["connected", "mirror", [SCOPE_MIRROR]]);
+  // Login com escrita de novo: o mesmo cadastro volta a refletir sem reconectar.
+  await relogin(kit, [SCOPE_REFLECT]);
+  assert.ok((await kit.integration.reflect(owner, event.id)).reflection);
+});
+
+test("regressão: login refeito sem Calendar marca reautorização e sincronizar responde SCOPE_NOT_GRANTED", async () => {
+  const kit = createKit();
+  await connect(kit, "reflect");
+  await relogin(kit, []);
+  await assert.rejects(kit.integration.sync(owner), { status: 409, code: "SCOPE_NOT_GRANTED" });
+  assert.deepEqual(kit.google.calls, []);
+  assert.deepEqual([(await kit.integration.status(owner)).state, (await kit.integration.status(owner)).lastError], ["needs_reauth", "SCOPE_NOT_GRANTED"]);
+});
+
+test("403 do Google não vira 5xx repetível: escopo insuficiente é 409 e reconfere o token; os demais são 403", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  kit.google.failures.insert = [new GoogleApiError("insufficient_scope")];
+  const refreshes = kit.oauth.refreshes;
+  await assert.rejects(kit.integration.reflect(owner, event.id), { status: 409, code: "SCOPE_NOT_GRANTED" });
+  kit.google.failures.insert = [new GoogleApiError("forbidden")];
+  await assert.rejects(kit.integration.reflect(owner, event.id), { status: 403, code: "UPSTREAM_FORBIDDEN" });
+  assert.equal(kit.oauth.refreshes, refreshes + 1);
+  assert.equal((await kit.integration.status(owner)).state, "connected");
+});

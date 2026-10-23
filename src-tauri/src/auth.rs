@@ -37,6 +37,7 @@ const AUTH_TIMEOUT: &str = "AUTH_TIMEOUT";
 const AUTH_DENIED: &str = "AUTH_DENIED";
 const AUTH_FAILED: &str = "AUTH_FAILED";
 const NOT_SIGNED_IN: &str = "NOT_SIGNED_IN";
+const ACCOUNT_CHANGED: &str = "ACCOUNT_CHANGED";
 const KEYRING_ERROR: &str = "KEYRING_ERROR";
 
 const SUCCESS_PAGE: &str = "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\">\
@@ -150,6 +151,7 @@ fn authorization_url(
     challenge: &str,
     state: &str,
     scopes: &str,
+    login_hint: Option<&str>,
     prompt_consent: bool,
 ) -> String {
     let mut params = vec![
@@ -162,6 +164,9 @@ fn authorization_url(
         ("state", state),
         ("access_type", "offline"),
     ];
+    if let Some(hint) = login_hint {
+        params.push(("login_hint", hint));
+    }
     if prompt_consent {
         params.push(("prompt", "consent"));
     }
@@ -202,6 +207,11 @@ fn parse_callback(request_line: &str, expected_state: &str) -> Callback {
         (None, Some(code)) => Callback::Code(code),
         (None, None) => Callback::Invalid,
     }
+}
+
+/// `sub` do ID token. Lido sem verificar assinatura: o token veio direto do endpoint do Google por TLS.
+fn jwt_subject(token: &str) -> Option<String> {
+    jwt_payload(token)?.get("sub")?.as_str().map(str::to_string)
 }
 
 /// Decodifica o payload de um JWT sem verificar a assinatura.
@@ -425,6 +435,14 @@ pub async fn auth_sign_in(
 ) -> Result<(), String> {
     let config = config()?;
     let scopes = login_scopes(calendar.as_deref(), calendar_login_enabled())?;
+    // Refazer o login pelo Calendar não pode trocar de conta: o React, o cache local e a outbox continuam os da sessão
+    // atual. Sem sessão em memória, renova o ID token para saber quem está logado.
+    let expected_sub = match calendar {
+        Some(_) => Some(
+            jwt_subject(&auth_id_token(auth.clone()).await?).ok_or(AUTH_FAILED.to_string())?,
+        ),
+        None => None,
+    };
     // Sem refresh token no cofre, ou ao escolher o Calendar na tela dele, força o consentimento: o Google só
     // emite refresh token com os escopos novos (apps instalados não têm autorização incremental).
     let has_refresh = blocking(read_refresh_token).await.ok().flatten().is_some();
@@ -446,6 +464,7 @@ pub async fn auth_sign_in(
         &code_challenge(&verifier),
         &state,
         &scopes,
+        expected_sub.as_deref(),
         !has_refresh || calendar.is_some(),
     );
 
@@ -475,6 +494,15 @@ pub async fn auth_sign_in(
         eprintln!("auth: resposta sem id_token");
         AUTH_FAILED.to_string()
     })?;
+    if let Some(expected) = expected_sub
+        && jwt_subject(&id_token).as_deref() != Some(expected.as_str())
+    {
+        // Outra conta escolhida na tela do Google: nada é gravado e o token recém-emitido é revogado (melhor esforço).
+        if let Some(token) = tokens.refresh_token {
+            revoke(&token).await;
+        }
+        return Err(ACCOUNT_CHANGED.to_string());
+    }
     #[cfg(debug_assertions)]
     debug_print_identity(&id_token);
     save_session(&auth, id_token, tokens.expires_in);
@@ -521,17 +549,23 @@ pub async fn auth_id_token(auth: State<'_, AuthState>) -> Result<String, String>
 pub async fn auth_sign_out(auth: State<'_, AuthState>) -> Result<(), String> {
     *lock(&auth) = None;
     // Melhor esforço: a entrada local é apagada mesmo se a revogação falhar.
-    if let Some(token) = blocking(read_refresh_token).await?
-        && let Ok(client) = http_client()
+    if let Some(token) = blocking(read_refresh_token).await? {
+        revoke(&token).await;
+    }
+    blocking(delete_refresh_token).await
+}
+
+/// Revogação de melhor esforço; falhas só vão para o log, sem o token.
+async fn revoke(token: &str) {
+    if let Ok(client) = http_client()
         && let Err(err) = client
             .post(REVOKE_ENDPOINT)
-            .form(&[("token", token.as_str())])
+            .form(&[("token", token)])
             .send()
             .await
     {
         eprintln!("auth: falha ao revogar: {}", err.without_url());
     }
-    blocking(delete_refresh_token).await
 }
 
 #[cfg(test)]
@@ -560,7 +594,7 @@ mod tests {
 
     #[test]
     fn authorization_url_has_pkce_redirect_and_scope() {
-        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", SCOPES, false);
+        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", SCOPES, None, false);
         assert!(url.starts_with(AUTH_ENDPOINT));
         assert!(url.contains("code_challenge_method=S256"));
         assert!(url.contains("code_challenge=chal"));
@@ -569,8 +603,10 @@ mod tests {
         assert!(url.contains("access_type=offline"));
         assert!(url.contains("state=st"));
         assert!(!url.contains("prompt="));
-        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", SCOPES, true);
+        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", SCOPES, Some("123"), true);
         assert!(with_consent.contains("prompt=consent"));
+        assert!(with_consent.contains("login_hint=123"));
+        assert!(!url.contains("login_hint"));
     }
 
     #[test]
@@ -589,7 +625,7 @@ mod tests {
             format!("openid email profile {CALENDAR_SCOPE_MIRROR}")
         );
         assert_eq!(login_scopes(Some("owner"), true), Err(AUTH_FAILED.to_string()));
-        let url = authorization_url("c", "http://127.0.0.1:1", "c", "s", &login_scopes(Some("reflect"), false).unwrap(), true);
+        let url = authorization_url("c", "http://127.0.0.1:1", "c", "s", &login_scopes(Some("reflect"), false).unwrap(), None, true);
         assert!(url.contains("calendar.events.owned"));
         assert!(!url.contains("include_granted_scopes"));
     }
@@ -657,5 +693,7 @@ mod tests {
         assert_eq!(claims["exp"], 99);
         assert!(jwt_payload("sem-pontos").is_none());
         assert!(jwt_payload("a.!!!.c").is_none());
+        assert_eq!(jwt_subject(&token).as_deref(), Some("123"));
+        assert!(jwt_subject("sem-pontos").is_none());
     }
 }

@@ -79,6 +79,15 @@ test("esgotadas as tentativas o erro é rate_limited; 5xx vira unavailable; erro
   await assert.rejects(net.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.kind === "unavailable");
 });
 
+test("403 insufficientPermissions vira insufficient_scope e os demais 403 forbidden, sem repetir", async () => {
+  const make = await ready();
+  for (const [reason, kind] of [["insufficientPermissions", "insufficient_scope"], ["forbiddenForNonOrganizer", "forbidden"]] as const) {
+    const s = await make([json(403, { error: { errors: [{ reason }] } })]);
+    await assert.rejects(s.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.kind === kind, reason);
+    assert.equal(s.calls.length, 1);
+  }
+});
+
 test("410 vira gone, 412 precondition_failed, 409 conflict e 404 not_found, sem repetir", async () => {
   const make = await ready();
   for (const [status, kind] of [[410, "gone"], [412, "precondition_failed"], [409, "conflict"], [404, "not_found"], [400, "invalid"]] as const) {
