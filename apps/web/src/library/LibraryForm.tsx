@@ -5,6 +5,9 @@ import DatePicker from "../components/DatePicker";
 import { saveLibraryItem, type LibraryInput, type LibraryItem } from "../lib/library-api";
 import { kindLabel, statuses } from "./labels";
 
+/** 20 tags de 40 caracteres unidas por ", " (como na edição): o campo nunca corta um conjunto que a API aceita. */
+const TAGS_TEXT_MAX = 20 * 40 + 19 * ", ".length;
+
 export default function LibraryForm({ existing, onClose, onSaved }: { existing?: LibraryItem; onClose: () => void; onSaved: () => void }) {
   const [kind, setKind] = useState<LibraryInput["kind"]>(existing?.kind ?? "book");
   const [status, setStatus] = useState<LibraryInput["status"]>(existing?.status ?? "wanted");
@@ -36,7 +39,7 @@ export default function LibraryForm({ existing, onClose, onSaved }: { existing?:
         <label>{creatorLabel}<input name="creator" maxLength={200} defaultValue={existing?.creator} /></label>
         <div className="library-form-grid"><label>Ano<input name="year" type="number" inputMode="numeric" min={1} max={9999} step={1} defaultValue={existing?.year ?? ""} /></label><label>Nota de 0 a 5<input name="rating" type="number" inputMode="decimal" min={0} max={5} step="any" defaultValue={existing?.rating ?? ""} /></label></div>
         <div className="library-form-grid"><DatePicker label="Início (opcional)" name="startedOn" value={startedOn} onChange={setStartedOn} /><DatePicker label="Fim (opcional)" name="finishedOn" value={finishedOn} onChange={setFinishedOn} /></div>
-        <label>Tags (separadas por vírgula)<input name="tags" maxLength={819} defaultValue={existing?.tags.join(", ")} /><small>Até 20 tags, com até 40 caracteres cada.</small></label>
+        <label>Tags (separadas por vírgula)<input name="tags" maxLength={TAGS_TEXT_MAX} defaultValue={existing?.tags.join(", ")} /><small>Até 20 tags, com até 40 caracteres cada.</small></label>
         <label>Comentário<textarea name="comment" rows={3} maxLength={1000} defaultValue={existing?.comment} /></label>
         <label>Link externo<input name="externalUrl" type="url" maxLength={2048} pattern="https?://.*" defaultValue={existing?.externalUrl ?? ""} placeholder="https://exemplo.com/obra…" /></label>
         <label>URL da capa<input name="coverUrl" type="url" maxLength={2048} pattern="https?://.*" defaultValue={existing?.coverUrl ?? ""} placeholder="https://exemplo.com/capa.jpg…" /><small>A imagem será carregada desse endereço ao exibir a obra.</small></label>
