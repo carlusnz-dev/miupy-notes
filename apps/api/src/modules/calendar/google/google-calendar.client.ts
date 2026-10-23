@@ -22,6 +22,8 @@ export type GoogleErrorKind =
   | "not_found"            // 404
   | "rate_limited"         // 429 ou 403 rateLimitExceeded/userRateLimitExceeded
   | "unauthorized"         // 401 ou refresh token recusado: precisa reautorizar
+  | "insufficient_scope"   // 403 insufficientPermissions: o token não tem o escopo (ex.: login refeito só com leitura)
+  | "forbidden"            // demais 403: recusa definitiva, não adianta repetir
   | "unavailable"          // 5xx ou falha de rede
   | "invalid";             // demais 4xx
 

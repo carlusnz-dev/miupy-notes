@@ -111,6 +111,7 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
     if (status === 404) return "not_found";
     if (status === 401) return "unauthorized";
     if (status === 429 || (status === 403 && reason !== undefined && (RETRYABLE_REASONS.has(reason) || reason === "quotaExceeded"))) return "rate_limited";
+    if (status === 403) return reason === "insufficientPermissions" ? "insufficient_scope" : "forbidden";
     if (status >= 500) return "unavailable";
     return "invalid";
   }

@@ -1,37 +1,35 @@
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { AppError } from "../../../core/domain/app-error.js";
 import { normalizeTimes } from "../domain/event-time.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
 import type { GoogleConnection, GoogleMode } from "../domain/google-connection.js";
-import type { AuthorizeGoogleInput, ConnectGoogleInput, UpdateEventInput } from "../dto/input.js";
+import type { UpdateEventInput } from "../dto/input.js";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../dto/output.js";
 import { GoogleApiError, type GoogleCalendarClient, type GoogleEvent } from "../google/google-calendar.client.js";
 import { OWN_EVENT_PROPERTY, eventIdFromGoogle, googleIdFor, mirrorId, sameRemoteContent, toGoogleBody, toMirrorEvent } from "../google/google-mapping.js";
-import { SCOPE_MIRROR, SCOPE_REFLECT, type CredentialStore, type GoogleOAuth } from "../google/google-oauth.js";
+import { SCOPE_MIRROR, SCOPE_REFLECT, type AccessTokenSource } from "../google/google-oauth.js";
 import { CalendarRepository } from "../repository/calendar.repository.js";
 import { GoogleIntegrationService } from "./google-integration.service.js";
 
-export type GoogleIntegrationDeps = { oauth: GoogleOAuth; credentials: CredentialStore; client: GoogleCalendarClient };
+/** `tokens` lê o refresh token do login: o Calendar não tem consentimento próprio. */
+export type GoogleIntegrationDeps = { tokens: AccessTokenSource; client: GoogleCalendarClient };
 
 const CALENDAR_ID = "primary";
-const AUTHORIZATION_TTL_MS = 10 * 60_000;
 /** Teto de páginas por sincronização: acima disso o cursor não é gravado e o usuário vê o erro, em vez de um espelho parcial "em dia". */
 const MAX_PAGES = 40;
 
 const notConfigured = () => new AppError(409, "INTEGRATION_NOT_CONFIGURED", "A integração com o Google Calendar não está configurada neste servidor.");
+const scopeMissing = () => new AppError(409, "SCOPE_NOT_GRANTED", "O login do Google não concedeu acesso ao Calendar. Conceda o Calendar no login do Google.");
 const notConnected = () => new AppError(409, "INTEGRATION_NOT_CONNECTED", "Conecte o Google Calendar antes de continuar.");
 const reauth = () => new AppError(409, "REAUTH_REQUIRED", "O Google recusou o acesso. Conecte o Google Calendar de novo.");
 const googleConflict = () => new AppError(409, "GOOGLE_CONFLICT", "O evento mudou no Google depois do último envio. Nada foi sobrescrito.");
 const versionConflict = () => new AppError(409, "CONFLICT", "O evento foi alterado por outra operação. Recarregue e tente de novo.");
 
+/** Escopos Calendar concedidos ao login; o de escrita vale também para leitura. */
+const calendarScopes = (granted: readonly string[]) => [SCOPE_REFLECT, SCOPE_MIRROR].filter((scope) => granted.includes(scope));
+const modeFor = (scopes: readonly string[]): GoogleMode => (scopes[0] === SCOPE_REFLECT ? "reflect" : "mirror");
 /** 404/410: o evento já não existe no Google. */
 const missing = (error: unknown) => error instanceof GoogleApiError && (error.kind === "not_found" || error.kind === "gone");
-
-const scopesFor = (mode: GoogleMode) => (mode === "reflect" ? [SCOPE_REFLECT] : [SCOPE_MIRROR]);
-const sameSecret = (a: string, b: string) => {
-  const left = Buffer.from(a), right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-};
 
 export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   private readonly authorizationRuns = new Map<string, Promise<unknown>>();
@@ -48,36 +46,23 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     };
   }
 
-  async authorize(ownerId: string, input: AuthorizeGoogleInput) {
-    const google = this.require();
-    const state = randomBytes(24).toString("base64url");
-    const expiresAt = new Date(this.now().getTime() + AUTHORIZATION_TTL_MS).toISOString();
-    await this.repository.savePending(ownerId, { state, mode: input.mode, redirectUri: input.redirectUri, expiresAt });
-    return { authorizationUrl: google.oauth.authorizationUrl({ state, codeChallenge: input.codeChallenge, redirectUri: input.redirectUri, scopes: scopesFor(input.mode) }), state, expiresAt };
+  /** Ativa o Calendar com o consentimento que o login já deu: nenhuma tela do Google, só a conferência dos escopos. */
+  connect(ownerId: string): Promise<GoogleStatusOutput> {
+    return this.serializeAuthorization(ownerId, () => this.connectGrant(ownerId));
   }
 
-  connect(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
-    return this.serializeAuthorization(ownerId, () => this.connectGrant(ownerId, input));
-  }
-
-  private async connectGrant(ownerId: string, input: ConnectGoogleInput): Promise<GoogleStatusOutput> {
+  private async connectGrant(ownerId: string): Promise<GoogleStatusOutput> {
     const google = this.require();
-    const pending = await this.repository.takePending(ownerId);
-    // Uso único: some antes da troca, então um `code` repetido não passa duas vezes.
-    if (!pending || pending.expiresAt <= this.now().toISOString() || !sameSecret(pending.state, input.state) || pending.redirectUri !== input.redirectUri) {
-      throw new AppError(400, "VALIDATION_ERROR", "Autorização inválida ou expirada. Comece de novo.");
-    }
-    let grant;
-    try { grant = await google.oauth.exchangeCode({ code: input.code, codeVerifier: input.codeVerifier, redirectUri: input.redirectUri }); }
+    // Novo login pode ter trocado os escopos do mesmo refresh token: confere o Google, não o cache.
+    google.tokens.invalidate(ownerId);
+    let granted;
+    try { granted = await google.tokens.grant(ownerId); }
     catch (error) { throw this.translate(error); }
-    // Consentimento granular: o usuário pode desmarcar o escopo; sem ele não há conexão.
-    if (!scopesFor(pending.mode).every((scope) => grant.scopes.includes(scope))) {
-      await google.oauth.revoke(grant.refreshToken);
-      throw new AppError(409, "SCOPE_NOT_GRANTED", "O acesso pedido ao Google Calendar não foi concedido.");
-    }
-    await google.credentials.put(ownerId, grant.refreshToken);
+    // Consentimento granular: o usuário pode desmarcar o Calendar no login; sem o escopo não há conexão.
+    const scopes = calendarScopes(granted.scopes);
+    if (scopes.length === 0) throw scopeMissing();
     await this.repository.saveConnection(ownerId, {
-      connectionId: randomUUID(), status: "connected", mode: pending.mode, scopes: grant.scopes, calendarId: CALENDAR_ID,
+      connectionId: randomUUID(), status: "connected", mode: modeFor(scopes), scopes, calendarId: CALENDAR_ID,
       connectedAt: this.now().toISOString(), syncToken: null, lastSyncAt: null, lastError: null,
     });
     return this.status(ownerId);
@@ -87,19 +72,17 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     return this.serializeAuthorization(ownerId, () => this.disconnectGrant(ownerId));
   }
 
+  /** O token é o do login: desconectar para de usar o Calendar neste app, mas não o revoga (isso é sair da conta). */
   private async disconnectGrant(ownerId: string): Promise<GoogleStatusOutput> {
     const google = this.require();
-    const token = await google.credentials.get(ownerId);
-    if (token) await google.oauth.revoke(token);
-    await google.credentials.delete(ownerId);
+    google.tokens.invalidate(ownerId);
     await this.repository.deleteConnection(ownerId);
-    await this.repository.clearPending(ownerId);
     // Os espelhos saem junto: sem conexão não há como mantê-los atualizados. Cópias enviadas ao Google permanecem lá.
     await this.repository.deleteAllMirrors(ownerId);
     return this.status(ownerId);
   }
 
-  /** A composição local tem um processo: desconectar aguarda a troca em voo e remove também o grant recém-chegado. */
+  /** A composição local tem um processo: conectar e desconectar não se intercalam para o mesmo proprietário. */
   private async serializeAuthorization<T>(ownerId: string, run: () => Promise<T>): Promise<T> {
     const previous = this.authorizationRuns.get(ownerId);
     const current = (previous ?? Promise.resolve()).catch(() => undefined).then(run);
@@ -110,7 +93,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async sync(ownerId: string): Promise<GoogleSyncOutput> {
     const google = this.require();
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     try {
       let resynced = false;
       let result: Omit<GoogleSyncOutput, "resynced" | "lastSyncAt"> & { syncToken: string };
@@ -134,7 +117,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async reflect(ownerId: string, eventId: string): Promise<CalendarEvent> {
     const google = this.require();
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     if (connection.mode !== "reflect") throw new AppError(409, "REFLECTION_NOT_ENABLED", "Conecte o Google Calendar com permissão de escrita para enviar eventos.");
     const event = await this.local(ownerId, eventId);
     // Cópia já excluída no Google: o local fica como está; reenviar exigiria desvincular antes.
@@ -163,7 +146,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     if (!event.reflection) return event;
     if (!options.keepRemote && event.reflection.state !== "deleted_remote") {
       const google = this.require();
-      const connection = await this.connected(ownerId);
+      const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
       try { await this.deleteRemote(google, ownerId, event.reflection.calendarId, event.reflection.googleEventId, event.reflection.etag); }
       catch (error) { throw await this.failed(ownerId, connection, error, false); }
     }
@@ -183,7 +166,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
       if (await this.repository.delete(ownerId, id, version) === "conflict") throw versionConflict();
       return;
     }
-    const connection = await this.connected(ownerId);
+    const connection = await this.scoped(google, ownerId, await this.connected(ownerId));
     try {
       await this.deleteRemote(google, ownerId, event.reflection.calendarId, event.reflection.googleEventId, event.reflection.etag);
       await this.assertCurrent(ownerId, connection);
@@ -194,7 +177,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
   /** Escrita explícita de um espelho: usa o ETag que foi lido, preservando campos remotos fora do formulário. */
   async updateMirror(ownerId: string, id: string, input: UpdateEventInput): Promise<CalendarEvent> {
     const google = this.require();
-    const connection = await this.writable(ownerId);
+    const connection = await this.writable(google, ownerId);
     const event = await this.mirror(ownerId, id, input.version, connection);
     if (input.links?.length) throw new AppError(400, "VALIDATION_ERROR", "Relações não são suportadas em eventos do Google.");
     const times = normalizeTimes({ allDay: input.allDay ?? event.allDay, start: input.start ?? event.start, end: input.end ?? event.end, timeZone: input.timeZone === undefined ? event.timeZone : input.timeZone });
@@ -232,7 +215,7 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
 
   async deleteMirror(ownerId: string, id: string, version: number): Promise<void> {
     const google = this.require();
-    const connection = await this.writable(ownerId);
+    const connection = await this.writable(google, ownerId);
     const event = await this.mirror(ownerId, id, version, connection);
     try {
       await this.deleteRemote(google, ownerId, connection.calendarId, event.external!.externalId, event.external!.etag);
@@ -242,11 +225,34 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     } catch (error) { throw await this.failed(ownerId, connection, error, false); }
   }
 
-  private async writable(ownerId: string) {
-    const connection = await this.repository.getConnection(ownerId);
-    if (!connection || connection.mode !== "reflect") throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
-    if (connection.status === "needs_reauth") throw reauth();
+  private async writable(google: GoogleIntegrationDeps, ownerId: string) {
+    const stored = await this.repository.getConnection(ownerId);
+    if (!stored) throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
+    if (stored.status === "needs_reauth") throw reauth();
+    const connection = await this.scoped(google, ownerId, stored);
+    if (connection.mode !== "reflect") throw new AppError(409, "READ_ONLY_EVENT", "Conecte com permissão de escrita para alterar eventos do Google.");
     return connection;
+  }
+
+  /**
+   * O modo gravado vem do login da época da conexão; um login novo pode ter trocado os escopos do mesmo cadastro.
+   * Confere o token atual (em cache enquanto o refresh token não muda) e corrige o cadastro antes de usar o modo.
+   * Sem nenhum escopo Calendar, a conexão passa a `needs_reauth` e a operação para com `SCOPE_NOT_GRANTED`.
+   */
+  private async scoped(google: GoogleIntegrationDeps, ownerId: string, connection: GoogleConnection): Promise<GoogleConnection> {
+    let granted;
+    try { granted = await google.tokens.grant(ownerId); }
+    catch (error) { throw await this.failed(ownerId, connection, error, false); }
+    const scopes = calendarScopes(granted.scopes);
+    if (scopes.length === 0) {
+      await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, status: "needs_reauth", lastError: "SCOPE_NOT_GRANTED" });
+      throw scopeMissing();
+    }
+    const mode = modeFor(scopes);
+    if (mode === connection.mode && scopes.join(" ") === connection.scopes.join(" ")) return connection;
+    const next = { ...connection, mode, scopes };
+    if (!(await this.repository.saveConnectionIf(ownerId, connection.connectionId, next))) throw await this.dropped(ownerId, connection);
+    return next;
   }
 
   private async mirror(ownerId: string, id: string, version: number, connection: GoogleConnection) {
@@ -407,6 +413,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     const translated = this.translate(error);
     if (translated instanceof AppError) {
       const needsReauth = translated.code === "REAUTH_REQUIRED";
+      // 403 de escopo com cache antigo: descarta o token para a próxima operação reconferir os escopos (`scoped`).
+      if (translated.code === "SCOPE_NOT_GRANTED") this.google?.tokens.invalidate(ownerId);
       // Condicionado à conexão: um erro tardio não ressuscita nem altera uma sessão desconectada/refeita.
       if (needsReauth || recordError) await this.repository.saveConnectionIf(ownerId, connection.connectionId, { ...connection, status: needsReauth ? "needs_reauth" : connection.status, lastError: translated.code });
     }
@@ -417,6 +425,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
     if (!(error instanceof GoogleApiError)) return error;
     switch (error.kind) {
       case "unauthorized": return reauth();
+      case "insufficient_scope": return scopeMissing();
+      case "forbidden": return new AppError(403, "UPSTREAM_FORBIDDEN", "O Google negou esta operação.");
       case "rate_limited": return new AppError(429, "RATE_LIMITED", "O Google limitou as requisições. Tente de novo em instantes.", error.retryAfterMs);
       case "precondition_failed": return googleConflict();
       case "not_found": return new AppError(409, "GOOGLE_EVENT_MISSING", "O evento não existe mais no Google. Desfaça o envio e envie de novo.");

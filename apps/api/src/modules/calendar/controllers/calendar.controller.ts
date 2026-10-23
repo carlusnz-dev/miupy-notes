@@ -5,8 +5,8 @@ import { requirePrincipal } from "../../../core/http/principal.js";
 import { normalizeTimes } from "../domain/event-time.js";
 import { AppError } from "../../../core/domain/app-error.js";
 import { CalendarDtoAdapter } from "../dto/adapter.js";
-import { authorizeGoogleInputSchema, connectGoogleInputSchema, createEventInputSchema, deleteEventQuerySchema, listEventsQuerySchema, updateEventInputSchema } from "../dto/input.js";
-import { googleAuthorizationOutputSchema, googleStatusOutputSchema, googleSyncOutputSchema } from "../dto/output.js";
+import { createEventInputSchema, deleteEventQuerySchema, listEventsQuerySchema, updateEventInputSchema } from "../dto/input.js";
+import { googleStatusOutputSchema, googleSyncOutputSchema } from "../dto/output.js";
 import { CalendarService } from "../services/calendar.service.js";
 import type { GoogleIntegrationService } from "../services/google-integration.service.js";
 
@@ -73,11 +73,9 @@ export class CalendarController extends BaseController<CalendarService> {
     });
 
     router.get("/google", async (_req, res) => { res.json(googleStatusOutputSchema.parse(await this.google.status(owner(res)))); });
-    router.post("/google/authorization", async (req, res) => {
-      res.json(googleAuthorizationOutputSchema.parse(await this.google.authorize(owner(res), authorizeGoogleInputSchema.parse(req.body))));
-    });
     router.post("/google/connection", async (req, res) => {
-      res.json(googleStatusOutputSchema.parse(await this.google.connect(owner(res), connectGoogleInputSchema.parse(req.body))));
+      z.strictObject({}).parse(req.body ?? {});
+      res.json(googleStatusOutputSchema.parse(await this.google.connect(owner(res))));
     });
     router.delete("/google/connection", async (_req, res) => { res.json(googleStatusOutputSchema.parse(await this.google.disconnect(owner(res)))); });
     router.post("/google/sync", async (req, res) => {
