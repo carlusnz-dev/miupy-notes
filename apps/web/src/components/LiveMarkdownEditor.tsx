@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, type MouseEvent, type Ref } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type MouseEvent, type Ref } from "react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { Prec } from "@codemirror/state";
@@ -12,7 +12,8 @@ import { liveMarkdown } from "./live-markdown";
 import "./live-editor.css";
 
 type Props = {
-  value: string;
+  /** Texto na montagem. O editor não é controlado: para trocar o texto por fora, remonte com outra `key`. */
+  defaultValue: string;
   onChange: (value: string) => void;
   onSave: () => void;
   /** Mostra o Markdown cru, sem renderização. */
@@ -56,7 +57,9 @@ function openExternal(href: string) {
   else window.open(href, "_blank", "noopener,noreferrer");
 }
 
-export default function LiveMarkdownEditor({ value, onChange, onSave, source, onSourceChange, autoFocus, ref }: Props) {
+export default function LiveMarkdownEditor({ defaultValue, onChange, onSave, source, onSourceChange, autoFocus, ref }: Props) {
+  // Fixo desde a montagem: um `value` novo faria o CodeMirror trocar o documento inteiro, inclusive por um texto mais velho.
+  const [initialValue] = useState(defaultValue);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => ({ focus: () => editorRef.current?.view?.focus() }), []);
@@ -116,7 +119,7 @@ export default function LiveMarkdownEditor({ value, onChange, onSave, source, on
       </div>
       <CodeMirror
         ref={editorRef}
-        value={value}
+        value={initialValue}
         onChange={onChange}
         extensions={extensions}
         theme="none"
