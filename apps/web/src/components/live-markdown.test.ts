@@ -104,6 +104,9 @@ test("tabela vira bloco quando a seleção está fora e volta a texto quando o c
   assert.deepEqual(blocks(stateAt(doc, 10)), [], "cursor numa célula");
   assert.deepEqual(blocks(stateAt(doc, table.from)), [], "tocar a borda revela");
   assert.deepEqual(blocks(stateAt("> | a | b |\n> |---|---|\n> | 1 | 2 |", 0)), [], "tabela dentro de citação permanece texto");
+  assert.deepEqual(blocks(stateAt("- item\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |", 0)), [], "tabela dentro de lista permanece texto");
+  const two = "| a |\n|---|\n| 1 |\n\nmeio\n\n| b |\n|---|\n| 2 |";
+  assert.equal(blocks(stateAt(two, two.indexOf("meio"))).length, 2, "várias tabelas no nível do documento");
 });
 
 test("células: pipes opcionais nas bordas, escape e deslocamentos", () => {

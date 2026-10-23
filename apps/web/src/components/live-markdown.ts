@@ -279,8 +279,10 @@ export function buildTableBlocks(state: EditorState): DecorationSet {
   const { doc } = state;
   const tree = ensureSyntaxTree(state, doc.length, 100) ?? syntaxTree(state);
   tree.iterate({
+    // Só blocos do nível do documento: tabela aninhada não começa na linha e ficaria como texto; não descer poupa a árvore inteira a cada tecla.
     enter: (ref) => {
-      if (ref.name !== "Table") return undefined;
+      if (ref.name === "Document") return undefined;
+      if (ref.name !== "Table") return false;
       const touched = state.selection.ranges.some((range) => range.from <= ref.to && range.to >= ref.from);
       // Tabelas dentro de citação/lista (linhas com prefixo) ficam como texto: dividir por `|` perderia o prefixo.
       if (!touched && doc.lineAt(ref.from).from === ref.from) {

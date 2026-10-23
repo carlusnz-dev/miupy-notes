@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Trash2, Settings, Type, BookOpen } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
+import type { LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
 import TagInput from "./components/TagInput";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { SkeletonBody } from "./components/Skeleton";
@@ -19,6 +17,19 @@ import { isLocalReadFailure } from "./lib/notes-autosave";
 import { notesSaver, sessionIdle } from "./lib/notes-saver";
 import { usePageTitle } from "./lib/use-page-title";
 import "./editor.css";
+
+// CodeMirror e o Markdown da leitura vêm em chunks próprios: título, tags e estado abrem sem esperar por eles.
+const LiveMarkdownEditor = lazy(() => import("./components/LiveMarkdownEditor"));
+const NoteReading = lazy(() => import("./components/NoteReading"));
+
+/** Pausa na digitação depois da qual contagem e leitura recebem o texto novo (a fila já o recebeu na hora). */
+const BODY_RENDER_DELAY = 300;
+
+/** A tela só muda quando algo visível muda; o texto do rascunho muda a cada tecla e não aparece aqui. */
+function sameView(a: EntryView, b: EntryView) {
+  return a.base === b.base && !a.snapshot === !b.snapshot && a.status === b.status && a.localIssue === b.localIssue
+    && a.invalid === b.invalid && a.error === b.error && a.retrying === b.retrying;
+}
 
 const timeFormat = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" });
 const countFormat = new Intl.NumberFormat("pt-BR");
@@ -74,8 +85,13 @@ function NoteEditorSession() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const initializedId = useRef("");
   const eol = useRef<Eol>("\n");
+  // Texto digitado que a tela ainda não renderizou (ver `edit`); `latest` sempre tem a versão mais nova.
+  const pendingDraft = useRef<Draft | null>(null);
+  const bodyTimer = useRef<number | undefined>(undefined);
   const latest = useRef({ note, draft });
-  latest.current = { note, draft };
+  latest.current = { note, draft: pendingDraft.current ?? draft };
+  // O editor não é controlado: trocar o texto por fora (recarregar do servidor) remonta-o com outra chave.
+  const [editorKey, setEditorKey] = useState(0);
   // Nota recém-criada: o foco vai para o título, não para o texto.
   // Valor fixo desde a abertura: mudar `autoFocus` depois faria o editor roubar o foco do título.
   const bodyAutoFocus = useRef(false);
@@ -87,6 +103,7 @@ function NoteEditorSession() {
   useEffect(() => {
     if (initializedId.current !== id) {
       initializedId.current = id;
+      dropPendingDraft();
       setNote(null);
       setDraft(null);
     }
@@ -104,6 +121,7 @@ function NoteEditorSession() {
       const restoredDraft = attached.restored ? attached.restored.draft : toDraft(attached.note);
       eol.current = attached.restored?.eol ?? detectEol(attached.note.body);
       bodyAutoFocus.current = !focusTitle.current && !attached.restored && !attached.note.body;
+      dropPendingDraft();
       latest.current = { note: attached.note, draft: restoredDraft };
       setNote(attached.note);
       setDraft(restoredDraft);
@@ -124,7 +142,7 @@ function NoteEditorSession() {
     const sync = () => {
       const current = notesSaver.view(id);
       if (!current) return;
-      setView(current);
+      setView((previous) => (previous && sameView(previous, current) ? previous : current));
       // Só a versão desta nota entra no estado: o resultado de outra nota nunca chega aqui.
       setNote((previous) => (previous && previous.id === current.base.id && previous.version !== current.base.version ? current.base : previous));
     };
@@ -141,6 +159,18 @@ function NoteEditorSession() {
     navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
   }, [ready, navigate, location.pathname, location.search]);
 
+  const flushPendingDraft = useCallback(() => {
+    window.clearTimeout(bodyTimer.current);
+    if (pendingDraft.current) setDraft(pendingDraft.current);
+    pendingDraft.current = null;
+  }, []);
+  function dropPendingDraft() {
+    window.clearTimeout(bodyTimer.current);
+    pendingDraft.current = null;
+  }
+  useEffect(() => () => window.clearTimeout(bodyTimer.current), []);
+  const toggleReading = useCallback(() => { flushPendingDraft(); setReading((value) => !value); }, [flushPendingDraft]);
+
   /** "Salvar agora": a fila envia assim que o scheduler permitir; `true` quando a nota ficou sincronizada. */
   const persist = useCallback(async (): Promise<boolean> => {
     const { note: current } = latest.current;
@@ -156,11 +186,11 @@ function NoteEditorSession() {
       const matches = preferences.readingShortcut === "Alt+R"
         ? event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === "r"
         : (event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey === (preferences.readingShortcut === "Ctrl+Shift+E") && event.key.toLowerCase() === "e";
-      if (matches) { event.preventDefault(); event.stopPropagation(); setReading(value => !value); }
+      if (matches) { event.preventDefault(); event.stopPropagation(); toggleReading(); }
     }
     window.addEventListener("keydown", shortcut, true);
     return () => window.removeEventListener("keydown", shortcut, true);
-  }, [preferences.readingShortcut, ready, persist]);
+  }, [preferences.readingShortcut, ready, persist, toggleReading]);
 
   const save = describeSave(view, `Sincronizado às ${timeFormat.format(new Date(note?.updatedAt ?? 0))}`);
   const blocked = view?.status === "conflict";
@@ -169,14 +199,24 @@ function NoteEditorSession() {
   // Ao sair após excluir, não há o que gravar.
   const deletedRef = useRef(false);
 
-  /** Cada alteração vai à fila na hora (mesmo inválida); o envio à API fica a cargo do scheduler. */
+  /**
+   * Cada alteração vai à fila na hora (mesmo inválida); o envio à API fica a cargo do scheduler.
+   * Só o texto mudou: o editor já mostra a tecla, e a tela re-renderiza depois de uma pausa, não a cada tecla.
+   */
   function edit(next: Partial<Draft>) {
     const { note: current, draft: previous } = latest.current;
     if (!current || !previous) return;
     const updated = { ...previous, ...next };
     latest.current = { note: current, draft: updated };
-    setDraft(updated);
     if (!sample) notesSaver.edit(current.id, updated, eol.current);
+    if (Object.keys(next).length === 1 && "body" in next) {
+      pendingDraft.current = updated;
+      window.clearTimeout(bodyTimer.current);
+      bodyTimer.current = window.setTimeout(flushPendingDraft, BODY_RENDER_DELAY);
+      return;
+    }
+    dropPendingDraft();
+    setDraft(updated);
   }
 
   /** Escolha do usuário: troca o texto local pela versão do servidor (o texto guardado é descartado). */
@@ -185,8 +225,10 @@ function NoteEditorSession() {
       const fresh = await getNote(id);
       setNotice((await notesSaver.reset(fresh)) ? null : "Recarregado, mas o rascunho antigo não pôde ser removido deste computador; ele pode reaparecer depois.");
       eol.current = detectEol(fresh.body);
+      dropPendingDraft();
       setNote(fresh);
       setDraft(toDraft(fresh));
+      setEditorKey((key) => key + 1);
       setRecovered(false);
     } catch {
       // A tela continua em conflito; o usuário pode tentar de novo.
@@ -273,7 +315,7 @@ function NoteEditorSession() {
         <span className={`save-status${save.alert ? " save-status-alert" : ""}`} role="status" aria-live="polite">{save.text}</span>
         <div className="editor-actions" role="group" aria-label="Ações da nota">
           <button type="button" className="tool-button" aria-label="Salvar" title="Salvar (Ctrl+S)" onClick={() => void persist()} disabled={!dirty || busy || blocked}><Save size={18} /></button>
-          <button type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={() => setReading(value => !value)}><BookOpen size={18} /></button>
+          <button type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={toggleReading}><BookOpen size={18} /></button>
           <button type="button" className="tool-button" aria-label="Alternar fonte dos títulos" title="Alternar fonte dos títulos" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
           <button type="button" className="tool-button" aria-label="Configurações" title="Configurações" onClick={() => navigate("/settings")}><Settings size={18} /></button>
           <button type="button" className="tool-button" aria-label="Excluir nota" title="Excluir nota" onClick={() => setConfirmDelete(true)} disabled={deleting}><Trash2 size={18} /></button>
@@ -319,17 +361,18 @@ function NoteEditorSession() {
         </div>
       )}
 
-      {reading && <article className="markdown-preview note-reading" aria-label="Nota em modo leitura" tabIndex={0}><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer">{children}</a> }}>{draft.body}</ReactMarkdown></article>}
+      {reading && <Suspense fallback={<SkeletonBody label="Preparando leitura" lines={6} />}><NoteReading body={draft.body} /></Suspense>}
       {/* Manter o editor montado preserva seleção e histórico de desfazer durante a leitura. */}
-      <div className="note-writing" hidden={reading} inert={reading}><LiveMarkdownEditor
+      <div className="note-writing" hidden={reading} inert={reading}><Suspense fallback={<SkeletonBody label="Carregando editor" lines={6} />}><LiveMarkdownEditor
+        key={editorKey}
         ref={editorRef}
-        value={draft.body}
+        defaultValue={draft.body}
         onChange={(body) => edit({ body })}
         onSave={() => void persist()}
         source={source}
         onSourceChange={setSource}
         autoFocus={bodyAutoFocus.current}
-      /></div>
+      /></Suspense></div>
 
       <div className="editor-footer muted-small">
         <span>{countFormat.format(words)} {words === 1 ? "palavra" : "palavras"} · {countFormat.format(draft.body.length)} / {countFormat.format(MAX_BODY)} caracteres</span>
