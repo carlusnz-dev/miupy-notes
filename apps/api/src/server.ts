@@ -16,9 +16,9 @@ function required(name: string): string {
 const endpoint = new URL(required("DYNAMODB_ENDPOINT"));
 if (!["127.0.0.1", "localhost", "[::1]"].includes(endpoint.hostname)) throw new Error("DYNAMODB_ENDPOINT deve apontar para o DynamoDB Local.");
 
-const { notes, folders, finance, calendar } = createDataModules(createDynamoClient(endpoint.href), required("NOTES_TABLE_NAME"), createLocalGoogleIntegration(process.env));
+const { notes, folders, finance, calendar, library } = createDataModules(createDynamoClient(endpoint.href), required("NOTES_TABLE_NAME"), createLocalGoogleIntegration(process.env));
 const claims = bearerTokenClaims(createRemoteJWKSet(GOOGLE_JWKS_URL), required("GOOGLE_CLIENT_ID"));
-const app = createApp({ authenticate: authenticate(claims, parseAllowedSubs(process.env.ALLOWED_SUBS)), notesRouter: notes.router, foldersRouter: folders.router, financeRouter: finance.router, calendarRouter: calendar.router });
+const app = createApp({ authenticate: authenticate(claims, parseAllowedSubs(process.env.ALLOWED_SUBS)), notesRouter: notes.router, foldersRouter: folders.router, financeRouter: finance.router, calendarRouter: calendar.router, libraryRouter: library.router });
 
 logger.info("dependencies.configured", { dependency: "dynamodb-local" });
 const port = Number(process.env.PORT ?? 4000);

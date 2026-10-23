@@ -69,3 +69,7 @@ Abra Agendas → escolha leitura ou leitura e escrita → Conectar Google Calend
 Os cofres são separados na aplicação, mas a [revogação Google](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke) remove os escopos concedidos ao projeto e invalida seus tokens, inclusive de outros clientes. Desconectar Calendar, recusar escopos (a API tenta revogar o token recebido) ou sair da conta (o login também tenta revogar seu token) pode exigir novo login e nova autorização Calendar se pertencem ao mesmo projeto. A revogação é de melhor esforço e pode demorar; não há promessa de independência no provedor.
 
 Este cofre e a serialização OAuth atendem **um processo da API local Linux**. Não habilite várias instâncias contra o mesmo cofre/repositório sem coordenação persistida. Não há implantação AWS, conexão Google real ou consentimento nativo verificado nesta frente; veja `docs/relatorios/2026-10-22_calendar-sync.md`.
+
+## Biblioteca
+
+`/v1/library` oferece CRUD autenticado/versionado e filtros por tipo, status, tag e título, com cursor. Contrato em [api-library.md](../../docs/arquitetura/api-library.md). Usa `LIBRARY#<id>` na mesma tabela, sem variáveis novas nem chamadas a catálogos externos. Testes HTTP em memória, adaptador com cliente falso e integração opt-in via `DYNAMODB_TEST_ENDPOINT` restrito a loopback; a integração cria e exclui sua própria tabela sintética. Sem AWS, upload, exportação/restauração ou outbox.

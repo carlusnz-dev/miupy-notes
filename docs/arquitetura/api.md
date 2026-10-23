@@ -109,3 +109,7 @@ Mensagem pública sem dados sensíveis; `requestId` presente em todos os erros, 
 | `GET` | `/integrations` | Listar integrações e estado, sem credenciais. |
 
 Pendente: idempotência de criação; política de exclusão; upload de anexos; falha ao obter o JWKS hoje responde `500 INTERNAL_ERROR` (sem código próprio).
+
+## Biblioteca
+
+CRUD autenticado `/v1/library`, com versão condicional, isolamento por proprietário, filtros combinados e paginação por cursor. Campos, limites, erros e páginas filtradas vazias estão em [api-library.md](api-library.md). Composto na API local e Lambda não implantada; testes sintéticos em memória e cliente DynamoDB falso, sem AWS; persistência em tabela DynamoDB Local sintética verificada.

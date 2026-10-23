@@ -63,7 +63,12 @@
       "POST /v1/calendar/google/authorization",
       "POST /v1/calendar/google/connection",
       "DELETE /v1/calendar/google/connection",
-      "POST /v1/calendar/google/sync"
+      "POST /v1/calendar/google/sync",
+      "GET /v1/library",
+      "POST /v1/library",
+      "GET /v1/library/:id",
+      "PATCH /v1/library/:id",
+      "DELETE /v1/library/:id"
     ],
     "authentication": {
       "local": "bearerTokenClaims: jose + JWKS do Google (RS256, iss https://accounts.google.com | accounts.google.com, aud GOOGLE_CLIENT_ID, exp)",
@@ -185,7 +190,30 @@
     },
     {
       "id": "library",
-      "status": "planned"
+      "status": "partial",
+      "path": "apps/api/src/modules/library",
+      "publicEntry": "apps/api/src/modules/library/index.ts",
+      "serviceContract": "LibraryService",
+      "serviceImplementation": "LibraryServiceImpl",
+      "repository": "DynamoLibraryRepository",
+      "testRepository": "MemoryLibraryRepository",
+      "routeMount": "authenticated",
+      "operations": [
+        "list (kind/status/tag/q, cursor)",
+        "create",
+        "findById",
+        "update",
+        "delete"
+      ],
+      "httpContract": "docs/arquitetura/api-library.md",
+      "persistence": {
+        "table": "NOTES_TABLE_NAME (verificado em tabela sintética DynamoDB Local; AWS não implantada)",
+        "pk": "USER#<ownerId>",
+        "sk": "LIBRARY#<id>",
+        "list": "Query por proprietário/prefixo; filtros após página avaliada; cursor pode acompanhar página vazia",
+        "concurrency": "PutCommand condicional em version; detalhe ConsistentRead; exclusão condicional à existência"
+      },
+      "verification": "2026-10-23: rotas HTTP em memória, comandos DynamoDB com cliente falso e integração em tabela local sintética criada/excluída; CRUD, isolamento, cursor e CAS 200/409. Sem conta real, upload ou exportação."
     },
     {
       "id": "integrations",
