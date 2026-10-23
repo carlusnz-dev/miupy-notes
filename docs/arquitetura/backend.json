@@ -21,7 +21,7 @@
       "422": "TOTAL_OVERFLOW",
       "429": "RATE_LIMITED (Calendar)",
       "502": "UPSTREAM_UNAVAILABLE / UPSTREAM_REJECTED / SYNC_TOO_LARGE / SYNC_INCOMPLETE",
-      "503": "CREDENTIAL_STORE_UNAVAILABLE (Calendar local)"
+      "503": "CREDENTIAL_STORE_UNAVAILABLE (chaveiro do login para o Calendar local)"
     },
     "testCommand": "npm run test:api",
     "authenticatedRoutes": [
@@ -60,7 +60,6 @@
       "POST /v1/calendar/events/:id/google-reflection",
       "DELETE /v1/calendar/events/:id/google-reflection",
       "GET /v1/calendar/google",
-      "POST /v1/calendar/google/authorization",
       "POST /v1/calendar/google/connection",
       "DELETE /v1/calendar/google/connection",
       "POST /v1/calendar/google/sync",
@@ -248,18 +247,18 @@
       "routeMount": "authenticated",
       "operations": [
         "events CRUD",
-        "google status/authorization/connection/sync",
+        "google status/connection/sync",
         "google-reflection add/remove"
       ],
       "httpContract": "docs/arquitetura/api-calendar.md",
       "persistence": {
         "table": "NOTES_TABLE_NAME (local sintético; AWS não implantada)",
         "pk": "USER#<ownerId>",
-        "sk": "EVENT#<id>, CALENDAR#GOOGLE, CALENDAR#GOOGLE#PENDING",
+        "sk": "EVENT#<id>, CALENDAR#GOOGLE",
         "concurrency": "eventos com versão condicional; criação idempotente por UUID; sincronização sem trava global por proprietário"
       },
-      "integration": "HttpGoogleOAuth/HttpGoogleCalendarClient com fetch injetável. API local Linux opt-in injeta SecretServiceCredentialStore; Tauri administra consentimento separado PKCE/state/loopback. State consumido atomicamente (DELETE ALL_OLD); connect/disconnect serializados por proprietário somente no processo local. Espelhos aceitam escrita consentida com PATCH/If-Match e cópias locais acompanham edição/exclusão. Sem configuração ou na Lambda: not_configured. Sem conexão/cofre/consentimento nativo real verificado ou cofre AWS.",
-      "verification": "Sessão 13: suíte API 163 aprovados/9 integrações DynamoDB ignoradas, web 160/160, Rust offline 9/9, builds explícitos com Vite envDir vazio, checkmodules e Chromium desktop/mobile/reduced-motion sintéticos. Carga inicial 30 dias passados e 366 futuros; incremental sob demanda, sem janela móvel automática ou garantia distribuída entre processos."
+      "integration": "HttpGoogleOAuth/HttpGoogleCalendarClient com fetch injetável. API local Linux opt-in (GOOGLE_CALENDAR_CREDENTIAL_STORE=login-keyring) injeta LoginCredentialStore (secret-tool lookup somente leitura do refresh token do login) e AccessTokenSource (renova com o cliente do login e confere o sub do ID token); não há OAuth separado nem POST /google/authorization. connect confere escopos Calendar do login (SCOPE_NOT_GRANTED se faltarem); disconnect não revoga o token do login. connect/disconnect serializados por proprietário somente no processo local. Espelhos aceitam escrita consentida com PATCH/If-Match e cópias locais acompanham edição/exclusão. Sem configuração ou na Lambda: not_configured. Sem conexão/chaveiro/consentimento nativo real verificado ou cofre AWS.",
+      "verification": "Login único (2026-10-22): API 170 aprovados/9 ignorados, web 160/160, Rust 9/9, sem chaveiro/conta Google reais. Sessão 13: suíte API 163 aprovados/9 integrações DynamoDB ignoradas, web 160/160, Rust offline 9/9, builds explícitos com Vite envDir vazio, checkmodules e Chromium desktop/mobile/reduced-motion sintéticos. Carga inicial 30 dias passados e 366 futuros; incremental sob demanda, sem janela móvel automática ou garantia distribuída entre processos."
     }
   ]
 }

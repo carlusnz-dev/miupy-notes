@@ -13,7 +13,7 @@
 | Observabilidade | CloudWatch logs, métricas e alarmes | Planejado | Falhas, latência, custo e sincronizações. |
 | Logs da API | Classe Logger + middleware Express, texto colorido e JSON opcional | Implementado localmente; ver sessões 07/09 | Correlação por requestId, nível configurável e metadados seguros; coleta CloudWatch e alarmes dependem de implantação. |
 | IaC | Terraform | Planejado | Infraestrutura reproduzível em `infra/`. |
-| Integrações | Google Calendar/Gmail | Calendar parcial; Gmail planejado | Calendar local Linux com Secret Service backend e consentimento separado no Tauri, leitura/escrita explícitas e ETag/PATCH; testes sintéticos. Conta real/aceite nativo e cofre AWS pendentes; Lambda sem adaptador. Coordenação OAuth apenas por processo local. |
+| Integrações | Google Calendar/Gmail | Calendar parcial; Gmail planejado | Calendar local Linux com login Google único (Calendar pedido no login do Tauri; API lê o refresh token do chaveiro do login), leitura/escrita explícitas e ETag/PATCH; testes sintéticos. Conta real/chaveiro real/aceite nativo e cofre AWS pendentes; Lambda sem adaptador. Coordenação conectar/desconectar apenas por processo local. |
 | Integração | Google Keep | Condicional | API oficial tem foco empresarial; verificar conta e permissões. |
 | LLM | MCP | Futuro | Ferramentas sobre dados autorizados e com auditoria. |
 | Movimento e CSS | GSAP + Tailwind CSS 4 | Tailwind ativo; GSAP em transições, seleção de períodos e troca de dias, com movimento reduzido | GSAP nas animações de interação; preferências do proprietário em AGENTS.md. Mesh decorativo CSS permanece na base. |

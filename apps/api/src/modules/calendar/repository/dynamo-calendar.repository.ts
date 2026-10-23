@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AppError } from "../../../core/domain/app-error.js";
 import { CalendarEvent } from "../domain/calendar-event.js";
 import { eventBounds } from "../domain/event-time.js";
-import type { GoogleConnection, PendingAuthorization } from "../domain/google-connection.js";
+import type { GoogleConnection } from "../domain/google-connection.js";
 import { CalendarRepository, type DeleteResult, type EventPage, type EventQuery } from "./calendar.repository.js";
 
 const link = z.object({ kind: z.enum(["note", "event"]), id: z.uuid() });
@@ -13,19 +13,17 @@ const storedEventSchema = z.object({
   allDay: z.boolean(), start: z.string(), end: z.string(), timeZone: z.string().nullable(),
   links: z.array(link), source: z.enum(["local", "google"]),
   external: z.object({ provider: z.literal("google"), calendarId: z.string(), externalId: z.string(), etag: z.string(), syncedAt: z.string(), connectionId: z.string().default("") }).nullable().default(null),
-  reflection: z.object({ googleEventId: z.string(), calendarId: z.string(), etag: z.string(), reflectedVersion: z.int().positive(), reflectedAt: z.string() }).nullable().default(null),
+  reflection: z.object({ googleEventId: z.string(), calendarId: z.string(), etag: z.string(), reflectedVersion: z.int().positive(), reflectedAt: z.string(), state: z.enum(["linked", "deleted_remote"]).default("linked") }).nullable().default(null),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), version: z.int().positive(),
 });
 const connectionSchema = z.object({
   connectionId: z.string(), status: z.enum(["connected", "needs_reauth"]), mode: z.enum(["mirror", "reflect"]), scopes: z.array(z.string()), calendarId: z.string(),
   connectedAt: z.string(), syncToken: z.string().nullable(), lastSyncAt: z.string().nullable(), lastError: z.string().nullable(),
 });
-const pendingSchema = z.object({ state: z.string(), mode: z.enum(["mirror", "reflect"]), redirectUri: z.string(), expiresAt: z.string() });
 const cursorSchema = z.strictObject({ id: z.uuid() });
 
 const EVENT_PREFIX = "EVENT#";
 const CONNECTION_SK = "CALENDAR#GOOGLE";
-const PENDING_SK = "CALENDAR#GOOGLE#PENDING";
 /** Com filtro de período o DynamoDB aplica `Limit` antes do filtro: o repositório continua lendo até juntar a página. */
 const SCAN_PAGE = 100;
 const MAX_QUERIES = 5;
@@ -185,19 +183,5 @@ export class DynamoCalendarRepository extends CalendarRepository {
   }
   async deleteConnection(ownerId: string): Promise<void> {
     await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: CONNECTION_SK } }));
-  }
-  async takePending(ownerId: string): Promise<PendingAuthorization | null> {
-    const result = await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: PENDING_SK }, ReturnValues: "ALL_OLD" }));
-    return result.Attributes ? pendingSchema.parse(result.Attributes) : null;
-  }
-  async getPending(ownerId: string): Promise<PendingAuthorization | null> {
-    const result = await this.client.send(new GetCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: PENDING_SK }, ConsistentRead: true }));
-    return result.Item ? pendingSchema.parse(result.Item) : null;
-  }
-  async savePending(ownerId: string, pending: PendingAuthorization): Promise<void> {
-    await this.client.send(new PutCommand({ TableName: this.tableName, Item: { pk: ownerKey(ownerId), sk: PENDING_SK, ...pending } }));
-  }
-  async clearPending(ownerId: string): Promise<void> {
-    await this.client.send(new DeleteCommand({ TableName: this.tableName, Key: { pk: ownerKey(ownerId), sk: PENDING_SK } }));
   }
 }

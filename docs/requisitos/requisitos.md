@@ -31,7 +31,7 @@ Notas e identidade (RF-01/RF-02) têm proteção local de rascunhos por CAS e jo
 
 ## Continuidade em 2026-10-22
 
-RF-05/RF-12 continuam parciais: API local Linux opt-in usa Secret Service e OAuth Calendar próprio no Tauri; leitura ou escrita consentida, edição/exclusão de espelhos e envio explícito de cópias locais testados com fakes. Carga inicial limitada a 30 dias passados e 366 futuros, incremental sob demanda, sem janela móvel automática. Connect/disconnect têm serialização somente no processo local; Lambda permanece sem cofre/conector habilitado. Não há conta Google/cofre/consentimento nativo real verificado nem AWS implantada. Sessão 13 registra limpeza Git/Orca, revisão e validação sintética desktop/mobile.
+RF-05/RF-12 continuam parciais: API local Linux opt-in (`login-keyring`) usa o login único do Tauri com escopo Calendar, sem segundo OAuth; a API lê o refresh token do chaveiro do login; leitura ou escrita consentida, edição/exclusão de espelhos e envio explícito de cópias locais testados com fakes. Carga inicial limitada a 30 dias passados e 366 futuros, incremental sob demanda, sem janela móvel automática. Connect/disconnect têm serialização somente no processo local; Lambda permanece sem cofre/conector habilitado. Não há conta Google/chaveiro/consentimento nativo real verificado nem AWS implantada. Sessão 13 registra limpeza Git/Orca, revisão e validação sintética desktop/mobile.
 
 ## Continuidade em 2026-10-23 — Biblioteca
 

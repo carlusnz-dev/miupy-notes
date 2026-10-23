@@ -1,6 +1,6 @@
 # Biblioteca — API e interface
 
-Data: 2026-10-23. Branch `feat/library-module`, criada sobre `develop` (`fcaf49c`), conferida antes de editar. Nenhum merge, recurso AWS, Terraform ou conta Google real nesta frente.
+Data: 2026-10-23. Branch `feat/library-module`, criada sobre `develop` (`fcaf49c`), conferida antes de editar. Nenhum merge do PR, recurso AWS, Terraform ou conta Google real nesta frente.
 
 ## Mudanças e decisões
 
@@ -17,9 +17,9 @@ Skills codigo-enxuto, revisar-contrato, graphify, validar-design, relatorio e re
 | Comando / prova | Resultado |
 |---|---|
 | `npm run build` | Web e API aprovados; aviso preexistente de chunk do editor acima de 500 kB. Biblioteca carregada sob demanda. |
-| `env -u DYNAMODB_TEST_ENDPOINT -u DYNAMODB_FINANCE_TEST_ENDPOINT -u DYNAMODB_CALENDAR_TEST_ENDPOINT npm run test:api` | 193 testes: 183 aprovados, 10 integrações ignoradas, nenhuma falha. Inclui 9 novos testes da Biblioteca sem rede externa. |
+| `env -u DYNAMODB_TEST_ENDPOINT -u DYNAMODB_FINANCE_TEST_ENDPOINT -u DYNAMODB_CALENDAR_TEST_ENDPOINT npm run test:api` | 203 testes: 193 aprovados, 10 integrações ignoradas, nenhuma falha. Inclui 9 novos testes da Biblioteca sem rede externa. |
 | `DYNAMODB_TEST_ENDPOINT=http://127.0.0.1:8000 node_modules/.bin/tsx --test apps/api/src/modules/library/repository/library.local.test.ts` | 1/1 aprovado em DynamoDB Local já disponível. Tabela sintética própria criada/excluída; persistência, isolamento, cursor/filtro vazio e CAS 200/409. Nenhuma tabela pessoal foi consultada. |
-| `npm run test:web` | 160/160 aprovados. |
+| `npm run test:web` | 162/162 aprovados. |
 | `npm run check:modules` | 5 módulos com estrutura/fronteiras válidas. |
 | `git diff --check` / `git diff --cached --check` | Sem erros de whitespace. |
 | `timeout 150s python apps/web/tests/library.mcp.py http://127.0.0.1:5183` | Playwright MCP Chromium isolado aprovado em 1440×900 e 390×844, sem erros JavaScript. |
@@ -45,3 +45,11 @@ A lista ordena por UUID e filtra depois dos itens avaliados; pode vir vazia com 
 PR [#24 — Biblioteca na API e na interface](https://github.com/carlusnz-dev/miupy-notes/pull/24), de `feat/library-module` para `develop`, aberto com `gh`, sem merge. Commits de implementação: `25281a8` (API/contrato) e `a55f33e` (interface/validação); ambos seguem Conventional Commits em pt-BR e incluem o coautor solicitado.
 
 O push SSH padrão falhou com `Permission denied (publickey)` e ausência de `ssh_askpass`. O push foi concluído por HTTPS com opções temporárias `credential.helper=!gh auth git-credential` e `url.https://github.com/.insteadOf=git@github.com:`, sem alterar o remoto configurado nem abrir credenciais. Os servidores sintéticos de API/Vite foram encerrados após a validação; o DynamoDB Local preexistente foi preservado. O estado da CI no momento da entrega consta no relatório externo em texto puro.
+
+## Atualização com develop
+
+Após abrir o PR, o coordenador avisou que develop avançou para `5b0ea06` com os PRs #22/#23. A primeira CI do PR aprovou, mas o GitHub apontou conflitos documentais. Conforme a orientação explícita do coordenador, origin/develop foi incorporado à branch, preservando login único/estado de exclusão do Calendar e os campos/requisitos da Biblioteca. Os cinco conflitos foram resolvidos em README da API, arquitetura JSON/Markdown, índice de relatórios e requisitos; não houve conflito de código. O PR permanece aberto e não foi integrado em develop.
+
+Após a incorporação de develop, `npm run build`, `npm run check:modules`, a suíte API (203 testes: 193 aprovados/10 ignorados) e web (162/162) foram repetidos com sucesso. Os totais da tabela acima refletem essa base atualizada; a execução inicial teve API 183 aprovados/10 ignorados e web 160/160. O diff em relação a origin/develop mantém apenas a frente Biblioteca e sua documentação.
+
+A integração DynamoDB Local 1/1 e o roteiro Playwright completo (incluindo capas/fallback, foco e reduced-motion) também foram repetidos após incorporar develop e passaram, sem erros JavaScript. As capturas foram atualizadas nessa base. Nenhum código de Calendar foi alterado pela resolução; a autorização/implementação da Biblioteca continua usando a autenticação pública existente.

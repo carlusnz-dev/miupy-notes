@@ -16,6 +16,7 @@ const errorMessages: Record<string, string> = {
   AUTH_FAILED: "Não foi possível concluir o login. Tente de novo.",
   KEYRING_ERROR: "Não foi possível acessar o chaveiro do sistema.",
   NOT_SIGNED_IN: "Sua sessão terminou. Entre de novo.",
+  ACCOUNT_CHANGED: "Escolha a mesma conta Google desta sessão. Para usar outra conta, saia e entre de novo.",
 };
 
 function messageFor(code: unknown): string {
@@ -67,6 +68,22 @@ export async function signIn() {
     update({ status: "signed-in", signingIn: false });
   } catch (code) {
     update({ signingIn: false, error: messageFor(code) });
+  }
+}
+
+/**
+ * Refaz o login do Google pedindo o Calendar (`mirror` leitura, `reflect` escrita). É o mesmo consentimento do login,
+ * não um segundo OAuth: o refresh token do cofre é substituído. O Rust recusa outra conta (`ACCOUNT_CHANGED`) sem gravar nada.
+ */
+export async function grantCalendar(mode: "mirror" | "reflect") {
+  if (state.status !== "signed-in" || state.signingIn) throw new Error(errorMessages.NOT_SIGNED_IN);
+  update({ signingIn: true, error: null });
+  try {
+    await invoke("auth_sign_in", { calendar: mode });
+  } catch (code) {
+    throw new Error(messageFor(code));
+  } finally {
+    update({ signingIn: false });
   }
 }
 

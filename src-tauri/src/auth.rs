@@ -2,6 +2,7 @@
 //! navegador do sistema e redirect loopback. Veja docs/decisoes/2026-10-18_identidade.md.
 //!
 //! Só o refresh token vai para o cofre do sistema; o ID token fica em memória.
+//! O mesmo login pede o escopo Calendar (consentimento único): a API local lê o refresh token deste cofre.
 
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -19,6 +20,9 @@ const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const REVOKE_ENDPOINT: &str = "https://oauth2.googleapis.com/revoke";
 const SCOPES: &str = "openid email profile";
+/// Escopos Calendar do modo espelho (leitura) e refletor (escrita); iguais a `SCOPE_MIRROR`/`SCOPE_REFLECT` da API.
+const CALENDAR_SCOPE_MIRROR: &str = "https://www.googleapis.com/auth/calendar.events.owned.readonly";
+const CALENDAR_SCOPE_REFLECT: &str = "https://www.googleapis.com/auth/calendar.events.owned";
 const KEYRING_SERVICE: &str = "com.miupy.notes";
 const KEYRING_USER: &str = "google-refresh-token";
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -33,6 +37,7 @@ const AUTH_TIMEOUT: &str = "AUTH_TIMEOUT";
 const AUTH_DENIED: &str = "AUTH_DENIED";
 const AUTH_FAILED: &str = "AUTH_FAILED";
 const NOT_SIGNED_IN: &str = "NOT_SIGNED_IN";
+const ACCOUNT_CHANGED: &str = "ACCOUNT_CHANGED";
 const KEYRING_ERROR: &str = "KEYRING_ERROR";
 
 const SUCCESS_PAGE: &str = "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\">\
@@ -93,6 +98,26 @@ pub fn load_dev_env() {
     }
 }
 
+/// Escopos do login. Sem `calendar` explícito, `GOOGLE_CALENDAR_CREDENTIAL_STORE=login-keyring` (o mesmo opt-in da API)
+/// inclui o Calendar somente leitura; o refletor só vem de uma escolha explícita na tela do Calendar.
+fn login_scopes(calendar: Option<&str>, calendar_enabled: bool) -> Result<String, String> {
+    let calendar = match calendar {
+        Some("mirror") => Some(CALENDAR_SCOPE_MIRROR),
+        Some("reflect") => Some(CALENDAR_SCOPE_REFLECT),
+        Some(_) => return Err(AUTH_FAILED.to_string()),
+        None if calendar_enabled => Some(CALENDAR_SCOPE_MIRROR),
+        None => None,
+    };
+    Ok(match calendar {
+        Some(scope) => format!("{SCOPES} {scope}"),
+        None => SCOPES.to_string(),
+    })
+}
+
+fn calendar_login_enabled() -> bool {
+    std::env::var("GOOGLE_CALENDAR_CREDENTIAL_STORE").is_ok_and(|value| value.trim() == "login-keyring")
+}
+
 fn config() -> Result<Config, String> {
     let client_id = std::env::var("GOOGLE_CLIENT_ID")
         .ok()
@@ -107,7 +132,7 @@ fn config() -> Result<Config, String> {
     })
 }
 
-pub(crate) fn generate_verifier() -> Result<String, String> {
+fn generate_verifier() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|_| {
         eprintln!("auth: falha ao gerar bytes aleatórios");
@@ -116,7 +141,7 @@ pub(crate) fn generate_verifier() -> Result<String, String> {
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
-pub(crate) fn code_challenge(verifier: &str) -> String {
+fn code_challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
@@ -125,18 +150,23 @@ fn authorization_url(
     redirect_uri: &str,
     challenge: &str,
     state: &str,
+    scopes: &str,
+    login_hint: Option<&str>,
     prompt_consent: bool,
 ) -> String {
     let mut params = vec![
         ("client_id", client_id),
         ("redirect_uri", redirect_uri),
         ("response_type", "code"),
-        ("scope", SCOPES),
+        ("scope", scopes),
         ("code_challenge", challenge),
         ("code_challenge_method", "S256"),
         ("state", state),
         ("access_type", "offline"),
     ];
+    if let Some(hint) = login_hint {
+        params.push(("login_hint", hint));
+    }
     if prompt_consent {
         params.push(("prompt", "consent"));
     }
@@ -177,6 +207,11 @@ fn parse_callback(request_line: &str, expected_state: &str) -> Callback {
         (None, Some(code)) => Callback::Code(code),
         (None, None) => Callback::Invalid,
     }
+}
+
+/// `sub` do ID token. Lido sem verificar assinatura: o token veio direto do endpoint do Google por TLS.
+fn jwt_subject(token: &str) -> Option<String> {
+    jwt_payload(token)?.get("sub")?.as_str().map(str::to_string)
 }
 
 /// Decodifica o payload de um JWT sem verificar a assinatura.
@@ -337,7 +372,7 @@ async fn read_request_line(stream: &mut TcpStream) -> Option<String> {
 }
 
 /// Espera o redirect do Google até receber um callback com o state esperado.
-pub(crate) async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
+async fn wait_for_code(listener: &TcpListener, expected_state: &str) -> Result<String, String> {
     loop {
         let Ok((mut stream, _)) = listener.accept().await else {
             continue;
@@ -394,9 +429,22 @@ pub async fn auth_status(auth: State<'_, AuthState>) -> Result<AuthStatus, Strin
 }
 
 #[tauri::command]
-pub async fn auth_sign_in(auth: State<'_, AuthState>) -> Result<(), String> {
+pub async fn auth_sign_in(
+    auth: State<'_, AuthState>,
+    calendar: Option<String>,
+) -> Result<(), String> {
     let config = config()?;
-    // Sem refresh token no cofre, força a tela de consentimento para que o Google emita um.
+    let scopes = login_scopes(calendar.as_deref(), calendar_login_enabled())?;
+    // Refazer o login pelo Calendar não pode trocar de conta: o React, o cache local e a outbox continuam os da sessão
+    // atual. Sem sessão em memória, renova o ID token para saber quem está logado.
+    let expected_sub = match calendar {
+        Some(_) => Some(
+            jwt_subject(&auth_id_token(auth.clone()).await?).ok_or(AUTH_FAILED.to_string())?,
+        ),
+        None => None,
+    };
+    // Sem refresh token no cofre, ou ao escolher o Calendar na tela dele, força o consentimento: o Google só
+    // emite refresh token com os escopos novos (apps instalados não têm autorização incremental).
     let has_refresh = blocking(read_refresh_token).await.ok().flatten().is_some();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|err| {
@@ -415,7 +463,9 @@ pub async fn auth_sign_in(auth: State<'_, AuthState>) -> Result<(), String> {
         &redirect_uri,
         &code_challenge(&verifier),
         &state,
-        !has_refresh,
+        &scopes,
+        expected_sub.as_deref(),
+        !has_refresh || calendar.is_some(),
     );
 
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|err| {
@@ -444,6 +494,15 @@ pub async fn auth_sign_in(auth: State<'_, AuthState>) -> Result<(), String> {
         eprintln!("auth: resposta sem id_token");
         AUTH_FAILED.to_string()
     })?;
+    if let Some(expected) = expected_sub
+        && jwt_subject(&id_token).as_deref() != Some(expected.as_str())
+    {
+        // Outra conta escolhida na tela do Google: nada é gravado e o token recém-emitido é revogado (melhor esforço).
+        if let Some(token) = tokens.refresh_token {
+            revoke(&token).await;
+        }
+        return Err(ACCOUNT_CHANGED.to_string());
+    }
     #[cfg(debug_assertions)]
     debug_print_identity(&id_token);
     save_session(&auth, id_token, tokens.expires_in);
@@ -490,17 +549,23 @@ pub async fn auth_id_token(auth: State<'_, AuthState>) -> Result<String, String>
 pub async fn auth_sign_out(auth: State<'_, AuthState>) -> Result<(), String> {
     *lock(&auth) = None;
     // Melhor esforço: a entrada local é apagada mesmo se a revogação falhar.
-    if let Some(token) = blocking(read_refresh_token).await?
-        && let Ok(client) = http_client()
+    if let Some(token) = blocking(read_refresh_token).await? {
+        revoke(&token).await;
+    }
+    blocking(delete_refresh_token).await
+}
+
+/// Revogação de melhor esforço; falhas só vão para o log, sem o token.
+async fn revoke(token: &str) {
+    if let Ok(client) = http_client()
         && let Err(err) = client
             .post(REVOKE_ENDPOINT)
-            .form(&[("token", token.as_str())])
+            .form(&[("token", token)])
             .send()
             .await
     {
         eprintln!("auth: falha ao revogar: {}", err.without_url());
     }
-    blocking(delete_refresh_token).await
 }
 
 #[cfg(test)]
@@ -529,7 +594,7 @@ mod tests {
 
     #[test]
     fn authorization_url_has_pkce_redirect_and_scope() {
-        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", false);
+        let url = authorization_url("client", "http://127.0.0.1:4321", "chal", "st", SCOPES, None, false);
         assert!(url.starts_with(AUTH_ENDPOINT));
         assert!(url.contains("code_challenge_method=S256"));
         assert!(url.contains("code_challenge=chal"));
@@ -538,8 +603,31 @@ mod tests {
         assert!(url.contains("access_type=offline"));
         assert!(url.contains("state=st"));
         assert!(!url.contains("prompt="));
-        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", true);
+        let with_consent = authorization_url("client", "http://127.0.0.1:1", "c", "s", SCOPES, Some("123"), true);
         assert!(with_consent.contains("prompt=consent"));
+        assert!(with_consent.contains("login_hint=123"));
+        assert!(!url.contains("login_hint"));
+    }
+
+    #[test]
+    fn login_scopes_add_calendar_only_when_enabled_or_chosen() {
+        assert_eq!(login_scopes(None, false).unwrap(), "openid email profile");
+        assert_eq!(
+            login_scopes(None, true).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_MIRROR}")
+        );
+        assert_eq!(
+            login_scopes(Some("reflect"), false).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_REFLECT}")
+        );
+        assert_eq!(
+            login_scopes(Some("mirror"), true).unwrap(),
+            format!("openid email profile {CALENDAR_SCOPE_MIRROR}")
+        );
+        assert_eq!(login_scopes(Some("owner"), true), Err(AUTH_FAILED.to_string()));
+        let url = authorization_url("c", "http://127.0.0.1:1", "c", "s", &login_scopes(Some("reflect"), false).unwrap(), None, true);
+        assert!(url.contains("calendar.events.owned"));
+        assert!(!url.contains("include_granted_scopes"));
     }
 
     #[test]
@@ -605,5 +693,7 @@ mod tests {
         assert_eq!(claims["exp"], 99);
         assert!(jwt_payload("sem-pontos").is_none());
         assert!(jwt_payload("a.!!!.c").is_none());
+        assert_eq!(jwt_subject(&token).as_deref(), Some("123"));
+        assert!(jwt_subject("sem-pontos").is_none());
     }
 }

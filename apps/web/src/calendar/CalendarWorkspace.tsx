@@ -5,6 +5,7 @@ import ButtonGroup from "../components/ButtonGroup";
 import { addDays, todayLocal, type CalendarDate } from "../lib/calendar-date";
 import type { CalendarEventOutput, EventDraft, GoogleStatusOutput, GoogleSyncOutput } from "../lib/calendar-api";
 import EventForm, { type NoteChoice } from "./EventForm";
+import { calendarFetchCache } from "./fetch-cache";
 import GooglePanel from "./GooglePanel";
 import MonthView from "./MonthView";
 import TimeGrid from "./TimeGrid";
@@ -18,8 +19,10 @@ import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
 
 export type GoogleApi = {
-  connect?: (mode: "mirror" | "reflect", onFinalizing?: () => void) => Promise<GoogleStatusOutput>;
-  cancelConnect?: () => Promise<void>;
+  /** Ativa com os escopos que o login já concedeu. */
+  connect?: () => Promise<GoogleStatusOutput>;
+  /** Refaz o login do Google com o Calendar no modo escolhido (consentimento único, sem OAuth separado). */
+  grant?: (mode: "mirror" | "reflect") => Promise<void>;
   disconnect?: () => Promise<GoogleStatusOutput>;
   getStatus: (signal?: AbortSignal) => Promise<GoogleStatusOutput>;
   sync: () => Promise<GoogleSyncOutput>;
@@ -46,20 +49,30 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   const [editing, setEditing] = useState<Editing | null>(null);
   // O formulário fica montado com `open` controlado: o Modal compartilhado faz a saída animada e devolve o foco ao botão que o abriu.
   const [formOpen, setFormOpen] = useState(false);
-  const [notes, setNotes] = useState<NoteChoice[]>([]);
-  const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">("loading");
-  const [status, setStatus] = useState<GoogleStatusOutput | null>(null);
+  const [notes, setNotes] = useState<NoteChoice[]>(() => calendarFetchCache.recall<NoteChoice[]>(ownerId, "notes") ?? []);
+  const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">(() => (calendarFetchCache.recall(ownerId, "notes") ? "ready" : "loading"));
+  const [status, setStatusState] = useState<GoogleStatusOutput | null>(() => calendarFetchCache.recall<GoogleStatusOutput>(ownerId, "googleStatus") ?? null);
+  const setStatus = useCallback((value: GoogleStatusOutput) => { calendarFetchCache.remember(ownerId, "googleStatus", value); setStatusState(value); }, [ownerId]);
   const [statusError, setStatusError] = useState<string | null>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const counter = useRef(0);
 
+  // Notas e status vêm da memória da Agenda se frescos (voltar à página não busca de novo); a volta da rede força o status.
+  const wasOffline = useRef(calendar.connectivity === "offline");
   useEffect(() => {
+    const reconnected = wasOffline.current && calendar.connectivity === "online";
+    wasOffline.current = calendar.connectivity === "offline";
+    if (calendar.connectivity === "offline") return;
     const abort = new AbortController();
-    setNotesState("loading");
-    loadNotes().then((items) => { if (!abort.signal.aborted) { setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted) setNotesState("unavailable"); });
-    google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
+    if (!calendarFetchCache.recall(ownerId, "notes")) {
+      setNotesState("loading");
+      loadNotes().then((items) => { if (!abort.signal.aborted) { calendarFetchCache.remember(ownerId, "notes", items); setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted) setNotesState("unavailable"); });
+    }
+    if (reconnected || !calendarFetchCache.recall(ownerId, "googleStatus")) {
+      google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
+    }
     return () => abort.abort();
-  }, [loadNotes, google, ownerId, calendar.connectivity]);
+  }, [loadNotes, google, ownerId, calendar.connectivity, setStatus]);
 
   // Troca de período/modo: entrada curta da vista; sem movimento quando o sistema pede movimento reduzido.
   const viewKey = `${mode}:${anchor.year}-${anchor.month}-${anchor.day}`;
@@ -133,10 +146,9 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       </div>
 
       <GooglePanel status={status} error={statusError}
-        onConnect={google.connect ? async (mode, onFinalizing) => { const connected = await google.connect!(mode, onFinalizing); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
-        onCancel={google.cancelConnect}
+        onConnect={google.connect ? async (mode) => { if (mode) await google.grant!(mode); const connected = await google.connect!(); if (isCurrent?.() === false) return; setStatus(connected); const result = await google.sync(); if (isCurrent?.() === false) return; setStatus(await google.getStatus()); calendar.refreshNow(); return result; } : undefined}
         onDisconnect={google.disconnect ? async () => { const disconnected = await google.disconnect!(); if (isCurrent?.() === false) return; setStatus(disconnected); calendar.refreshNow(); } : undefined}
-        onSync={async () => { const result = await google.sync(); setStatus(await google.getStatus().catch(() => status)); calendar.refreshNow(); return result; }} />
+        onSync={async () => { const result = await google.sync(); const next = await google.getStatus().catch(() => null); if (next) setStatus(next); calendar.refreshNow(); return result; }} />
 
       {editing && (
         <EventForm

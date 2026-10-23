@@ -14,6 +14,3 @@ export type GoogleConnection = {
   /** Código público do último erro de sincronização (`RATE_LIMITED`, `UNAUTHORIZED`...), sem texto do provedor. */
   readonly lastError: string | null;
 };
-
-/** Autorização iniciada e ainda não concluída: o `state` expira e é de uso único. */
-export type PendingAuthorization = { readonly state: string; readonly mode: GoogleMode; readonly redirectUri: string; readonly expiresAt: string };
