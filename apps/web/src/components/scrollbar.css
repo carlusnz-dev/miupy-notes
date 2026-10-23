@@ -1,0 +1,9 @@
+@property --scroll-thumb { syntax: '<color>'; inherits: true; initial-value: transparent; }
+* { --scroll-thumb: transparent; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; transition: --scroll-thumb .2s ease; }
+.app-shell [class] { scrollbar-color: var(--scroll-thumb) transparent; }
+.is-scrolling { --scroll-thumb: var(--color-border-strong, #6e6e6a); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: var(--scroll-thumb); border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none; } }
+@media (forced-colors: active) { *, .app-shell [class] { scrollbar-color: auto; } }

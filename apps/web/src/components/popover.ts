@@ -56,15 +56,15 @@ export function useAnchoredPosition(mounted: boolean, anchor: RefObject<HTMLElem
 }
 
 /** Fecha ao tocar fora do contêiner (campo + popover). */
-export function useDismiss(open: boolean, container: RefObject<HTMLElement | null>, onDismiss: () => void) {
+export function useDismiss(open: boolean, container: RefObject<HTMLElement | null>, onDismiss: () => void, anchor?: RefObject<HTMLElement | null>) {
   const latest = useRef(onDismiss);
   latest.current = onDismiss;
   useEffect(() => {
     if (!open) return;
-    function outside(event: PointerEvent) { if (!container.current?.contains(event.target as Node)) latest.current(); }
+    function outside(event: PointerEvent) { if (!container.current?.contains(event.target as Node) && !anchor?.current?.contains(event.target as Node)) latest.current(); }
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
-  }, [open, container]);
+  }, [open, container, anchor]);
 }
 
 /**
