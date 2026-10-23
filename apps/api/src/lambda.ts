@@ -6,8 +6,8 @@ import { createDynamoClient } from "./core/dynamo/client.js";
 import { createDataModules } from "./compose.js";
 
 // Não implantado. O JWT authorizer do API Gateway valida o token; aqui só se aplicam as claims e a lista de `sub`.
-const { notes, folders, finance, calendar } = createDataModules(createDynamoClient(), process.env.NOTES_TABLE_NAME ?? "");
-const app = createApp({ authenticate: authenticate(lambdaAuthorizerClaims, parseAllowedSubs(process.env.ALLOWED_SUBS)), notesRouter: notes.router, foldersRouter: folders.router, financeRouter: finance.router, calendarRouter: calendar.router });
+const { notes, folders, finance, calendar, library } = createDataModules(createDynamoClient(), process.env.NOTES_TABLE_NAME ?? "");
+const app = createApp({ authenticate: authenticate(lambdaAuthorizerClaims, parseAllowedSubs(process.env.ALLOWED_SUBS)), notesRouter: notes.router, foldersRouter: folders.router, financeRouter: finance.router, calendarRouter: calendar.router, libraryRouter: library.router });
 
 logger.info("dependencies.configured", { dependency: "dynamodb" });
 

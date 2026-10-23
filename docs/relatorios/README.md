@@ -41,3 +41,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | 16 — reutilização do cliente OAuth Calendar local | [relatório](2026-10-22_sessao-16.md) |
 | 2026-10-22 | Calendar — OAuth unificado no login | [relatório](2026-10-22_calendar-oauth-unificado.md) |
 | 2026-10-23 | Calendar — exclusão no Google e estado local | [relatório](2026-10-23_calendar-exclusao-google.md) |
+| 2026-10-23 | Biblioteca — API, interface e validação sintética | [relatório](2026-10-23_biblioteca.md) |

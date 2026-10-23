@@ -67,3 +67,7 @@ Abra Agendas → Ativar Google Calendar (sem nova tela de login). "Alterar permi
 O token é um só: Desconectar o Calendar apaga cadastro e espelhos e não revoga nada; sair da conta revoga o token do login e, com a [revogação Google](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke), também o acesso ao Calendar. A revogação é de melhor esforço e pode demorar.
 
 Esta leitura do chaveiro e a serialização conectar/desconectar atendem **um processo da API local Linux**. Não habilite várias instâncias contra o mesmo repositório sem coordenação persistida. Não há implantação AWS, conexão Google real ou consentimento nativo verificado nesta frente; veja `docs/relatorios/2026-10-22_calendar-sync.md`.
+
+## Biblioteca
+
+`/v1/library` oferece CRUD autenticado/versionado e filtros por tipo, status, tag e título, com cursor. Contrato em [api-library.md](../../docs/arquitetura/api-library.md). Usa `LIBRARY#<id>` na mesma tabela, sem variáveis novas nem chamadas a catálogos externos. Testes HTTP em memória, adaptador com cliente falso e integração opt-in via `DYNAMODB_TEST_ENDPOINT` restrito a loopback; a integração cria e exclui sua própria tabela sintética. Sem AWS, upload, exportação/restauração ou outbox.
