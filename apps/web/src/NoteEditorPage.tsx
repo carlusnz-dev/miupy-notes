@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Trash2, Settings, Type } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Settings, Type, BookOpen } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
 import TagInput from "./components/TagInput";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -66,6 +68,7 @@ function NoteEditorSession() {
   const ignoreLocal = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [source, setSource] = useState(false);
+  const [reading, setReading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -144,6 +147,20 @@ function NoteEditorSession() {
     if (!current || sample) return false;
     return notesSaver.flush(current.id);
   }, [sample]);
+
+  useEffect(() => {
+    if (!ready) return;
+    function shortcut(event: KeyboardEvent) {
+      if (event.repeat || event.isComposing || document.querySelector("dialog[open]")) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "s") { event.preventDefault(); event.stopPropagation(); void persist(); return; }
+      const matches = preferences.readingShortcut === "Alt+R"
+        ? event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === "r"
+        : (event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey === (preferences.readingShortcut === "Ctrl+Shift+E") && event.key.toLowerCase() === "e";
+      if (matches) { event.preventDefault(); event.stopPropagation(); setReading(value => !value); }
+    }
+    window.addEventListener("keydown", shortcut, true);
+    return () => window.removeEventListener("keydown", shortcut, true);
+  }, [preferences.readingShortcut, ready, persist]);
 
   const save = describeSave(view, `Sincronizado às ${timeFormat.format(new Date(note?.updatedAt ?? 0))}`);
   const blocked = view?.status === "conflict";
@@ -256,6 +273,7 @@ function NoteEditorSession() {
         <span className={`save-status${save.alert ? " save-status-alert" : ""}`} role="status" aria-live="polite">{save.text}</span>
         <div className="editor-actions" role="group" aria-label="Ações da nota">
           <button type="button" className="tool-button" aria-label="Salvar" title="Salvar (Ctrl+S)" onClick={() => void persist()} disabled={!dirty || busy || blocked}><Save size={18} /></button>
+          <button type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={() => setReading(value => !value)}><BookOpen size={18} /></button>
           <button type="button" className="tool-button" aria-label="Alternar fonte dos títulos" title="Alternar fonte dos títulos" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
           <button type="button" className="tool-button" aria-label="Configurações" title="Configurações" onClick={() => navigate("/settings")}><Settings size={18} /></button>
           <button type="button" className="tool-button" aria-label="Excluir nota" title="Excluir nota" onClick={() => setConfirmDelete(true)} disabled={deleting}><Trash2 size={18} /></button>
@@ -284,7 +302,7 @@ function NoteEditorSession() {
       )}
 
       <label className="visually-hidden" htmlFor="editor-title">Título</label>
-      <input
+      {reading ? <h1 className="editor-title">{draft.title || "Sem título"}</h1> : <input
         ref={titleRef}
         id="editor-title"
         className="editor-title"
@@ -294,14 +312,16 @@ function NoteEditorSession() {
         maxLength={MAX_TITLE}
         placeholder="Título"
         autoComplete="off"
-      />
-      {preferences.showTags && (
+      />}
+      {preferences.showTags && !reading && (
         <div className="editor-meta">
           <TagInput value={draft.tags} onChange={(tags) => edit({ tags })} maxTags={MAX_TAGS} maxLength={MAX_TAG} />
         </div>
       )}
 
-      <LiveMarkdownEditor
+      {reading && <article className="markdown-preview note-reading" aria-label="Nota em modo leitura" tabIndex={0}><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ children, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer">{children}</a> }}>{draft.body}</ReactMarkdown></article>}
+      {/* Manter o editor montado preserva seleção e histórico de desfazer durante a leitura. */}
+      <div className="note-writing" hidden={reading} inert={reading}><LiveMarkdownEditor
         ref={editorRef}
         value={draft.body}
         onChange={(body) => edit({ body })}
@@ -309,11 +329,11 @@ function NoteEditorSession() {
         source={source}
         onSourceChange={setSource}
         autoFocus={bodyAutoFocus.current}
-      />
+      /></div>
 
       <div className="editor-footer muted-small">
         <span>{countFormat.format(words)} {words === 1 ? "palavra" : "palavras"} · {countFormat.format(draft.body.length)} / {countFormat.format(MAX_BODY)} caracteres</span>
-        <span>Ctrl+S salva · Ctrl+Enter alterna tarefa · versão {note.version}</span>
+        <span>{preferences.readingShortcut} alterna leitura · Ctrl+S salva · {!reading && "Ctrl+Enter alterna tarefa · "}versão {note.version}</span>
       </div>
     </div>
   );

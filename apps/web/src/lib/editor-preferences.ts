@@ -11,9 +11,10 @@ const schema = z.object({
   showTags: z.boolean(),
   chipStyle: z.enum(["outline", "filled"]),
   toolbarExpanded: z.boolean(),
+  readingShortcut: z.enum(["Ctrl+E", "Ctrl+Shift+E", "Alt+R"]),
 });
 export type EditorPreferences = z.infer<typeof schema>;
-export const defaultEditorPreferences: EditorPreferences = { width: "medium", padding: 24, headingFont: "serif", editorFont: "mono", fontSize: 15, colorTheme: "mono", showTags: true, chipStyle: "outline", toolbarExpanded: true };
+export const defaultEditorPreferences: EditorPreferences = { width: "medium", padding: 24, headingFont: "serif", editorFont: "mono", fontSize: 15, colorTheme: "mono", showTags: true, chipStyle: "outline", toolbarExpanded: true, readingShortcut: "Ctrl+E" };
 const key = "miupy.editor-preferences.v1";
 const listeners = new Set<() => void>();
 function read(): EditorPreferences {

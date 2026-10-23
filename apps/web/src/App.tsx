@@ -1,6 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
+import ScrollActivity from "./components/ScrollActivity";
 import Sidebar from "./components/Sidebar";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
@@ -13,6 +14,7 @@ const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 // Perfil traz o Recharts; configurações só carregam quando abertas.
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
+const BanksPage = lazy(() => import("./finance/BanksPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
@@ -79,6 +81,8 @@ function Shell() {
     ? "Visão geral"
     : pathname.startsWith("/notes/")
       ? "Editor de notas"
+      : pathname === "/finance/banks"
+        ? "Bancos e contas"
       : pathname.startsWith("/finance/")
         ? "Lançamento financeiro"
       : pathname === "/profile"
@@ -90,6 +94,7 @@ function Shell() {
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
+      <ScrollActivity />
       <Sidebar />
       <main className="main-content">
         <header className="topbar">
@@ -117,6 +122,7 @@ function Shell() {
                     <ProfilePage />
                   </Suspense>
                 } />
+                <Route path="/finance/banks" element={<Suspense fallback={<SkeletonBody label="Carregando bancos…" lines={4} />}><BanksPage /></Suspense>} />
                 <Route path="/finance/:id" element={<Suspense fallback={<SkeletonBody label="Carregando lançamento…" lines={4} />}><FinanceDetailPage /></Suspense>} />
                 <Route path="/finance" element={<Suspense fallback={<SkeletonBody label="Carregando finanças…" lines={4} />}><FinancePage /></Suspense>} />
                 <Route path="/agendas" element={<Suspense fallback={<SkeletonBody label="Carregando agendas…" lines={3} cards={1} cardHeight={320} />}><CalendarPage /></Suspense>} />

@@ -38,7 +38,7 @@
 .finance-detail dd { margin: 0; overflow-wrap: anywhere; }
 .finance-banks { list-style: none; padding: 0; }
 .finance-banks li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid #343436; }
-.finance-banks li span:first-of-type { flex: 1; overflow-wrap: anywhere; }
+.finance-banks li > span:first-of-type { flex: 1; overflow-wrap: anywhere; }
 .finance-banks img { width: 28px; height: 28px; object-fit: contain; }
 .finance-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 480px) { .finance-grid { grid-template-columns: 1fr; } .finance-actions { width: 100%; } .finance-actions button { flex: 1; } .finance-detail { grid-template-columns: 1fr; gap: 8px; } .finance-detail dd { margin-bottom: 8px; } }
@@ -54,3 +54,5 @@
 /* Campos compostos (data, hora): a borda é do contêiner, não do input interno. */
 .finance-form :is(.date-control, .time-control) input { border: 0; background: transparent; }
 .finance-form .date-picker > label { font-size: 14px; }
+
+.finance-form .ui-input:focus-visible { outline: none; }
