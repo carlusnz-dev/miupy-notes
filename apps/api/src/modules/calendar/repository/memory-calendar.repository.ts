@@ -1,14 +1,13 @@
 import { AppError } from "../../../core/domain/app-error.js";
 import type { CalendarEvent } from "../domain/calendar-event.js";
 import { overlaps } from "../domain/event-time.js";
-import type { GoogleConnection, PendingAuthorization } from "../domain/google-connection.js";
+import type { GoogleConnection } from "../domain/google-connection.js";
 import { CalendarRepository, type DeleteResult, type EventPage, type EventQuery } from "./calendar.repository.js";
 
 /** Implementação em memória para testes; ordena por ID como a chave de ordenação do DynamoDB. */
 export class MemoryCalendarRepository extends CalendarRepository {
   private readonly events = new Map<string, CalendarEvent>();
   private readonly connections = new Map<string, GoogleConnection>();
-  private readonly pending = new Map<string, PendingAuthorization>();
 
   async create(event: CalendarEvent): Promise<CalendarEvent> {
     const key = `${event.ownerId}:${event.id}`;
@@ -73,8 +72,4 @@ export class MemoryCalendarRepository extends CalendarRepository {
     return true;
   }
   async deleteConnection(ownerId: string) { this.connections.delete(ownerId); }
-  async takePending(ownerId: string) { const pending = this.pending.get(ownerId) ?? null; this.pending.delete(ownerId); return pending; }
-  async getPending(ownerId: string) { return this.pending.get(ownerId) ?? null; }
-  async savePending(ownerId: string, pending: PendingAuthorization) { this.pending.set(ownerId, pending); }
-  async clearPending(ownerId: string) { this.pending.delete(ownerId); }
 }

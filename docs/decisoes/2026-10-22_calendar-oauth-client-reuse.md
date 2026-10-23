@@ -1,5 +1,7 @@
 # Calendar local: reutilizar o cliente OAuth Desktop
 
+> Consentimento e cofre superados por [login único](2026-10-22_calendar-login-unico.md).
+
 Data: 2026-10-22. Escopo: RF-05, RF-12 e RNF-02, apenas composição local Linux. Complementa [OAuth Calendar local](2026-10-22_calendar-local-oauth.md).
 
 ## Contexto e escolha

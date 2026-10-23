@@ -16,6 +16,8 @@ Estado em 2026-10-18: todos os itens abaixo são **planejados**. O primeiro reco
 | RF-10 | S | Gerar relatórios pessoais por período e domínio. | Relatório mostra origem dos dados, filtros e data de geração. |
 | RF-11 | F | Expor ferramentas MCP para LLMs sobre dados autorizados. | Ferramentas usam escopo explícito, confirmação para escrita e trilha de auditoria. |
 | RF-12 | S | Consultar e gerenciar sincronizações externas. | Estado, erro, retry e desconexão visíveis por integração. |
+| RF-13 | S | Gerenciar obras da Biblioteca por usuário com tipo, criador, status, ano, nota, tags, datas, comentário e URLs opcionais. | CRUD autenticado; outro proprietário recebe 404; edição concorrente retorna 409; URLs restritas a HTTP/HTTPS. |
+| RF-14 | S | Encontrar obras por tipo, status, tag e trecho do título, com paginação acessível. | Filtros combinados, cursor continua mesmo em página vazia; interface responsiva, modal com teclado e movimento reduzido. |
 | RNF-01 | M | Interface responsiva e binário enxuto. | Medir tamanho final, abertura e fluidez antes de fixar metas. |
 | RNF-02 | M | Segurança e privacidade. | TLS, criptografia em repouso, segredo fora do cliente, menor privilégio e logs sem conteúdo pessoal. |
 | RNF-03 | M | Recuperação e backups. | Backup versionado com teste periódico de restauração e retenção definida. |
@@ -29,4 +31,8 @@ Notas e identidade (RF-01/RF-02) têm proteção local de rascunhos por CAS e jo
 
 ## Continuidade em 2026-10-22
 
-RF-05/RF-12 continuam parciais: API local Linux opt-in usa Secret Service e OAuth Calendar próprio no Tauri; leitura ou escrita consentida, edição/exclusão de espelhos e envio explícito de cópias locais testados com fakes. Carga inicial limitada a 30 dias passados e 366 futuros, incremental sob demanda, sem janela móvel automática. Connect/disconnect têm serialização somente no processo local; Lambda permanece sem cofre/conector habilitado. Não há conta Google/cofre/consentimento nativo real verificado nem AWS implantada. Sessão 13 registra limpeza Git/Orca, revisão e validação sintética desktop/mobile.
+RF-05/RF-12 continuam parciais: API local Linux opt-in (`login-keyring`) usa o login único do Tauri com escopo Calendar, sem segundo OAuth; a API lê o refresh token do chaveiro do login; leitura ou escrita consentida, edição/exclusão de espelhos e envio explícito de cópias locais testados com fakes. Carga inicial limitada a 30 dias passados e 366 futuros, incremental sob demanda, sem janela móvel automática. Connect/disconnect têm serialização somente no processo local; Lambda permanece sem cofre/conector habilitado. Não há conta Google/chaveiro/consentimento nativo real verificado nem AWS implantada. Sessão 13 registra limpeza Git/Orca, revisão e validação sintética desktop/mobile.
+
+## Continuidade em 2026-10-23 — Biblioteca
+
+RF-13/RF-14 têm API e interface local com verificação sintética; DynamoDB possui adaptador testado com cliente falso, persistência verificada em tabela DynamoDB Local sintética nesta frente. RF-09 continua parcial: exportação e restauração da Biblioteca não foram implementadas. Sem upload de capas, sincronização externa, contador no Perfil, Tauri/WebKit manual ou recursos AWS. Contrato em `docs/arquitetura/api-library.md`.

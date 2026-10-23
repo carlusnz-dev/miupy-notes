@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { signIn, useAuth, getOwnerId, getAuthSessionVersion, isCurrentAuthSession } from "../lib/auth";
-import { connectGoogle, cancelGoogleConnection, disconnectGoogle, createCalendarEvent, createTask, deleteCalendarEvent, deleteTask, getCalendarEvent, getGoogleStatus, listEventsInRange, listTasks, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent, updateTask } from "../lib/calendar-api";
+import { grantCalendar, signIn, useAuth, getOwnerId, getAuthSessionVersion, isCurrentAuthSession } from "../lib/auth";
+import { connectGoogle, disconnectGoogle, createCalendarEvent, createTask, deleteCalendarEvent, deleteTask, getCalendarEvent, getGoogleStatus, listEventsInRange, listTasks, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent, updateTask } from "../lib/calendar-api";
 import { listNotesMetadata } from "../lib/notes-api";
 import { usePageTitle } from "../lib/use-page-title";
 import CalendarWorkspace, { type GoogleApi } from "./CalendarWorkspace";
@@ -30,7 +30,7 @@ const remote: RangeRemote = {
   listRange: (range, signal) => listEventsInRange(range, signal),
 };
 const tasksApi: TasksApi = { list: listTasks, create: createTask, update: updateTask, remove: deleteTask };
-const google: GoogleApi = { connect: connectGoogle, cancelConnect: cancelGoogleConnection, disconnect: disconnectGoogle, getStatus: getGoogleStatus, sync: syncGoogle, reflect: reflectEvent, unreflect: unreflectEvent };
+const google: GoogleApi = { connect: connectGoogle, grant: grantCalendar, disconnect: disconnectGoogle, getStatus: getGoogleStatus, sync: syncGoogle, reflect: reflectEvent, unreflect: unreflectEvent };
 
 export default function CalendarPage() {
   usePageTitle("Agendas");

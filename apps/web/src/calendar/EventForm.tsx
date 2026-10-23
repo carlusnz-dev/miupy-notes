@@ -134,9 +134,18 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
             <Select label="Outro evento" value={eventToAdd} options={eventOptions} onChange={(id) => { addLink("event", id); setEventToAdd(""); }} />
             <p className="calendar-note">Biblioteca: módulo ainda indisponível, sem relações por enquanto.</p>
           </fieldset>}
-          {canWriteGoogle && event?.source !== "google" && <label className="calendar-check"><input type="checkbox" checked={sendToGoogle || !!event?.reflection} disabled={!!event?.reflection} onChange={(e) => setSendToGoogle(e.target.checked)} /> {event?.reflection ? "Salvar também atualiza no Google; excluir remove de lá." : "Enviar este evento ao Google ao salvar"}</label>}
+          {canWriteGoogle && event?.source !== "google" && <label className="calendar-check"><input type="checkbox" checked={sendToGoogle || !!event?.reflection} disabled={!!event?.reflection} onChange={(e) => setSendToGoogle(e.target.checked)} /> {event?.reflection?.state === "deleted_remote" ? "Este evento não está mais no Google; salvar altera só o evento local." : event?.reflection ? "Salvar também atualiza no Google; excluir remove de lá." : "Enviar este evento ao Google ao salvar"}</label>}
           {event?.source === "google" && canWriteGoogle && <p className="calendar-note">Salvar altera este evento no Google. Excluir também o remove do Google. Mudanças remotas concorrentes geram conflito.</p>}
-          {event && event.source !== "google" && google?.state === "connected" && google.mode === "reflect" && reflector && (
+          {event?.reflection?.state === "deleted_remote" && reflector && (
+            <div className="calendar-reflect">
+              <strong>Excluído no Google</strong>
+              <p>A cópia no Google foi excluída. Exclua este evento aqui ou mantenha-o só neste app.</p>
+              <div className="calendar-alert-actions">
+                <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(() => reflector.unreflect(event.id, true))}>Manter só neste app</button>
+              </div>
+            </div>
+          )}
+          {event && event.source !== "google" && event.reflection?.state !== "deleted_remote" && google?.state === "connected" && google.mode === "reflect" && reflector && (
             <div className="calendar-reflect">
               <strong>Google Calendar</strong>
               {event.reflection

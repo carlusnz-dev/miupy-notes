@@ -16,6 +16,7 @@ const ProfilePage = lazy(() => import("./ProfilePage"));
 const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
 const BanksPage = lazy(() => import("./finance/BanksPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
+const LibraryPage = lazy(() => import("./library/LibraryPage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
@@ -44,19 +45,6 @@ const theme = {
   "--radius-medium": `${tokens.radiusPx.medium}px`,
   "--duration": `${tokens.motion.defaultDurationMs}ms`,
 } as CSSProperties;
-
-function Feature({ label, description }: { label: string; description: string }) {
-  usePageTitle(label);
-  return (
-    <div className="feature-page">
-      <div className="eyebrow">EM PREPARAÇÃO</div>
-      <h1>{label}<em>.</em></h1>
-      <p className="lead">{description}</p>
-      <p className="muted">Este espaço ainda não armazena dados. O primeiro fluxo será conectado à API após definir a autenticação.</p>
-      <NavLink className="text-link" to="/">Voltar ao início <ArrowIcon /></NavLink>
-    </div>
-  );
-}
 
 function NotFound() {
   const { pathname } = useLocation();
@@ -128,9 +116,7 @@ function Shell() {
                 <Route path="/agendas" element={<Suspense fallback={<SkeletonBody label="Carregando agendas…" lines={3} cards={1} cardHeight={320} />}><CalendarPage /></Suspense>} />
                 {/* Atalhos antigos (Sidebar e Início) apontavam para /events. */}
                 <Route path="/events" element={<Navigate to="/agendas" replace />} />
-                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance" && section.path !== "/agendas").map((section) => (
-                  <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
-                ))}
+                <Route path="/library" element={<Suspense fallback={<SkeletonBody label="Carregando biblioteca…" cards={4} />}><LibraryPage /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>

@@ -45,26 +45,6 @@ export const listEventsQuerySchema = z.strictObject({
 
 export const deleteEventQuerySchema = z.strictObject({ version: z.coerce.number().int().positive() });
 
-const loopbackRedirect = z.url().max(300).refine((value) => {
-  const url = new URL(value);
-  return url.protocol === "http:" && url.hostname === "127.0.0.1" && !!url.port && url.pathname === "/callback" && !url.search && !url.hash && !url.username && !url.password;
-}, "Redirect loopback inválido.");
-
-export const authorizeGoogleInputSchema = z.strictObject({
-  mode: z.enum(["mirror", "reflect"]),
-  redirectUri: loopbackRedirect,
-  codeChallenge: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/),
-});
-
-export const connectGoogleInputSchema = z.strictObject({
-  state: z.string().min(16).max(128),
-  code: z.string().min(1).max(2048),
-  codeVerifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
-  redirectUri: loopbackRedirect,
-});
-
 export type CreateEventInput = z.infer<typeof createEventInputSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventInputSchema>;
 export type ListEventsQuery = z.infer<typeof listEventsQuerySchema>;
-export type AuthorizeGoogleInput = z.infer<typeof authorizeGoogleInputSchema>;
-export type ConnectGoogleInput = z.infer<typeof connectGoogleInputSchema>;
