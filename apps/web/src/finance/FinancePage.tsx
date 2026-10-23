@@ -4,7 +4,7 @@ import { formatMoney } from './money';
 import { Link, useNavigate } from 'react-router-dom';
 import { FinanceAccess } from './FinanceAccess';
 import { TransactionForm } from './TransactionForm';
-import { BanksModal } from './BanksModal';
+import Button from '../components/Button';
 import { usePageTitle } from '../lib/use-page-title';
 import './finance.css';
 
@@ -23,7 +23,6 @@ function FinanceList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
-  const [showBanks, setShowBanks] = useState(false);
   const [exporting, setExporting] = useState(false);
   const cursor = cursors[cursors.length - 1];
   useEffect(() => {
@@ -46,7 +45,7 @@ function FinanceList() {
     finally { setExporting(false); }
   }
   return <section className="finance-page" aria-labelledby="finance-title">
-    <header className="finance-heading"><div><p className="finance-eyebrow">Seu dinheiro, com clareza</p><h1 id="finance-title">Finanças</h1><p className="finance-muted">Entradas, saídas e os bancos do seu dia a dia.</p></div><div className="finance-actions"><button onClick={() => setShowBanks(true)} disabled={loading}>Bancos</button><button onClick={() => void exportCsv()} disabled={exporting || loading}>{exporting ? 'Exportando…' : 'Exportar CSV'}</button><button onClick={() => setCreating(true)} disabled={loading}>Novo lançamento</button></div></header>
+    <header className="finance-heading"><div><div className="eyebrow">SEU DINHEIRO, COM CLAREZA</div><h1 id="finance-title">Finanças<em>.</em></h1><p className="finance-muted">Entradas, saídas e os bancos do seu dia a dia.</p></div><div className="finance-actions"><Button onClick={() => navigate("/finance/banks")}>Bancos</Button><button onClick={() => void exportCsv()} disabled={exporting || loading}>{exporting ? 'Exportando…' : 'Exportar CSV'}</button><button onClick={() => setCreating(true)} disabled={loading}>Novo lançamento</button></div></header>
     {error && <div role="alert" className="finance-error">{error} <button onClick={reload}>Recarregar dados</button></div>}
     {loading ? <p role="status">Carregando finanças…</p> : !error ? <>
       <section aria-label="Balanço geral"><h2>Balanço geral</h2><p className="finance-muted">Referências de abertura + movimentos posteriores das contas + movimentos sem conta. Moedas são mantidas separadas.</p><div className="finance-totals">{balances?.currencies.map(total => <article key={total.currency}><span>{total.currency}</span><strong>{formatMoney(total.balanceCents, total.currency)}</strong><small>Sem conta: {formatMoney(total.unallocatedCents, total.currency)}</small></article>)}</div></section>
@@ -58,7 +57,6 @@ function FinanceList() {
       <nav className="finance-pagination" aria-label="Páginas dos lançamentos"><button disabled={cursors.length < 2} onClick={() => setCursors(values => values.slice(0, -1))}>Anterior</button><span>Página {cursors.length} · até 50 itens</span><button disabled={!page?.nextCursor} onClick={() => setCursors(values => [...values, page?.nextCursor ?? undefined])}>Próxima</button></nav>
     </> : null}
     {creating && <TransactionForm banks={banks} onClose={() => setCreating(false)} onSaved={saved => { setCreating(false); navigate(`/finance/${saved.id}`); }} />}
-    {showBanks && <BanksModal banks={banks} balances={balances} onClose={() => setShowBanks(false)} onChanged={reload} />}
 
   </section>;
 }

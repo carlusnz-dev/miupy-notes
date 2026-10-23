@@ -69,6 +69,6 @@ export function LibraryWorkspace() {
       <nav className="library-pagination" aria-label="Páginas da biblioteca"><button className="button button-secondary" disabled={!cursor} onClick={() => { const next = new URLSearchParams(params); next.delete("cursor"); setParams(next); }}>Primeira página</button><button className="button button-secondary" disabled={!page?.nextCursor} onClick={() => { const next = new URLSearchParams(params); next.set("cursor", page!.nextCursor!); setParams(next); }}>Próxima página</button></nav>
     </> : null}
     {form && <LibraryForm existing={form.existing} onClose={() => setForm(null)} onSaved={() => { setForm(null); reload(); }} />}
-    {deleting && <ConfirmDialog title="Excluir obra?" confirmLabel="Excluir obra" busy={busy} error={deleteError} onClose={() => setDeleting(null)} onConfirm={() => void remove()}><p>A obra “{deleting.title}” será excluída. Esta ação não pode ser desfeita.</p></ConfirmDialog>}
+    <ConfirmDialog open={!!deleting} title="Excluir obra?" confirmLabel="Excluir obra" busyLabel="Excluindo…" busy={busy} error={deleteError} onCancel={() => setDeleting(null)} onConfirm={() => void remove()}><p>A obra “{deleting?.title}” será excluída. Esta ação não pode ser desfeita.</p></ConfirmDialog>
   </section>;
 }

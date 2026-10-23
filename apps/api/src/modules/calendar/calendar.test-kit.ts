@@ -3,12 +3,15 @@ import { createServer, type Server } from "node:http";
 import express from "express";
 import { errorHandler } from "../../core/http/error-handler.js";
 import { CalendarController } from "./controllers/calendar.controller.js";
+import { TaskController } from "./controllers/task.controller.js";
 import { FakeGoogleCalendarClient } from "./google/fake-google-calendar.client.js";
 import { AccessTokenSource, GoogleOAuth, MemoryCredentialStore, type AccessToken } from "./google/google-oauth.js";
 import { MemoryCalendarRepository } from "./repository/memory-calendar.repository.js";
+import { MemoryTaskRepository } from "./repository/memory-task.repository.js";
 import { createCalendarRouter } from "./routes/calendar.routes.js";
 import { CalendarServiceImpl } from "./services/calendar.service.impl.js";
 import { GoogleIntegrationServiceImpl } from "./services/google-integration.service.impl.js";
+import { TaskServiceImpl } from "./services/task.service.impl.js";
 
 /** OAuth falso: o "Google" devolve o `sub` e os escopos que o login concedeu. */
 export class FakeGoogleOAuth extends GoogleOAuth {
@@ -32,7 +35,9 @@ export function createKit(options: { configured?: boolean; now?: () => Date } = 
   const deps = options.configured === false ? null : { tokens, client: google };
   const service = new CalendarServiceImpl(repository, { exists: async (owner, id) => owner === "alice" && id === knownNote });
   const integration = new GoogleIntegrationServiceImpl(repository, deps, options.now);
-  return { repository, google, oauth, credentials, tokens, service, integration };
+  const taskRepository = new MemoryTaskRepository();
+  const taskService = new TaskServiceImpl(taskRepository);
+  return { repository, google, oauth, credentials, tokens, service, integration, taskRepository, taskService };
 }
 
 /** Principal falso só no teste, como nas rotas de notas. */
@@ -45,7 +50,7 @@ export function createTestServer(kit: ReturnType<typeof createKit>): Server {
     next();
   });
   app.use(express.json({ limit: "256kb" }));
-  app.use("/v1/calendar", createCalendarRouter(new CalendarController(kit.service, kit.integration)));
+  app.use("/v1/calendar", createCalendarRouter(new CalendarController(kit.service, kit.integration), new TaskController(kit.taskService)));
   app.use(errorHandler);
   return createServer(app);
 }

@@ -113,10 +113,11 @@ export default function Modal({ open, title, onClose, children, busy = false, in
       className={className ? `modal ${className}` : "modal"}
       aria-labelledby={titleId}
       aria-busy={busy}
-      onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onCloseRef.current(); }}
+      // Diálogos aninhados (ex.: confirmação sobre o formulário) não fecham nem prendem o Tab do diálogo de baixo.
+      onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (!busyRef.current) onCloseRef.current(); }}
       // Navegadores diferem em para onde o Tab vai ao sair do <dialog> (barra do navegador, <body>): o ciclo é feito aqui.
       onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
+        if (event.key !== "Tab" || (event.target as Element).closest("dialog") !== event.currentTarget) return;
         const items = [...event.currentTarget.querySelectorAll<HTMLElement>(focusable)].filter((item) => !item.matches(":disabled") && item.getClientRects().length > 0);
         const first = items[0], last = items[items.length - 1];
         if (!first) { event.preventDefault(); return; }

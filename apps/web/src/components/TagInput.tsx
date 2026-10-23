@@ -43,6 +43,7 @@ export default function TagInput({ value, onChange, maxTags = 20, maxLength = 40
   }
 
   function keyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Enter") {
       event.preventDefault();
       if (draft.trim()) commit([draft]);
@@ -59,6 +60,7 @@ export default function TagInput({ value, onChange, maxTags = 20, maxLength = 40
   return (
     <div className="tag-input" role="group" aria-label={label} onClick={(event) => { if (event.target === event.currentTarget) inputRef.current?.focus(); }}>
       <span className="tag-input-label" aria-hidden="true">{label}</span>
+      <div className="tag-input-control">
       {value.map((tag) => (
         <Badge key={tag} animate onRemove={() => { setMessage(`Tag ${tag} removida.`); onChange(value.filter((item) => item !== tag)); }}>{tag}</Badge>
       ))}
@@ -69,13 +71,13 @@ export default function TagInput({ value, onChange, maxTags = 20, maxLength = 40
         aria-describedby={hintId}
         value={draft}
         maxLength={maxLength}
-        disabled={full}
         placeholder={full ? `Limite de ${maxTags} tags` : "Adicionar tag…"}
         autoComplete="off"
         onChange={change}
         onKeyDown={keyDown}
         onBlur={() => setDraft("")}
       />
+      </div>
       <span id={hintId} className="visually-hidden">Digite e pressione espaço ou Enter para confirmar. Ao sair do campo, o rascunho é descartado.</span>
       <span className="visually-hidden" role="status" aria-live="polite">{message}</span>
     </div>

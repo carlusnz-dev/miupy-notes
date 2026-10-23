@@ -42,3 +42,6 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Calendar — OAuth unificado no login | [relatório](2026-10-22_calendar-oauth-unificado.md) |
 | 2026-10-23 | Calendar — exclusão no Google e estado local | [relatório](2026-10-23_calendar-exclusao-google.md) |
 | 2026-10-23 | Biblioteca — API, interface e validação sintética | [relatório](2026-10-23_biblioteca.md) |
+| 2026-10-22 | Design/UX — refresh da Agenda e controles próprios | [relatório](2026-10-22_design-ux-refresh.md) |
+| 2026-10-23 | Design — Agenda e tarefas | [relatório](2026-10-23_design-agenda.md) |
+| 2026-10-23 | Design — UI, notas e finanças | [relatório](2026-10-23_design-ui-codex.md) |

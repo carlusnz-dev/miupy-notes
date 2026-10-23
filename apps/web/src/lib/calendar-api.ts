@@ -1,9 +1,15 @@
 import { calendarEventListOutputSchema, calendarEventOutputSchema, googleStatusOutputSchema, googleSyncOutputSchema,
   type CalendarEventOutput, type GoogleStatusOutput, type GoogleSyncOutput } from "../../../api/src/modules/calendar/contract";
+import { taskListOutputSchema, taskOutputSchema, type TaskOutput } from "../../../api/src/modules/calendar/task-contract";
 import { apiClient, toApiError } from "./api-client";
 
 export type { CalendarEventOutput, GoogleStatusOutput, GoogleSyncOutput };
+export type { TaskOutput };
+export { isTaskOverdue } from "../../../api/src/modules/calendar/task-contract";
 export type EventLink = CalendarEventOutput["links"][number];
+
+/** Campos editáveis de uma tarefa: `dueTime` é HH:MM local e exige `dueDate` (AAAA-MM-DD). */
+export type TaskDraft = { title: string; description: string; dueDate: string | null; dueTime: string | null; status: "pending" | "completed" };
 
 /** Campos editáveis de um evento, no formato da API: com hora, `start`/`end` são instantes ISO; dia inteiro, AAAA-MM-DD. */
 export type EventDraft = {
@@ -53,6 +59,32 @@ export function updateCalendarEvent(id: string, version: number, draft: EventDra
 
 export function deleteCalendarEvent(id: string, version: number) {
   return guard(async () => { await apiClient.delete(`${base}/events/${encodeURIComponent(id)}`, { params: { version } }); });
+}
+
+/** Todas as tarefas (a lista é pequena e a API pagina por ID). `maxPages` evita laço sem fim. */
+export async function listTasks(signal?: AbortSignal, maxPages = 10): Promise<TaskOutput[]> {
+  const items: TaskOutput[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const result = await guard(async () => taskListOutputSchema.parse((await apiClient.get(`${base}/tasks`, { params: { cursor, limit: 100 }, signal })).data));
+    items.push(...result.items);
+    if (!result.nextCursor) return items;
+    cursor = result.nextCursor;
+  }
+  throw toApiError(new Error("Tarefas demais para carregar."));
+}
+
+/** `id` gerado no cliente: repetir o envio não duplica a tarefa. */
+export function createTask(id: string, draft: TaskDraft) {
+  return guard(async () => taskOutputSchema.parse((await apiClient.post(`${base}/tasks`, { id, ...draft })).data));
+}
+
+export function updateTask(id: string, version: number, changes: Partial<TaskDraft>) {
+  return guard(async () => taskOutputSchema.parse((await apiClient.patch(`${base}/tasks/${encodeURIComponent(id)}`, { version, ...changes })).data));
+}
+
+export function deleteTask(id: string, version: number) {
+  return guard(async () => { await apiClient.delete(`${base}/tasks/${encodeURIComponent(id)}`, { params: { version } }); });
 }
 
 export function getGoogleStatus(signal?: AbortSignal) {

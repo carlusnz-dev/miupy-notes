@@ -25,15 +25,12 @@ export default function Sidebar() {
   const [width, setWidth] = useState(228);
   const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
   useLayoutEffect(() => {
-    const media = gsap.matchMedia();
-    media.add('(prefers-reduced-motion: no-preference)', () => {
-      const context = gsap.context(() => {
-        if (!collapsed) gsap.fromTo('.sidebar-letter', { opacity: 0 }, { opacity: 1, stagger: .012, duration: .2, clearProps: 'opacity' });
-        gsap.fromTo(root.current, { opacity: .5 }, { opacity: 1, duration: .2, clearProps: 'opacity' });
-      }, root);
-      return () => context.revert();
-    });
-    return () => { animation.current?.kill(); media.revert(); };
+    const context = gsap.context(() => {
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        gsap.fromTo(root.current, { xPercent: -100 }, { xPercent: 0, duration: .24, ease: 'power2.out', clearProps: 'transform' });
+      }
+    }, root);
+    return () => { animation.current?.kill(); context.revert(); };
   }, [collapsed]);
   function toggle() {
     if (changing.current) return;
@@ -41,10 +38,8 @@ export default function Sidebar() {
     changing.current = true;
     animation.current = gsap.timeline({ onComplete: () => {
       changing.current = false;
-      gsap.set(root.current, { clearProps: 'opacity' });
-      gsap.set(root.current?.querySelectorAll('.sidebar-letter') ?? [], { clearProps: 'opacity' });
       setCollapsed(value => !value);
-    } }).to(root.current?.querySelectorAll('.sidebar-letter') ?? [], { opacity: 0, stagger: .003, duration: .12 }).to(root.current, { opacity: .5, duration: .1 }, 0);
+    } }).to(root.current, { xPercent: -100, duration: .18, ease: 'power2.in', clearProps: 'transform' });
   }
   const resize = (value: number) => setWidth(Math.min(maxWidth, Math.max(minWidth, value)));
 

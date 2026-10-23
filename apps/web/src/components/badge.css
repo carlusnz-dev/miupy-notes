@@ -4,8 +4,12 @@
 .badge-remove:hover { color: var(--color-text); background: var(--color-surface-raised); }
 .badge-remove:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 1px; }
 .chip-filled .badge, .badge-filled { background: var(--color-surface-raised); }
-.tag-input { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; color: var(--color-muted); font-size: 12px; cursor: text; }
-.tag-input-label { margin-right: 2px; }
-.tag-input-field { flex: 1 1 120px; min-width: 0; padding: 4px 8px; border: 1px solid transparent; border-radius: var(--radius-small); color: var(--color-text); background: transparent; font: inherit; }
-.tag-input-field:hover:not(:disabled), .tag-input-field:focus-visible { border-color: var(--color-border); background: var(--color-surface); }
-.tag-input-field:disabled { cursor: not-allowed; }
+.tag-input { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--color-muted); font-size: 12px; cursor: text; }
+.tag-input-label { flex: none; }
+.tag-input-control { display: flex; flex: 1; align-items: center; gap: 5px; min-width: 0; height: 36px; padding: 3px 8px; overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-small); background: var(--color-surface); }
+.tag-input-control:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.tag-input-control .badge { flex: none; max-width: 140px; height: 26px; min-height: 26px; padding: 0 5px; }
+.tag-input-control .badge-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-input-control .badge-remove { width: 24px; height: 24px; margin: 0; }
+.tag-input-field { flex: 1 0 110px; min-width: 110px; height: 28px; padding: 2px; border: 0; color: var(--color-text); background: transparent; font: inherit; }
+.tag-input-field:focus-visible { outline: none; }

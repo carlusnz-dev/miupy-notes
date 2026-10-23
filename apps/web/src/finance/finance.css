@@ -1,6 +1,6 @@
-.finance-page { color: #f5f5f2; padding: clamp(20px, 4vw, 48px); max-width: 1500px; margin: auto; }
-.finance-heading { display: flex; justify-content: space-between; gap: 24px; align-items: center; flex-wrap: wrap; margin-bottom: 32px; }
-.finance-heading h1 { font-family: var(--font-serif); font-size: clamp(36px, 5vw, 56px); font-weight: 400; margin: 4px 0 8px; }
+.finance-page { color: #f5f5f2; min-width: 0; }
+.finance-heading { display: flex; justify-content: space-between; gap: 16px 24px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 32px; }
+.finance-heading h1 { margin: 8px 0 6px; }
 .finance-eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: #a6a6a2; }
 .finance-muted, .finance-pagination, .finance-totals small { color: #a6a6a2; }
 .finance-actions, .finance-pagination, .finance-modal footer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -25,20 +25,20 @@
 .finance-error { padding: 16px; border: 1px solid #6e6e6a; margin: 16px 0; }
 /* Caixa, backdrop e cabeçalho vêm de components/Modal (modal.css); aqui só a largura do formulário. */
 .finance-modal { width: min(560px, calc(100vw - 32px)); }
-.finance-modal h2 { font-size: 24px; margin: 0; overflow-wrap: anywhere; }
+.finance-modal h2 { margin: 0; overflow-wrap: anywhere; }
 .finance-modal footer { justify-content: flex-end; margin-top: 24px; }
 .finance-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 16px; min-width: 0; }
 .finance-form label { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
 .finance-form input, .finance-form select { background: #0b0b0c; border: 1px solid #6e6e6a; border-radius: 6px; padding: 10px; color: #f5f5f2; width: 100%; box-sizing: border-box; font: inherit; min-width: 0; color-scheme: dark; }
 .finance-form .finance-check { display: flex; align-items: center; gap: 8px; }
-.finance-form .finance-check input { width: auto; accent-color: #f5f5f2; }
+.finance-form .finance-check input { width: 18px; padding: 0; }
 .finance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .finance-detail { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 16px; }
 .finance-detail dt { color: #a6a6a2; }
 .finance-detail dd { margin: 0; overflow-wrap: anywhere; }
 .finance-banks { list-style: none; padding: 0; }
 .finance-banks li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid #343436; }
-.finance-banks li span:first-of-type { flex: 1; overflow-wrap: anywhere; }
+.finance-banks li > span:first-of-type { flex: 1; overflow-wrap: anywhere; }
 .finance-banks img { width: 28px; height: 28px; object-fit: contain; }
 .finance-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 480px) { .finance-grid { grid-template-columns: 1fr; } .finance-actions { width: 100%; } .finance-actions button { flex: 1; } .finance-detail { grid-template-columns: 1fr; gap: 8px; } .finance-detail dd { margin-bottom: 8px; } }
@@ -51,3 +51,8 @@
 .finance-account button { justify-self: start; }
 
 .finance-modal .modal-close { padding: 0; border-radius: 50%; }
+/* Campos compostos (data, hora): a borda é do contêiner, não do input interno. */
+.finance-form :is(.date-control, .time-control) input { border: 0; background: transparent; }
+.finance-form .date-picker > label { font-size: 14px; }
+
+.finance-form .ui-input:focus-visible { outline: none; }

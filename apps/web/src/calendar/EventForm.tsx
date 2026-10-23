@@ -1,7 +1,10 @@
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import ButtonGroup from "../components/ButtonGroup";
+import ConfirmDialog from "../components/ConfirmDialog";
 import DatePicker from "../components/DatePicker";
 import Modal from "../components/Modal";
 import Select from "../components/Select";
+import TimeField from "../components/TimeField";
 import Badge from "../components/Badge";
 import type { CalendarEventOutput, EventDraft, EventLink, GoogleStatusOutput } from "../lib/calendar-api";
 import { timeRange, zoneNote } from "./format";
@@ -10,13 +13,18 @@ import { buildDraft, initialFields, type Fields } from "./draft";
 import { browserZone, zoneChoices } from "./time";
 
 export type NoteChoice = { id: string; title: string };
+const kinds = [{ value: "event", label: "Evento" }, { value: "task", label: "Tarefa" }] as const;
 type Reflector = { reflect: (id: string) => Promise<void>; unreflect: (id: string, keepRemote: boolean) => Promise<void> };
 
-export default function EventForm({ open, entry, day, notes, notesState, events, google, reflector, onClose, onSubmit, onDelete, onResolve, onDiscard }: {
+export default function EventForm({ open, entry, day, seed, kind, notes, notesState, events, google, reflector, onClose, onSubmit, onDelete, onResolve, onDiscard }: {
   open: boolean;
   /** Evento aberto; nulo = novo. */
   entry: DisplayEvent | null;
   day: { year: number; month: number; day: number };
+  /** Campos já preenchidos (vindos do cartão de criação rápida). */
+  seed?: Partial<Fields>;
+  /** Só na criação: alterna entre evento e tarefa; `task` é o formulário da tarefa, no mesmo Modal. */
+  kind?: { value: "event" | "task"; onChange: (value: "event" | "task") => void; task: ReactNode };
   notes: NoteChoice[];
   notesState: "loading" | "ready" | "unavailable";
   events: CalendarEventOutput[];
@@ -29,13 +37,13 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
   onDiscard: () => Promise<void>;
 }) {
   const event = entry?.event ?? null;
-  const [fields, setFields] = useState<Fields>(() => initialFields(event, day));
+  const [fields, setFields] = useState<Fields>(() => ({ ...initialFields(event, day), ...seed }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [noteToAdd, setNoteToAdd] = useState("");
   const [eventToAdd, setEventToAdd] = useState("");
-  const ids = { title: useId(), description: useId(), location: useId(), startTime: useId(), endTime: useId() };
+  const ids = { title: useId(), description: useId(), location: useId() };
   const canWriteGoogle = google?.state === "connected" && google.mode === "reflect";
   const readOnly = event?.readOnly === true && !canWriteGoogle;
   const [sendToGoogle, setSendToGoogle] = useState(event?.reflection !== null && event?.reflection !== undefined);
@@ -60,13 +68,16 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
 
   const linkLabel = (link: EventLink) => link.kind === "note" ? (notes.find((note) => note.id === link.id)?.title ?? "Nota indisponível") : (events.find((item) => item.id === link.id)?.title ?? "Evento indisponível");
   const addLink = (kind: EventLink["kind"], id: string) => { if (id && !fields.links.some((link) => link.kind === kind && link.id === id)) set("links", [...fields.links, { kind, id }]); };
-  const noteOptions = [{ value: "", label: notesState === "loading" ? "Carregando notas…" : notesState === "unavailable" ? "Notas indisponíveis agora" : "Escolher nota…" }, ...notes.filter((note) => !fields.links.some((link) => link.kind === "note" && link.id === note.id)).map((note) => ({ value: note.id, label: note.title }))];
-  const eventOptions = [{ value: "", label: "Escolher evento…" }, ...events.filter((item) => item.id !== event?.id && !fields.links.some((link) => link.kind === "event" && link.id === item.id)).map((item) => ({ value: item.id, label: item.title }))];
+  // Memoizadas: sem isso, cada tecla no título refazia as listas (todas as notas e todos os eventos carregados).
+  const noteOptions = useMemo(() => [{ value: "", label: notesState === "loading" ? "Carregando notas…" : notesState === "unavailable" ? "Notas indisponíveis agora" : "Escolher nota…" }, ...notes.filter((note) => !fields.links.some((link) => link.kind === "note" && link.id === note.id)).map((note) => ({ value: note.id, label: note.title }))], [notes, notesState, fields.links]);
+  const eventOptions = useMemo(() => [{ value: "", label: "Escolher evento…" }, ...events.filter((item) => item.id !== event?.id && !fields.links.some((link) => link.kind === "event" && link.id === item.id)).map((item) => ({ value: item.id, label: item.title }))], [events, event?.id, fields.links]);
   const zoneInfo = event ? zoneNote(event) : null;
 
   return (
-    <Modal open={open} title={readOnly ? "Evento do Google" : event ? "Editar evento" : "Novo evento"} onClose={onClose} busy={busy} className="calendar-modal">
-      {readOnly && event ? (
+    <>
+    <Modal open={open} title={readOnly ? "Evento do Google" : event ? "Editar evento" : kind?.value === "task" ? "Nova tarefa" : "Novo evento"} onClose={onClose} busy={busy} className="calendar-modal">
+      {kind && <ButtonGroup label="Tipo" options={kinds} value={kind.value} onChange={kind.onChange} />}
+      {kind?.value === "task" ? kind.task : readOnly && event ? (
         <div className="calendar-readonly">
           <h3>{event.title}</h3>
           <p>{timeRange(event)}{zoneInfo ? ` · ${zoneInfo}` : ""}</p>
@@ -101,11 +112,11 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
           <label className="calendar-check"><input type="checkbox" checked={fields.allDay} onChange={(e) => set("allDay", e.target.checked)} /> Dia inteiro</label>
           <div className="calendar-pair">
             <DatePicker label="Início" value={fields.startDate} onChange={(value) => { set("startDate", value); if (value && (!fields.endDate || fields.endDate < value)) set("endDate", value); }} required />
-            {!fields.allDay && <div className="calendar-field"><label htmlFor={ids.startTime}>Hora de início</label><input id={ids.startTime} type="time" value={fields.startTime} onChange={(e) => set("startTime", e.target.value)} required /></div>}
+            {!fields.allDay && <TimeField label="Hora de início" value={fields.startTime} onChange={(value) => set("startTime", value)} required />}
           </div>
           <div className="calendar-pair">
             <DatePicker label="Fim" value={fields.endDate} onChange={(value) => set("endDate", value)} required />
-            {!fields.allDay && <div className="calendar-field"><label htmlFor={ids.endTime}>Hora de fim</label><input id={ids.endTime} type="time" value={fields.endTime} onChange={(e) => set("endTime", e.target.value)} required /></div>}
+            {!fields.allDay && <TimeField label="Hora de fim" value={fields.endTime} onChange={(value) => set("endTime", value)} required />}
           </div>
           {!fields.allDay && <Select label="Fuso horário" value={fields.timeZone} options={zones.map((zone) => ({ value: zone, label: zone }))} onChange={(zone) => set("timeZone", zone)} />}
           <div className="calendar-field">
@@ -149,9 +160,7 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
           )}
           {error && <p className="calendar-error" role="alert">{error}</p>}
           <div className="modal-actions">
-            {event && (confirmDelete
-              ? <><button type="button" className="button button-secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>Manter</button><button type="button" className="button" disabled={busy} onClick={() => void run(async () => { await onDelete(); onClose(); })}>Confirmar exclusão</button></>
-              : <button type="button" className="button button-secondary" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</button>)}
+            {event && <button type="button" className="button button-secondary calendar-delete" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</button>}
             <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>Cancelar</button>
             <button type="submit" className="button" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</button>
           </div>
@@ -159,5 +168,11 @@ export default function EventForm({ open, entry, day, notes, notesState, events,
         </form>
       )}
     </Modal>
+    {/* Irmão do formulário (não filho): o <dialog> de confirmação fica no topo e o de baixo vira inerte. */}
+    <ConfirmDialog open={open && confirmDelete} title="Excluir este evento?" confirmLabel="Excluir evento" busyLabel="Excluindo…" busy={busy} error={confirmDelete ? error : null}
+      onCancel={() => setConfirmDelete(false)} onConfirm={() => void run(async () => { await onDelete(); setConfirmDelete(false); onClose(); })}>
+      <p>{event?.reflection ? "O evento sai desta agenda e também do Google. " : ""}A exclusão fica guardada neste dispositivo e é enviada ao servidor assim que houver conexão.</p>
+    </ConfirmDialog>
+    </>
   );
 }
