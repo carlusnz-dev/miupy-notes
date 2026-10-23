@@ -39,3 +39,9 @@ O primeiro build apontou a allowlist de templates do logger sem `/v1/library`; f
 Não executados: login Google real, Tauri/WebKit manual, release desktop, AWS, Terraform/deploy ou teste com dados pessoais. A validação visual usa Chromium e harness sintético, não garante comportamento nativo WebKit. Recursos não implementados: exportação/restauração, lixeira/retenção, sincronização offline, upload/catálogo externo e contador agregado no Perfil.
 
 A lista ordena por UUID e filtra depois dos itens avaliados; pode vir vazia com cursor e não é snapshot. O formulário preserva a página após edição. POST não é idempotente; resultado ambíguo exige conferir o acervo antes de repetir. DELETE segue notas, sem versão, podendo excluir edição recente. Próximo passo: revisão do PR e aceite nativo; considerar resumo agregado/exportação da Biblioteca em frente própria, sem ampliar esta entrega.
+
+## Entrega
+
+PR [#24 — Biblioteca na API e na interface](https://github.com/carlusnz-dev/miupy-notes/pull/24), de `feat/library-module` para `develop`, aberto com `gh`, sem merge. Commits de implementação: `25281a8` (API/contrato) e `a55f33e` (interface/validação); ambos seguem Conventional Commits em pt-BR e incluem o coautor solicitado.
+
+O push SSH padrão falhou com `Permission denied (publickey)` e ausência de `ssh_askpass`. O push foi concluído por HTTPS com opções temporárias `credential.helper=!gh auth git-credential` e `url.https://github.com/.insteadOf=git@github.com:`, sem alterar o remoto configurado nem abrir credenciais. Os servidores sintéticos de API/Vite foram encerrados após a validação; o DynamoDB Local preexistente foi preservado. O estado da CI no momento da entrega consta no relatório externo em texto puro.
