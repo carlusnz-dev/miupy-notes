@@ -10,7 +10,7 @@ export class CalendarDtoAdapter {
       links: event.links, source: event.source, readOnly: event.source !== "local",
       // `etag` e IDs do Google ficam no servidor.
       external: event.external && { provider: event.external.provider, calendarId: event.external.calendarId, syncedAt: event.external.syncedAt },
-      reflection: event.reflection && { reflectedAt: event.reflection.reflectedAt, reflectedVersion: event.reflection.reflectedVersion, inSync: event.reflection.reflectedVersion === event.version },
+      reflection: event.reflection && { reflectedAt: event.reflection.reflectedAt, reflectedVersion: event.reflection.reflectedVersion, inSync: event.reflection.state === "linked" && event.reflection.reflectedVersion === event.version, state: event.reflection.state },
       createdAt: event.createdAt, updatedAt: event.updatedAt, version: event.version,
     });
   }

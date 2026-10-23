@@ -455,3 +455,93 @@ test("editar só título preserva descrição/local remotos maiores que o espelh
   assert.equal(kit.google.events.get("long")?.description?.length, 9000);
   assert.equal(kit.google.events.get("long")?.location?.length, 400);
 });
+
+test("regressão: evento enviado e apagado no Google vira deleted_remote na sincronização, sem conflito", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  const reflected = await kit.integration.reflect(owner, local.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(local.id.replaceAll("-", ""));
+  await kit.integration.sync(owner);
+  const current = await kit.repository.findById(owner, local.id);
+  assert.equal(current?.reflection?.state, "deleted_remote");
+  assert.equal(current?.version, reflected.version);
+  // Salvar de novo grava só o local e não tenta reaparecer no Google nem vira GOOGLE_EVENT_MISSING.
+  const edited = await kit.service.update(owner, local.id, { version: current!.version, title: "Novo título" });
+  const after = await kit.integration.reflect(owner, edited.id);
+  assert.equal(after.reflection?.state, "deleted_remote");
+  assert.equal(after.title, "Novo título");
+  assert.equal(kit.google.events.size, 0);
+});
+
+test("regressão: cancelamento só com ID (sem extendedProperties) também marca o evento enviado", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(local.id.replaceAll("-", ""), { idOnly: true });
+  const result = await kit.integration.sync(owner);
+  assert.equal(result.deleted, 1);
+  assert.equal((await kit.repository.findById(owner, local.id))?.reflection?.state, "deleted_remote");
+});
+
+test("regressão: salvar evento enviado cuja cópia sumiu do Google (404) marca deleted_remote em vez de GOOGLE_EVENT_MISSING", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  kit.google.remove(local.id.replaceAll("-", ""));
+  const saved = await kit.integration.reflect(owner, local.id);
+  assert.equal(saved.reflection?.state, "deleted_remote");
+});
+
+for (const kind of ["not_found", "gone", "precondition_failed"] as const) {
+  test(`excluir evento enviado conclui a exclusão local quando o DELETE no Google responde ${kind}`, async () => {
+    const kit = createKit(); await connect(kit, "reflect");
+    const local = (await kit.service.create(owner, timedInput)).event;
+    const reflected = await kit.integration.reflect(owner, local.id);
+    // 412 com ETag velho num evento que já foi excluído no Google não pode deixar o item preso.
+    if (kind === "precondition_failed") kit.google.remove(local.id.replaceAll("-", ""));
+    kit.google.failures.delete = [new GoogleApiError(kind)];
+    await kit.integration.deleteReflected(owner, local.id, reflected.version);
+    assert.equal(await kit.repository.findById(owner, local.id), null);
+  });
+}
+
+test("evento deleted_remote: excluir não chama o Google e desvincular mantém o evento só local", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const first = (await kit.service.create(owner, timedInput)).event;
+  const second = (await kit.service.create(owner, { ...timedInput, title: "Outro" })).event;
+  await kit.integration.reflect(owner, first.id); await kit.integration.reflect(owner, second.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(first.id.replaceAll("-", "")); kit.google.remove(second.id.replaceAll("-", ""));
+  await kit.integration.sync(owner);
+  kit.google.calls.length = 0;
+
+  const marked = (await kit.repository.findById(owner, first.id))!;
+  await kit.integration.deleteReflected(owner, first.id, marked.version);
+  assert.equal(await kit.repository.findById(owner, first.id), null);
+
+  const other = (await kit.repository.findById(owner, second.id))!;
+  const detached = await kit.integration.unreflect(owner, second.id, { keepRemote: false });
+  assert.equal(detached.reflection, null);
+  assert.equal(detached.title, other.title);
+  assert.deepEqual(kit.google.calls, []);
+  await kit.service.delete(owner, second.id, detached.version);
+});
+
+test("desvincular (apagar a cópia) com 410 do Google conclui sem erro", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  kit.google.failures.delete = [new GoogleApiError("gone")];
+  assert.equal((await kit.integration.unreflect(owner, local.id, { keepRemote: false })).reflection, null);
+});
+
+test("espelho editado depois de apagado no Google (404) é removido localmente, sem conflito", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  kit.google.seed(gEvent("a")); await kit.integration.sync(owner);
+  const event = (await kit.repository.list(owner, { limit: 10 })).items[0];
+  kit.google.remove("a");
+  await assert.rejects(kit.integration.updateMirror(owner, event.id, { version: event.version, title: "x" }), { code: "NOT_FOUND" });
+  assert.equal(await kit.repository.findById(owner, event.id), null);
+});
