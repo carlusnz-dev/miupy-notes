@@ -16,8 +16,8 @@ export const calendarEventOutputSchema = z.object({
   /** Espelhos do Google são somente leitura no app. */
   readOnly: z.boolean(),
   external: z.object({ provider: z.literal("google"), calendarId: z.string(), syncedAt: z.iso.datetime() }).nullable(),
-  /** `inSync` é falso quando o evento local mudou depois do último envio ao Google. */
-  reflection: z.object({ reflectedAt: z.iso.datetime(), reflectedVersion: z.int().positive(), inSync: z.boolean() }).nullable(),
+  /** `inSync` é falso quando o evento local mudou depois do último envio ao Google; `state: "deleted_remote"` = a cópia foi excluída no Google. */
+  reflection: z.object({ reflectedAt: z.iso.datetime(), reflectedVersion: z.int().positive(), inSync: z.boolean(), state: z.enum(["linked", "deleted_remote"]) }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   version: z.int().positive(),

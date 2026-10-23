@@ -13,7 +13,7 @@ const storedEventSchema = z.object({
   allDay: z.boolean(), start: z.string(), end: z.string(), timeZone: z.string().nullable(),
   links: z.array(link), source: z.enum(["local", "google"]),
   external: z.object({ provider: z.literal("google"), calendarId: z.string(), externalId: z.string(), etag: z.string(), syncedAt: z.string(), connectionId: z.string().default("") }).nullable().default(null),
-  reflection: z.object({ googleEventId: z.string(), calendarId: z.string(), etag: z.string(), reflectedVersion: z.int().positive(), reflectedAt: z.string() }).nullable().default(null),
+  reflection: z.object({ googleEventId: z.string(), calendarId: z.string(), etag: z.string(), reflectedVersion: z.int().positive(), reflectedAt: z.string(), state: z.enum(["linked", "deleted_remote"]).default("linked") }).nullable().default(null),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), version: z.int().positive(),
 });
 const connectionSchema = z.object({
