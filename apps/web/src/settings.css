@@ -9,6 +9,14 @@
 .settings-check input { accent-color: var(--color-text); }
 .settings-sample { min-width: 0; padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-medium); }
 .settings-sample h2 { margin: 0 0 12px; font-size: 16px; }
-.settings-sample-body { max-width: var(--editor-width); margin: auto; padding: var(--editor-padding); border: 1px solid var(--color-border); border-radius: var(--radius-small); }
+.settings-sample-body { max-width: var(--editor-width); margin: auto; padding: var(--editor-padding); border: 1px solid var(--color-border); border-radius: var(--radius-small); font-family: var(--editor-font); font-size: var(--editor-size); line-height: 1.7; }
+/* Prévia escopada: não herda os h1/h2 globais do app; reflete a fonte de títulos escolhida (--heading-font, serif por padrão). */
+.settings-sample-body :is(h1, h2, h3) { max-width: none; font-family: var(--heading-font, var(--font-serif)); font-weight: 400; line-height: 1.2; letter-spacing: normal; }
+.settings-sample-body h1 { margin: 0 0 .5em; font-size: clamp(24px, 3vw, 32px); }
+.settings-sample-body h2 { margin: 1em 0 .4em; font-size: clamp(19px, 2.2vw, 24px); }
+.settings-sample-body :is(p, ul, ol) { margin: 0 0 .8em; }
+.settings-sample-body :is(ul, ol) { padding-left: 1.4em; }
+.settings-sample-body ul { list-style: disc; }
+.settings-sample-body ol { list-style: decimal; }
 .settings-editor-line { padding: 12px; border: 1px solid var(--color-border); }
 @media (max-width: 700px) { .settings-grid { grid-template-columns: minmax(0, 1fr); } }

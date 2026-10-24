@@ -19,14 +19,14 @@ function Harness() {
   const field = useRef<HTMLInputElement>(null);
   return <div className="app-shell" style={theme}>
     <main style={{ padding: 24, display: "grid", gap: 12, alignContent: "start" }}>
-      <button id="opener" className="button" onClick={() => setOpen(true)}>Abrir janela</button>
-      <button id="busy-toggle" className="button button-secondary" onClick={() => setBusy((value) => !value)}>Alternar ocupado ({String(busy)})</button>
+      <button id="opener" className="ui-button ui-button-primary ui-button-md" onClick={() => setOpen(true)}>Abrir janela</button>
+      <button id="busy-toggle" className="ui-button ui-button-secondary ui-button-md" onClick={() => setBusy((value) => !value)}>Alternar ocupado ({String(busy)})</button>
       <output id="closed-count">{closed}</output>
     </main>
     <Modal open={open} title="Excluir esta nota?" busy={busy} initialFocusRef={field} onClose={() => { setClosed((value) => value + 1); setOpen(false); }}>
       <p>A exclusão é definitiva: ainda não há lixeira.</p>
       <input ref={field} aria-label="Confirmação" />
-      <div className="modal-actions"><button className="button button-secondary" onClick={() => setOpen(false)} disabled={busy}>Cancelar</button><button id="confirm" className="button">Excluir definitivamente</button></div>
+      <div className="modal-actions"><button className="ui-button ui-button-secondary ui-button-md" onClick={() => setOpen(false)} disabled={busy}>Cancelar</button><button id="confirm" className="ui-button ui-button-primary ui-button-md">Excluir definitivamente</button></div>
     </Modal>
   </div>;
 }

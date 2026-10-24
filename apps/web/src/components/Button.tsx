@@ -1,11 +1,12 @@
 import { useEffect, useRef, type ButtonHTMLAttributes, type Ref } from "react";
 import gsap from "gsap";
+import { buttonClass, type ButtonSize, type ButtonVariant } from "./button-class";
 import { reducedMotion } from "./popover";
 import "./primitives.css";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "sm" | "md";
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
   ref?: Ref<HTMLButtonElement>;
 };
@@ -17,7 +18,7 @@ export default function Button({ variant = "secondary", size = "md", loading = f
     return () => { context.current?.revert(); };
   }, []);
   return <button {...props} ref={ref} type={type} disabled={disabled || loading} aria-busy={loading || undefined}
-    className={`ui-button ui-button-${variant} ui-button-${size} ${className}`} onClick={event => {
+    className={buttonClass(variant, size, className)} onClick={event => {
       if (!reducedMotion()) {
         const button = event.currentTarget;
         const bounds = button.getBoundingClientRect();

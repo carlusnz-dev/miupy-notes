@@ -16,7 +16,7 @@
 .date-picker button.date-nav:hover { background: var(--color-surface); }
 .date-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .date-row [role="gridcell"] { display: grid; }
-.date-weekday { padding: 4px 0; color: var(--color-muted); font-size: 11px; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
+.date-weekday { padding: 4px 0; color: var(--color-muted); font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
 .date-picker button.date-day { min-height: 34px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-small); color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
 .date-picker button.date-day:hover { background: var(--color-surface); }
 .date-picker button.date-day[aria-current="date"] { border-color: var(--color-border-strong); }

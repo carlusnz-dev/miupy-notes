@@ -4,13 +4,14 @@ import { FilePlus, FolderPlus } from "lucide-react";
 import NoteTree from "./components/NoteTree";
 import { SkeletonBody } from "./components/Skeleton";
 import { ApiError } from "./lib/api-client";
-import SignOutButton from "./components/SignOutButton";
 import { signIn, useAuth } from "./lib/auth";
 import { animateIn } from "./lib/notes-motion";
 import { buildNotesTree } from "./lib/notes-tree";
 import { usePreviewWorkspace, useRemoteWorkspace, type PreviewWorkspaceState, type Workspace } from "./lib/notes-workspace";
 import { usePageTitle } from "./lib/use-page-title";
 import "./notes.css";
+import Button from "./components/Button";
+import PageHeader from "./components/PageHeader";
 
 const PREVIEW_STATES: Record<string, PreviewWorkspaceState | "deslogado"> = { carregando: "carregando", vazio: "vazio", erro: "erro", arvore: "arvore", lista: "arvore", deslogado: "deslogado" };
 
@@ -74,16 +75,15 @@ function SignedInNotes({ workspace, preview }: { workspace: Workspace; preview: 
           <span>{countLabel}</span>
           {workspace.status === "ready" && !preview && workspace.refreshing && <span className="refresh-status" role="status">Atualizando…</span>}
         </div>
-        <SignOutButton disabled={preview} />
       </div>
 
       <div className="notes-actions" role="group" aria-label="Criar">
-        <button type="button" className="button notes-new" onClick={() => void createNote(null)} disabled={busy || workspace.status !== "ready"}>
+        <Button variant="primary" className="notes-new" type="button" onClick={() => void createNote(null)} disabled={busy || workspace.status !== "ready"}>
           <FilePlus size={16} aria-hidden="true" /> Nova nota
-        </button>
-        <button type="button" className="button button-secondary notes-new" onClick={() => void createFolder(null)} disabled={busy || workspace.status !== "ready"}>
+        </Button>
+        <Button className="notes-new" type="button" onClick={() => void createFolder(null)} disabled={busy || workspace.status !== "ready"}>
           <FolderPlus size={16} aria-hidden="true" /> Nova pasta
-        </button>
+        </Button>
       </div>
 
       {actionError && (
@@ -100,7 +100,7 @@ function SignedInNotes({ workspace, preview }: { workspace: Workspace; preview: 
           <StatePanel title="Não foi possível carregar as notas">
             <p>{errorMessage(workspace.error)}</p>
             <RequestId error={workspace.error} />
-            <button type="button" className="button button-secondary" onClick={workspace.retry} disabled={preview}>Tentar de novo</button>
+            <Button type="button" onClick={workspace.retry} disabled={preview}>Tentar de novo</Button>
           </StatePanel>
         )}
 
@@ -147,9 +147,7 @@ export default function NotesPage() {
 
   return (
     <div className="feature-page notes-page">
-      <div className="eyebrow">ACERVO PESSOAL</div>
-      <h1>Notas<em>.</em></h1>
-      <p className="lead">Ideias, páginas e conexões em um lugar.</p>
+      <PageHeader eyebrow="ACERVO PESSOAL" title="Notas" description="Ideias, páginas e conexões em um lugar." />
 
       {status === "checking" && (
         <div className="notes-state">
@@ -170,9 +168,9 @@ export default function NotesPage() {
           <StatePanel title="Conta não conectada">
             <p>Entre com sua conta Google para ver e criar notas. O login abre o navegador do sistema.</p>
             {!preview && auth.error && <p className="form-error" role="alert">{auth.error}</p>}
-            <button type="button" className="button" onClick={() => { if (!preview) void signIn(); }} disabled={auth.signingIn || !!preview}>
+            <Button variant="primary" type="button" onClick={() => { if (!preview) void signIn(); }} disabled={auth.signingIn || !!preview}>
               {auth.signingIn ? "Aguardando o navegador…" : "Entrar com Google"}
-            </button>
+            </Button>
           </StatePanel>
         </div>
       )}
