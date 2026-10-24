@@ -49,3 +49,5 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-23 | 18 — revisões, design, Biblioteca e Calendar | [relatório](2026-10-23_sessao-18.md) |
 | 2026-10-23 | 19 — validação, integração do design, Google Tasks e editor | [relatório](2026-10-23_sessao-19.md) |
 | 2026-10-24 | 20 — higiene do repositório e validação de design ao vivo | [relatório](2026-10-24_sessao-20.md) |
+| 2026-10-24 | Design — revisão visual de develop (28 achados) | [relatório](2026-10-24_design-revisao.md) |
+| 2026-10-24 | Continuidade — polimento de design e UX | [prompt](2026-10-24_prompt-polimento-design.md) |
