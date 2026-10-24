@@ -12,6 +12,7 @@ import { usePageTitle } from "./lib/use-page-title";
 import type { NoteOutput } from "./lib/notes-api";
 import Button from "./components/Button";
 import PageHeader from "./components/PageHeader";
+import HomeToday, { type TodayPreview } from "./HomeToday";
 
 const periods = [7, 30, 90] as const;
 // Texto visível = nome acessível (WCAG 2.5.3): "30d" com aria-label "30 dias" divergia.
@@ -70,6 +71,11 @@ function previewState(name: string | null) {
   };
 }
 
+/** A faixa "Hoje" só entende os estados de exemplo que têm equivalente nela. */
+function previewToday(name: string | null): TodayPreview | null {
+  return import.meta.env.DEV && (name === "vazio" || name === "lista" || name === "carregando" || name === "erro") ? name : null;
+}
+
 export default function Home() {
   usePageTitle("Visão geral");
   const auth = useAuth();
@@ -98,7 +104,8 @@ export default function Home() {
 
   return (
     <div className="home-page">
-      <PageHeader className="home-intro" eyebrow="VISÃO GERAL" title="Seu espaço" description={`${dateFormat.format(new Date())} · Um panorama das suas notas.`} />
+      <PageHeader className="home-intro" eyebrow="VISÃO GERAL" title="Seu espaço" description={`${dateFormat.format(new Date())} · O que pede atenção hoje e um panorama das suas notas.`} />
+      {(preview ? preview.status !== "signed-out" : auth.status === "signed-in") && <HomeToday enabled={auth.status === "signed-in"} preview={previewToday(previewName)} />}
       <section className="dashboard" aria-labelledby="dashboard-title">
         <div className="dashboard-heading">
           <h2 id="dashboard-title">Em números</h2>
