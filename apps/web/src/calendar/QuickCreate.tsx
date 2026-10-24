@@ -96,7 +96,7 @@ export default function QuickCreate({ x, y, day, startMin, endMin, onClose, onSa
       <ButtonGroup label="Duração" options={quickDurations} value={duration} onChange={setDuration} />
       {error && <p className="calendar-error" role="alert">{error}</p>}
       <div className="calendar-quick-actions">
-        <Button type="button" disabled={busy} onClick={() => { close(); onMore({ kind: "event", event: fields, task: {} }); }}>Mais opções</Button>
+        <Button type="button" disabled={busy} onClick={() => { close(); onMore({ kind: "event", event: fields, task: { title, dueDate: fields.startDate, dueTime: fields.allDay ? "" : fields.startTime } }); }}>Mais opções</Button>
         <Button variant="primary" type="submit" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</Button>
       </div>
     </>

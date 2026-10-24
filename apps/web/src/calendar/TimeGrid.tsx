@@ -351,9 +351,10 @@ function TimeGrid({ days, events, tasks, overdueIds, statusOf, onOpen, onPickDay
                   const google = block.event.source === "google";
                   const place = { top: block.startMin / 60 * HOUR_PX, left: `calc(${block.column / block.columns * 100}% + 2px)`, width: `calc(${100 / block.columns}% - 4px)` };
                   const label = `${block.event.title}, ${timeRange(block.event)}${google ? ", do Google, somente leitura" : ""}`;
-                  // Zona de toque da alça (só com ponteiro grosso): metade dentro do bloco, o resto logo abaixo da borda.
+                  // Zona de toque da alça (só com ponteiro grosso): 44 px centrados no traço, metade dentro do bloco, o resto
+                  // logo abaixo da borda. Estreita para não tomar o toque que abre o bloco nem o do vizinho de baixo.
                   const inside = Math.min(RESIZE_ZONE_PX * .7, height / 2);
-                  const zone = { top: place.top + height - inside, left: place.left, width: place.width, height: inside + Math.min(RESIZE_ZONE_PX / 2, RESIZE_ZONE_PX - inside), "--inside": `${inside}px` } as React.CSSProperties;
+                  const zone = { top: place.top + height - inside, left: `calc(${place.left} + (${place.width} - ${RESIZE_ZONE_PX}px) / 2)`, width: RESIZE_ZONE_PX, height: inside + Math.min(RESIZE_ZONE_PX / 2, RESIZE_ZONE_PX - inside), "--inside": `${inside}px` } as React.CSSProperties;
                   return (
                     <Fragment key={block.event.id}>
                       <button type="button" className="calendar-block" data-source={block.event.source} data-status={status} data-compact={height < COMPACT_PX || undefined}
@@ -374,6 +375,7 @@ function TimeGrid({ days, events, tasks, overdueIds, statusOf, onOpen, onPickDay
                       </button>
                       {draggable && (
                         <span className="calendar-resize-zone" style={zone} aria-hidden="true"
+                          onClick={() => { if (!suppressClick.current) onOpen(block.event); }}
                           onPointerDown={(event) => onBlockPointerDown(event, block, dayIndex, true)} onPointerMove={onBlockPointerMove} onPointerUp={onBlockPointerUp}
                           onPointerCancel={(event) => cancelGesture(event.currentTarget, true)} />
                       )}

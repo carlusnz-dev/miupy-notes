@@ -44,6 +44,12 @@ test("validateLibraryForm devolve uma mensagem por campo inválido", () => {
   assert.equal(errors.creator, undefined);
 });
 
+test("validateLibraryForm segue a API em URLs sem barras e em texto com emoji", () => {
+  for (const url of ["https:foo", "https:/x.com"]) assert.match(validateLibraryForm({ ...valid, externalUrl: url }).externalUrl!, /http/);
+  assert.deepEqual(validateLibraryForm({ ...valid, title: "📚".repeat(101), comment: "📚".repeat(600) }), {});
+  assert.match(validateLibraryForm({ ...valid, title: "📚".repeat(201) }).title!, /200/);
+});
+
 test("firstInvalid segue a ordem do formulário, não a ordem das chaves", () => {
   assert.equal(firstInvalid({ coverUrl: "x", rating: "y", dates: "z" }), "rating");
   assert.equal(firstInvalid({ coverUrl: "x", title: "y" }), "title");

@@ -8,15 +8,18 @@ export type LibraryFormErrors = Partial<Record<LibraryField, string>>;
 /** Ordem do formulário: o foco vai para o primeiro campo inválido nesta ordem. */
 export const fieldOrder: readonly LibraryField[] = ["title", "creator", "year", "rating", "dates", "tags", "comment", "externalUrl", "coverUrl"];
 
-const isHttpUrl = (text: string) => { try { return /^https?:$/.test(new URL(text).protocol); } catch { return false; } };
+// `new URL` normaliza "https:foo"; a API exige o prefixo literal "http(s)://".
+const isHttpUrl = (text: string) => { try { return /^https?:\/\//i.test(text) && /^https?:$/.test(new URL(text).protocol); } catch { return false; } };
+// A API conta pontos de código, não unidades UTF-16 (emoji conta 1).
+const length = (text: string) => [...text].length;
 
 /** Espelha os limites do dto da API (`dto/input.ts`) para dar erro inline antes do envio. */
 export function validateLibraryForm(values: LibraryFormValues): LibraryFormErrors {
   const errors: LibraryFormErrors = {};
   const title = values.title.trim();
   if (!title) errors.title = "Informe o título da obra.";
-  else if (title.length > 200) errors.title = "O título aceita até 200 caracteres.";
-  if (values.creator.trim().length > 200) errors.creator = "Use até 200 caracteres.";
+  else if (length(title) > 200) errors.title = "O título aceita até 200 caracteres.";
+  if (length(values.creator.trim()) > 200) errors.creator = "Use até 200 caracteres.";
   if (values.year.trim()) {
     const year = Number(values.year);
     if (!Number.isInteger(year) || year < 1 || year > 9999) errors.year = "Informe um ano inteiro entre 1 e 9999.";
@@ -29,7 +32,7 @@ export function validateLibraryForm(values: LibraryFormValues): LibraryFormError
   const tags = values.tags.split(",").map(tag => tag.trim()).filter(Boolean);
   if (tags.length > 20) errors.tags = "Use no máximo 20 tags.";
   else if (tags.some(tag => tag.length > 40)) errors.tags = "Cada tag aceita até 40 caracteres.";
-  if (values.comment.trim().length > 1000) errors.comment = "O comentário aceita até 1000 caracteres.";
+  if (length(values.comment.trim()) > 1000) errors.comment = "O comentário aceita até 1000 caracteres.";
   for (const field of ["externalUrl", "coverUrl"] as const) {
     const url = values[field].trim();
     if (!url) continue;

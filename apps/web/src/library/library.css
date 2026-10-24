@@ -4,7 +4,7 @@
 .library-search { display: flex; align-items: end; gap: 12px; margin-bottom: 32px; }
 .library-search label { flex: 1; min-width: 0; }
 .library-search label:nth-child(2) { max-width: 180px; }
-.library-search label, .library-field > label { display: grid; gap: 8px; color: var(--color-muted); font-size: 14px; }
+.library-search label, .library-field > label, .library-filter-form > label { display: grid; gap: 8px; color: var(--color-muted); font-size: 14px; }
 .library-search input { height: var(--library-control); padding: 0 12px; }
 .library-search input, .library-form input, .library-form textarea { width: 100%; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-surface); color: var(--color-text); padding: 11px 12px; font: inherit; font-size: 16px; }
 .library-search .ui-button, .library-toolbar .select-trigger, :root .library-page .button-group button { min-height: var(--library-control); }

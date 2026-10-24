@@ -18,7 +18,7 @@ type ModalProps = {
 const focusable = "button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])";
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Mesmo ponto de quebra de modal.css: abaixo dele o diálogo é um bottom sheet e entra/sai deslizando.
-const sheet = () => window.matchMedia("(max-width: 700px)").matches;
+const sheet = () => window.matchMedia("(max-width: 760px)").matches;
 
 // <dialog> nativo com showModal(): isola o fundo (inert), prende o Tab e trata Esc.
 // GSAP só anima a entrada/saída; com movimento reduzido tudo é instantâneo.
