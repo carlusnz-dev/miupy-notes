@@ -17,11 +17,4 @@
   .is-collapsed nav { margin-top: 30px; }
   .shell-sidebar.is-collapsed nav a, .shell-sidebar.is-collapsed .sidebar-footer a { justify-content: center; padding-inline: 0; }
 }
-@media (max-width: 760px) {
-  .sidebar.shell-sidebar { width: 100%; padding: 12px 16px 8px; }
-  .shell-sidebar .sidebar-toggle, .shell-sidebar .sidebar-resize { display: none; }
-  .shell-sidebar .sidebar-footer { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 4px; }
-  .shell-sidebar .sidebar-footer a { padding: 4px 7px; margin: 0; min-height: 32px; }
-  .shell-sidebar nav a { gap: 6px; }
-}
 .sidebar-letter { display: inline-block; }
