@@ -1,8 +1,9 @@
-.event-carousel { display: grid; gap: 8px; min-width: 0; }
-.event-carousel-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.event-carousel { display: grid; gap: 6px; min-width: 0; }
+.event-carousel-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.event-carousel-nav { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .event-carousel-count { color: var(--color-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .event-carousel-arrows { display: flex; gap: 6px; }
-.event-carousel-arrow { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text); background: transparent; cursor: pointer; transition: background-color var(--duration), border-color var(--duration), opacity var(--duration); }
+.event-carousel-arrow { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text); background: transparent; cursor: pointer; transition: background-color var(--duration), border-color var(--duration), opacity var(--duration); }
 .event-carousel-arrow:hover:not(:disabled) { border-color: var(--color-border-strong); background: var(--color-surface-raised); }
 .event-carousel-arrow:disabled { opacity: .35; cursor: default; }
 .event-carousel-arrow:focus-visible, .event-carousel-viewport:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
@@ -12,5 +13,3 @@
 .event-carousel-track { display: flex; gap: var(--carousel-gap); margin: 0; padding: 0; list-style: none; will-change: transform; user-select: none; -webkit-user-select: none; }
 .event-carousel-item { flex: 0 0 var(--carousel-item); min-width: 0; }
 .event-carousel-item > * { height: 100%; }
-/* Celular: um cartão por vez, na altura do próprio conteúdo (a série mais alta não estica os demais). */
-@media (max-width: 519px) { .event-carousel-track { align-items: flex-start; } .event-carousel-item > * { height: auto; } }

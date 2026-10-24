@@ -20,6 +20,7 @@ import { shift, visibleDays, type ViewMode } from "./layout";
 import { draftOf, type DisplayEvent } from "./outbox";
 import type { CalendarStore } from "./store";
 import { useTasks, type TasksApi } from "./tasks";
+import { centeredScrollLeft } from "./touch-gesture";
 import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
 import Button from "../components/Button";
@@ -101,6 +102,12 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
     if (!element) return;
     const offset = direction.current * 28;
     direction.current = 0;
+    // Semana e mês passam de 100% da largura no celular: abrem com o dia de hoje (se visível) no centro.
+    const mark = element.querySelector<HTMLElement>("[data-today]");
+    if (mark && element.scrollWidth > element.clientWidth) {
+      const box = element.getBoundingClientRect();
+      element.scrollLeft = centeredScrollLeft({ left: box.left, width: box.width, scrollLeft: element.scrollLeft, scrollWidth: element.scrollWidth }, mark.getBoundingClientRect());
+    } else element.scrollLeft = 0;
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       gsap.fromTo(element, { opacity: 0, x: offset, y: offset ? 0 : 6 }, { opacity: 1, x: 0, y: 0, duration: .32, ease: "power2.inOut", clearProps: "opacity,transform" });
@@ -148,7 +155,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
         <p className="calendar-sync" role="status" data-tone={conflicts || rejected ? "alert" : pending || offline ? "pending" : "ok"}>
           {conflicts > 0 ? `${conflicts} conflito(s) para resolver. ` : ""}
           {rejected > 0 ? `${rejected} envio(s) recusado(s) pelo servidor. ` : ""}
-          {offline ? "Sem conexão. " : ""}
+          {offline && (pending > 0 || calendar.fetchState.status !== "stale") ? "Sem conexão. " : ""}
           {pending > 0 ? `${pending} alteração(ões) salva(s) só neste dispositivo, aguardando envio.${waitUntil > Date.now() ? ` O servidor pediu para aguardar até ${new Date(waitUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : ""}` : calendar.fetchState.status === "ok" && !conflicts && !rejected ? `Em dia com o servidor desde ${new Date(calendar.fetchState.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : calendar.fetchState.status === "stale" ? calendar.fetchState.reason : calendar.fetchState.status === "loading" ? "Atualizando…" : ""}
           {(pending > 0 || offline || calendar.fetchState.status === "stale") && <> <button type="button" className="calendar-link-button" onClick={calendar.retryNow}>Tentar agora</button></>}
         </p>
@@ -168,7 +175,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
 
       <div className="calendar-layout" data-mode={mode}>
         <div className="calendar-top">
-          <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} />
+          <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} onCreate={() => openNew()} />
           {tasksApi && tasks.state === "ready" && <TasksPanel pending={tasks.pending} overdue={tasks.overdue} onToggle={tasks.toggle} onOpen={openTask} error={tasks.error} onDismissError={tasks.dismissError} />}
         </div>
         <div className="calendar-view" ref={viewRef} aria-label={`Visualização por ${modes.find((item) => item.value === mode)?.label.toLowerCase()}`}>
@@ -202,7 +209,6 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
         <QuickCreate key={quick.key} x={quick.slot.x} y={quick.slot.y} day={quick.slot.day} startMin={quick.slot.startMin} endMin={quick.slot.endMin}
           onClose={() => setQuick(null)}
           onSaveEvent={(draft) => calendar.submit({ kind: "create", eventId: crypto.randomUUID(), draft })}
-          onSaveTask={tasks.create}
           onMore={(seed) => moreOptions(quick.slot, seed)} />
       )}
     </section>
