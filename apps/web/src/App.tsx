@@ -3,6 +3,7 @@ import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react
 import tokens from "../../../styles/tokens.json";
 import ScrollActivity from "./components/ScrollActivity";
 import Sidebar from "./components/Sidebar";
+import BottomNav from "./components/BottomNav";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
 import ArrowIcon from "./components/ArrowIcon";
@@ -22,6 +23,7 @@ const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 import "./account-nav.css";
+import "./components/touch.css";
 
 const sections = [
   { path: "/notes", label: "Notas", description: "Ideias, páginas e conexões em um lugar." },
@@ -62,6 +64,7 @@ function NotFound() {
 function Shell() {
   const { pathname } = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [pathname]);
@@ -82,12 +85,13 @@ function Shell() {
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
+      {/* HashRouter usa o hash como rota: o link só move o foco, sem mudar a URL. */}
+      <a className="skip-link" href="#conteudo" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); }}>Pular para o conteúdo</a>
       <ScrollActivity />
       <Sidebar />
-      <main className="main-content">
+      <main className="main-content" id="conteudo" ref={mainRef} tabIndex={-1}>
         <header className="topbar">
-          <span>miupy / notes</span>
-          <span>{pageName}</span>
+          <span>miupy / notes / <span className="topbar-page" aria-current="page">{pageName}</span></span>
         </header>
         <div className="page-scroll" ref={scrollRef}>
           <div className="page-content">
@@ -127,6 +131,7 @@ function Shell() {
           <span>Seu acervo, seu tempo.</span>
         </footer>
       </main>
+      <BottomNav />
     </div>
   );
 }
