@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { LibraryItem } from "../lib/library-api";
 import { kindLabel, statusLabel } from "./labels";
+import Button from "../components/Button";
 
 export default function LibraryCard({ item, onEdit, onDelete }: { item: LibraryItem; onEdit: () => void; onDelete: () => void }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -12,7 +13,7 @@ export default function LibraryCard({ item, onEdit, onDelete }: { item: LibraryI
       <h2><button onClick={onEdit}>{item.title}</button></h2><p>{item.creator || kindLabel[item.kind]}{item.year ? ` (${item.year})` : ""}</p>
       {item.comment && <p className="library-comment">{item.comment}</p>}
       {item.tags.length > 0 && <p className="library-tags">{item.tags.map((tag, index) => <span key={`${tag}:${index}`}>{tag}</span>)}</p>}
-      <div className="library-card-actions">{item.externalUrl && <a href={item.externalUrl} target="_blank" rel="noopener noreferrer">Abrir link<span className="visually-hidden"> de {item.title} em nova aba</span></a>}<button onClick={onDelete} aria-label={`Excluir ${item.title}`}>Excluir</button></div>
+      <div className="library-card-actions">{item.externalUrl && <a href={item.externalUrl} target="_blank" rel="noopener noreferrer">Abrir link<span className="visually-hidden"> de {item.title} em nova aba</span></a>}<Button variant="danger" size="sm" onClick={onDelete} aria-label={`Excluir ${item.title}`}>Excluir</Button></div>
     </div>
   </article>;
 }

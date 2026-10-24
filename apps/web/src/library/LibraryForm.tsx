@@ -4,6 +4,7 @@ import Select from "../components/Select";
 import DatePicker from "../components/DatePicker";
 import { saveLibraryItem, type LibraryInput, type LibraryItem } from "../lib/library-api";
 import { kindLabel, statuses } from "./labels";
+import Button from "../components/Button";
 
 /** 20 tags de 40 caracteres unidas por ", " (como na edição): o campo nunca corta um conjunto que a API aceita. */
 const TAGS_TEXT_MAX = 20 * 40 + 19 * ", ".length;
@@ -45,7 +46,7 @@ export default function LibraryForm({ existing, onClose, onSaved }: { existing?:
         <label>URL da capa<input name="coverUrl" type="url" maxLength={2048} pattern="https?://.*" defaultValue={existing?.coverUrl ?? ""} placeholder="https://exemplo.com/capa.jpg…" /><small>A imagem será carregada desse endereço ao exibir a obra.</small></label>
       </fieldset>
       {error && <p ref={errorRef} tabIndex={-1} role="alert" className="library-error">{error}</p>}
-      <footer><button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>Cancelar</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Salvando…" : "Salvar obra"}</button></footer>
+      <footer><Button type="button" disabled={busy} onClick={onClose}>Cancelar</Button><Button variant="primary" type="submit" disabled={busy}>{busy ? "Salvando…" : "Salvar obra"}</Button></footer>
     </form>
   </Modal>;
 }

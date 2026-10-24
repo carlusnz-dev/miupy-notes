@@ -17,6 +17,8 @@ import { isLocalReadFailure } from "./lib/notes-autosave";
 import { notesSaver, sessionIdle } from "./lib/notes-saver";
 import { usePageTitle } from "./lib/use-page-title";
 import "./editor.css";
+import Button from "./components/Button";
+import PageHeader from "./components/PageHeader";
 
 // CodeMirror e o Markdown da leitura vêm em chunks próprios: título, tags e estado abrem sem esperar por eles.
 const LiveMarkdownEditor = lazy(() => import("./components/LiveMarkdownEditor"));
@@ -265,9 +267,7 @@ function NoteEditorSession() {
   if (auth.status !== "signed-in" && !sample) {
     return (
       <div className="feature-page">
-        <div className="eyebrow">EDITOR</div>
-        <h1>Editor<em>.</em></h1>
-        <p className="lead">Entre com sua conta Google na tela de notas para editar.</p>
+        <PageHeader eyebrow="EDITOR" title="Editor" description="Entre com sua conta Google na tela de notas para editar." />
         <Link className="text-link" to="/notes">Ir para Notas</Link>
       </div>
     );
@@ -281,8 +281,8 @@ function NoteEditorSession() {
           <div className="state-panel" role="alert">
             <strong>{attachError.local ? "Rascunho local ilegível" : "Não foi possível abrir a nota"}</strong>
             <p>{attachError.message}</p>
-            <button type="button" className="button button-secondary" onClick={() => { ignoreLocal.current = false; setAttachError(null); setAttachTry((n) => n + 1); }}>Tentar de novo</button>
-            {attachError.local && <button type="button" className="button button-secondary" onClick={() => { ignoreLocal.current = true; setAttachError(null); setAttachTry((n) => n + 1); }}>Abrir sem o rascunho local</button>}
+            <Button type="button" onClick={() => { ignoreLocal.current = false; setAttachError(null); setAttachTry((n) => n + 1); }}>Tentar de novo</Button>
+            {attachError.local && <Button type="button" onClick={() => { ignoreLocal.current = true; setAttachError(null); setAttachTry((n) => n + 1); }}>Abrir sem o rascunho local</Button>}
             <Link className="text-link" to="/notes">Voltar para Notas</Link>
           </div>
         </div>
@@ -339,7 +339,7 @@ function NoteEditorSession() {
         <div className="state-panel editor-banner" role="alert">
           <strong>Esta nota foi alterada em outro lugar</strong>
           <p>O salvamento automático parou para não sobrescrever a outra versão. Seu texto continua guardado neste computador, mesmo se você sair; copie o que precisar antes de recarregar, pois recarregar o descarta.</p>
-          <button type="button" className="button button-secondary" onClick={() => void reloadSaved()}>Recarregar a versão salva</button>
+          <Button type="button" onClick={() => void reloadSaved()}>Recarregar a versão salva</Button>
         </div>
       )}
 

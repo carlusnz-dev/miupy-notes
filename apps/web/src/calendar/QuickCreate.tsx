@@ -7,6 +7,7 @@ import { toIso, type CalendarDate } from "../lib/calendar-date";
 import type { EventDraft, TaskDraft } from "../lib/calendar-api";
 import { buildDraft, initialFields, type Fields } from "./draft";
 import { buildTaskDraft, type TaskFields } from "./TaskForm";
+import Button from "../components/Button";
 
 export type ItemKind = "event" | "task";
 /** O que o formulário completo recebe ao tocar em "Mais opções": o que já foi digitado no cartão. */
@@ -116,8 +117,8 @@ export default function QuickCreate({ x, y, day, startMin, endMin, onClose, onSa
           )}
           {error && <p className="calendar-error" role="alert">{error}</p>}
           <div className="calendar-quick-actions">
-            <button type="button" className="button button-secondary" disabled={busy} onClick={() => { close(); onMore({ kind, event: fields, task: taskFields() }); }}>Mais opções</button>
-            <button type="submit" className="button" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</button>
+            <Button type="button" disabled={busy} onClick={() => { close(); onMore({ kind, event: fields, task: taskFields() }); }}>Mais opções</Button>
+            <Button variant="primary" type="submit" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</Button>
           </div>
         </form>
       )}
