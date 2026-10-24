@@ -1,6 +1,33 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
+    "allow": [
+      "Bash(gcloud version)",
+      "Bash(gcloud --version)",
+      "Bash(gcloud --help)",
+      "Bash(gcloud config get-value project)",
+      "Bash(gcloud projects list *)",
+      "Bash(gcloud projects describe *)",
+      "Bash(gcloud services list *)",
+      "Bash(gcloud services describe *)",
+      "Bash(gh pr *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh run watch *)",
+      "Bash(gh workflow list *)",
+      "Bash(gh workflow view *)"
+    ],
+    "ask": [
+      "Bash(gcloud * create *)",
+      "Bash(gcloud * delete *)",
+      "Bash(gcloud * update *)",
+      "Bash(gcloud * enable *)",
+      "Bash(gcloud * disable *)",
+      "Bash(gcloud * undelete *)",
+      "Bash(gcloud * set-iam-policy *)",
+      "Bash(gcloud * add-iam-policy-binding *)",
+      "Bash(gcloud * remove-iam-policy-binding *)"
+    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",

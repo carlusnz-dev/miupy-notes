@@ -31,6 +31,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 - Mantenha resultados do Graphify no cache externo ao checkout, nunca no Git. Versione apenas skills e instruções de uso, sem grafos, índices, visualizações ou logs de consulta.
 - Não abra nem indexe arquivos de dados pessoais, `.env*`, credenciais, tokens, arquivos locais ou estado de Terraform. A configuração TOML do Codex define sandbox e aprovações, mas não garante por si só bloqueio de leitura de cada arquivo; siga esta instrução e os limites do sandbox.
 - Não faça chamadas a contas AWS reais, `terraform apply`/`destroy`, deploys ou resets destrutivos. Comandos locais de build e teste estão permitidos.
+- GCP/gcloud: consultas básicas de metadados (`version`, `config get-value project`, `projects list/describe`, `services list/describe`) estão autorizadas. Criação, exclusão, ativação/desativação de serviços, alterações de IAM/configuração e deploy exigem autorização específica; não amplie o allow para `gcloud` inteiro. Não imprima tokens nem consulte segredos. A autorização para habilitar Calendar API em 2026-10-22 foi pontual, não autoriza outras mutações.
 
 ## Verificação atual
 
