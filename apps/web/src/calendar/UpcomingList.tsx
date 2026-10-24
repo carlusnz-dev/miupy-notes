@@ -8,6 +8,7 @@ import { relativeDay, startDay, timeRange, zoneNote } from "./format";
 import { groupEvents, type EventGroup } from "./groups";
 import type { DisplayEvent } from "./outbox";
 import { UPCOMING_DAYS } from "./use-calendar";
+import Button from "../components/Button";
 
 const MAX_NEXT_DATES = 3;
 
@@ -70,7 +71,7 @@ function GroupModal({ open, group, statusOf, onClose, onPick }: {
             </li>
           ))}
         </ol>
-        <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose}>Fechar</button></div>
+        <div className="modal-actions"><Button type="button" onClick={onClose}>Fechar</Button></div>
       </div>
     </Modal>
   );

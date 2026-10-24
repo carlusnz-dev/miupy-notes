@@ -8,6 +8,7 @@ import Select from "./components/Select";
 import { usePageTitle } from "./lib/use-page-title";
 import "./editor.css";
 import "./settings.css";
+import PageHeader from "./components/PageHeader";
 
 const choices = {
   width: [["narrow", "Estreita"], ["medium", "Média"], ["wide", "Larga"]],
@@ -28,7 +29,7 @@ export default function SettingsPage() {
   const helpRef = useRef<HTMLButtonElement>(null);
   const closeHelp = useCallback(() => setShortcutHelp(false), []);
   return <div className="settings-page" style={editorStyle(p)}>
-    <div className="eyebrow">PREFERÊNCIAS</div><h1>Configurações<em>.</em></h1><p className="lead">Ajuste a leitura e a escrita das suas notas.</p>
+    <PageHeader size="utility" eyebrow="PREFERÊNCIAS" title="Configurações" description="Ajuste a leitura e a escrita das suas notas." />
     <div className="settings-grid"><section className="settings-panel" aria-label="Preferências do editor">
       <Button ref={helpRef} size="sm" aria-expanded={shortcutHelp} aria-haspopup="dialog" aria-controls={shortcutHelp ? "shortcut-help" : undefined} onClick={() => setShortcutHelp(value => !value)}>Sobre o modo leitura</Button>
       <Popover id="shortcut-help" open={shortcutHelp} onClose={closeHelp} anchorRef={helpRef} label="Sobre o modo leitura"><p>O modo leitura mostra o texto formatado e bloqueia a edição. Use o botão de livro na nota ou o atalho escolhido abaixo para alternar.</p></Popover>

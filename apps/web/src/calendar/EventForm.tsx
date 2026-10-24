@@ -11,6 +11,7 @@ import { timeRange, zoneNote } from "./format";
 import type { DisplayEvent } from "./outbox";
 import { buildDraft, initialFields, type Fields } from "./draft";
 import { browserZone, zoneChoices } from "./time";
+import Button from "../components/Button";
 
 export type NoteChoice = { id: string; title: string };
 const kinds = [{ value: "event", label: "Evento" }, { value: "task", label: "Tarefa" }] as const;
@@ -84,7 +85,7 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
           {event.location && <p>{event.location}</p>}
           {event.description && <p className="calendar-description">{event.description}</p>}
           <p className="calendar-note">Espelho somente leitura do Google Calendar. Para alterar, edite no Google e sincronize.</p>
-          <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose}>Fechar</button></div>
+          <div className="modal-actions"><Button type="button" onClick={onClose}>Fechar</Button></div>
         </div>
       ) : (
         <form className="calendar-form" onSubmit={submit} noValidate>
@@ -93,8 +94,8 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
               <strong>Conflito de versões.</strong>
               <p>{op.serverCopy ? `O evento foi alterado em outro lugar ("${op.serverCopy.title}"). Nada foi sobrescrito.` : "O evento foi removido em outro lugar. Nada foi recriado."}</p>
               <div className="calendar-alert-actions">
-                <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(async () => { await onResolve("mine"); onClose(); })}>{op.serverCopy ? "Manter o meu" : "Recriar o meu"}</button>
-                <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(async () => { await onResolve("server"); onClose(); })}>Usar o do servidor</button>
+                <Button type="button" disabled={busy} onClick={() => void run(async () => { await onResolve("mine"); onClose(); })}>{op.serverCopy ? "Manter o meu" : "Recriar o meu"}</Button>
+                <Button type="button" disabled={busy} onClick={() => void run(async () => { await onResolve("server"); onClose(); })}>Usar o do servidor</Button>
               </div>
             </div>
           )}
@@ -102,7 +103,7 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
             <div className="calendar-alert" role="alert">
               <strong>O servidor recusou este envio.</strong>
               <p>Corrija os dados abaixo e salve de novo, ou descarte o rascunho.</p>
-              <div className="calendar-alert-actions"><button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(async () => { await onDiscard(); onClose(); })}>Descartar rascunho</button></div>
+              <div className="calendar-alert-actions"><Button type="button" disabled={busy} onClick={() => void run(async () => { await onDiscard(); onClose(); })}>Descartar rascunho</Button></div>
             </div>
           )}
           <div className="calendar-field">
@@ -141,7 +142,7 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
               <strong>Excluído no Google</strong>
               <p>A cópia no Google foi excluída. Exclua este evento aqui ou mantenha-o só neste app.</p>
               <div className="calendar-alert-actions">
-                <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(() => reflector.unreflect(event.id, true))}>Manter só neste app</button>
+                <Button type="button" disabled={busy} onClick={() => void run(() => reflector.unreflect(event.id, true))}>Manter só neste app</Button>
               </div>
             </div>
           )}
@@ -153,16 +154,16 @@ export default function EventForm({ open, entry, day, seed, kind, notes, notesSt
                 : <p>Este evento não está no Google. Enviar é uma ação sua, evento a evento.</p>}
               {op ? <p className="calendar-note">Há alterações só neste dispositivo: envie-as ao servidor antes de enviar ao Google.</p>
                 : <div className="calendar-alert-actions">
-                  <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(() => reflector.reflect(event.id))}>{event.reflection ? "Atualizar no Google" : "Enviar ao Google"}</button>
-                  {event.reflection && <button type="button" className="button button-secondary" disabled={busy} onClick={() => void run(() => reflector.unreflect(event.id, false))}>Remover do Google</button>}
+                  <Button type="button" disabled={busy} onClick={() => void run(() => reflector.reflect(event.id))}>{event.reflection ? "Atualizar no Google" : "Enviar ao Google"}</Button>
+                  {event.reflection && <Button type="button" disabled={busy} onClick={() => void run(() => reflector.unreflect(event.id, false))}>Remover do Google</Button>}
                 </div>}
             </div>
           )}
           {error && <p className="calendar-error" role="alert">{error}</p>}
           <div className="modal-actions">
-            {event && <button type="button" className="button button-secondary calendar-delete" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</button>}
-            <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>Cancelar</button>
-            <button type="submit" className="button" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</button>
+            {event && <Button variant="danger" className="calendar-delete" type="button" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</Button>}
+            <Button type="button" disabled={busy} onClick={onClose}>Cancelar</Button>
+            <Button variant="primary" type="submit" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</Button>
           </div>
           <p className="calendar-note">Ao salvar, a alteração fica guardada neste dispositivo e é enviada ao servidor assim que houver conexão.</p>
         </form>

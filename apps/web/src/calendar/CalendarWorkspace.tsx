@@ -22,6 +22,8 @@ import type { CalendarStore } from "./store";
 import { useTasks, type TasksApi } from "./tasks";
 import { useCalendar, type RangeRemote } from "./use-calendar";
 import "./calendar.css";
+import Button from "../components/Button";
+import PageHeader from "../components/PageHeader";
 
 export type GoogleApi = {
   /** Ativa com os escopos que o login já concedeu. */
@@ -142,11 +144,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
 
   return (
     <section className="calendar-page" aria-labelledby="calendar-title">
-      <header className="calendar-head">
-        <div>
-          <div className="eyebrow">TEMPO COM CONTEXTO</div>
-          <h1 id="calendar-title">Agendas<em>.</em></h1>
-        </div>
+      <PageHeader id="calendar-title" eyebrow="TEMPO COM CONTEXTO" title="Agendas" actions={
         <p className="calendar-sync" role="status" data-tone={conflicts || rejected ? "alert" : pending || offline ? "pending" : "ok"}>
           {conflicts > 0 ? `${conflicts} conflito(s) para resolver. ` : ""}
           {rejected > 0 ? `${rejected} envio(s) recusado(s) pelo servidor. ` : ""}
@@ -154,7 +152,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
           {pending > 0 ? `${pending} alteração(ões) salva(s) só neste dispositivo, aguardando envio.${waitUntil > Date.now() ? ` O servidor pediu para aguardar até ${new Date(waitUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : ""}` : calendar.fetchState.status === "ok" && !conflicts && !rejected ? `Em dia com o servidor desde ${new Date(calendar.fetchState.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.` : calendar.fetchState.status === "stale" ? calendar.fetchState.reason : calendar.fetchState.status === "loading" ? "Atualizando…" : ""}
           {(pending > 0 || offline || calendar.fetchState.status === "stale") && <> <button type="button" className="calendar-link-button" onClick={calendar.retryNow}>Tentar agora</button></>}
         </p>
-      </header>
+      } />
       {calendar.localError && <p className="calendar-error" role="alert">{calendar.localError}</p>}
 
       <div className="calendar-toolbar">
@@ -165,7 +163,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
           <button type="button" className="calendar-icon-button" aria-label="Próximo período" onClick={() => go(1)}><ChevronRight size={16} aria-hidden="true" /></button>
           <strong className="calendar-period" ref={periodRef} aria-live="polite">{periodLabel(mode, anchor)}</strong>
         </div>
-        <button type="button" className="button calendar-new" onClick={() => openNew()}><Plus size={14} aria-hidden="true" />&nbsp;Novo evento</button>
+        <Button variant="primary" className="calendar-new" type="button" onClick={() => openNew()}><Plus size={14} aria-hidden="true" />&nbsp;Novo evento</Button>
       </div>
 
       <div className="calendar-layout" data-mode={mode}>

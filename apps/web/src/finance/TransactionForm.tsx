@@ -6,6 +6,7 @@ import DatePicker from '../components/DatePicker';
 import MoneyInput from '../components/MoneyInput';
 import Select from '../components/Select';
 import { Modal } from './Modal';
+import Button from '../components/Button';
 
 type Direction = TransactionInput['direction'];
 type Link = TransactionInput['link'];
@@ -125,6 +126,6 @@ export function TransactionForm({ existing, banks, onClose, onSaved }: { existin
       <label>Origem<input name="source" maxLength={200} value={source} onChange={e => setSource(e.target.value)} required /></label>
       <Select label="Vínculo" value={link} options={links} onChange={setLink} />
       {link !== 'none' && <MonthField value={month} onChange={setMonth} />}
-    </fieldset></div></fieldset>{error && <p role="alert">{error}</p>}<footer><button type="button" onClick={onClose} disabled={busy}>Cancelar</button>{step === 1 && <button type="button" disabled={busy} onClick={() => setStep(0)}>Voltar</button>}<button type="submit" disabled={busy || (step === 1 && !!accountError)}>{busy ? 'Salvando…' : step === 0 ? 'Continuar' : 'Salvar lançamento'}</button></footer></form>
+    </fieldset></div></fieldset>{error && <p role="alert">{error}</p>}<footer><Button onClick={onClose} disabled={busy}>Cancelar</Button>{step === 1 && <Button disabled={busy} onClick={() => setStep(0)}>Voltar</Button>}<Button variant="primary" type="submit" disabled={busy || (step === 1 && !!accountError)}>{busy ? 'Salvando…' : step === 0 ? 'Continuar' : 'Salvar lançamento'}</Button></footer></form>
   </Modal>;
 }

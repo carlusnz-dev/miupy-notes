@@ -57,17 +57,13 @@ h1 em { font-style: normal; }
 :is(a, button, input, textarea):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; border: 1px solid var(--color-accent); border-radius: var(--radius-small); color: var(--color-accent-text); background: var(--color-accent); font: 500 13px/1 Inter, system-ui, sans-serif; letter-spacing: normal; text-transform: none; cursor: pointer; transition: background var(--duration), border-color var(--duration), color var(--duration); }
-.button:disabled { border-color: var(--color-border); color: var(--color-muted); background: transparent; cursor: not-allowed; }
-.button-secondary { border-color: var(--color-border-strong); color: var(--color-text); background: transparent; }
-.button-secondary:hover:not(:disabled) { background: var(--color-surface-raised); }
 
 .notes-state { margin-top: 24px; }
 .notes-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 24px 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); color: var(--color-muted); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
 .state-panel { display: grid; gap: 8px; justify-items: start; padding: 28px 24px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-medium); }
 .state-panel strong { font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
 .state-panel p { max-width: 520px; margin: 0; color: var(--color-muted); }
-.state-panel .button { margin-top: 12px; }
+.state-panel .ui-button { margin-top: 12px; }
 .muted-small { font-size: 12px; }
 .muted-small code { font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; color: var(--color-text); }
 .note-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
@@ -80,7 +76,7 @@ h1 em { font-style: normal; }
 .note-form h2 { margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
 .note-form label { margin-top: 4px; font-size: 12px; font-weight: 500; }
 .note-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); color: var(--color-text); background: var(--color-background); font: inherit; }
-.note-form .button { align-self: end; }
+.note-form .ui-button { align-self: end; }
 .note-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
 .note-form-fields label { grid-column: 1 / -1; }
 .refresh-status { color: var(--color-muted); font-size: 12px; font-weight: 400; letter-spacing: normal; text-transform: none; }
@@ -126,7 +122,7 @@ a.note-row:hover { border-color: var(--color-border-strong); background: var(--c
 .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .dashboard-heading h2, .section-heading h2 { margin: 0; font: inherit; }
 .dashboard-heading h2 { font-size: 13px; font-weight: 600; }
-.dashboard-link { color: var(--color-muted); font-size: 12px; border-bottom: 1px solid var(--color-border-strong); }
+.dashboard-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--color-muted); font-size: 12px; border-bottom: 1px solid var(--color-border-strong); }
 .dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .metric-card { display: flex; flex-direction: column; min-width: 0; min-height: 148px; padding: 15px 17px; border: 1px solid var(--color-border); border-radius: var(--radius-medium); background: var(--color-surface); }
 .metric-card > span, .metric-top { color: var(--color-muted); font-size: 11px; }
