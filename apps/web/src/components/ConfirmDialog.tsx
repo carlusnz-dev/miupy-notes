@@ -1,9 +1,10 @@
 import { useRef, type ReactNode } from "react";
 import Modal from "./Modal";
+import Button from "./Button";
 
 /**
  * Confirmação de ação destrutiva sobre o Modal compartilhado (foco preso, Esc, retorno de foco, GSAP).
- * O foco inicial fica em "cancelar": Enter por engano não apaga nada.
+ * A ação de confirmar usa a variante danger. O foco inicial fica em "cancelar": Enter por engano não apaga nada.
  */
 export default function ConfirmDialog({ open, title, children, confirmLabel, busyLabel, cancelLabel = "Cancelar", busy = false, error, onConfirm, onCancel }: {
   open: boolean;
@@ -24,8 +25,8 @@ export default function ConfirmDialog({ open, title, children, confirmLabel, bus
       {children}
       {error && <p className="confirm-error" role="alert">{error}</p>}
       <div className="modal-actions">
-        <button ref={cancel} type="button" className="button button-secondary" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
-        <button type="button" className="button" onClick={onConfirm} disabled={busy}>{busy && busyLabel ? busyLabel : confirmLabel}</button>
+        <Button ref={cancel} type="button" onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
+        <Button variant="danger" type="button" onClick={onConfirm} disabled={busy}>{busy && busyLabel ? busyLabel : confirmLabel}</Button>
       </div>
     </Modal>
   );

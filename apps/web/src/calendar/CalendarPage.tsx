@@ -8,6 +8,8 @@ import type { NoteChoice } from "./EventForm";
 import { createIndexedDbCalendarStore } from "./store";
 import type { TasksApi } from "./tasks";
 import type { RangeRemote } from "./use-calendar";
+import Button from "../components/Button";
+import PageHeader from "../components/PageHeader";
 
 const MAX_NOTE_PAGES = 5;
 async function loadNotes(): Promise<NoteChoice[]> {
@@ -50,11 +52,10 @@ export default function CalendarPage() {
   if (auth.status !== "signed-in") {
     return (
       <section className="calendar-page">
-        <div className="eyebrow">TEMPO COM CONTEXTO</div>
-        <h1>Agendas<em>.</em></h1>
+        <PageHeader eyebrow="TEMPO COM CONTEXTO" title="Agendas" />
         {auth.status === "checking" ? <p role="status">Verificando sua conta…</p>
           : auth.status === "unsupported" ? <p className="muted">Abra o aplicativo desktop para conectar sua conta Google e acessar suas agendas.</p>
-          : <><p className="muted">Conecte sua conta para acessar seus eventos.</p><button type="button" className="button" onClick={() => void signIn()} disabled={auth.signingIn}>{auth.signingIn ? "Conectando…" : "Entrar com Google"}</button></>}
+          : <><p className="muted">Conecte sua conta para acessar seus eventos.</p><Button variant="primary" type="button" onClick={() => void signIn()} disabled={auth.signingIn}>{auth.signingIn ? "Conectando…" : "Entrar com Google"}</Button></>}
         {auth.error && <p role="alert">{auth.error}</p>}
       </section>
     );

@@ -51,4 +51,5 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-24 | 20 — higiene do repositório e validação de design ao vivo | [relatório](2026-10-24_sessao-20.md) |
 | 2026-10-24 | Design — revisão visual de develop (28 achados) | [relatório](2026-10-24_design-revisao.md) |
 | 2026-10-24 | Continuidade — polimento de design e UX | [prompt](2026-10-24_prompt-polimento-design.md) |
+| 2026-10-24 | Design — polimento visual (A-01 a A-28) | [relatório](2026-10-24_design-polimento.md) |
 | 2026-10-24 | 21 — polimento visual com workers e regra de worktrees do Orca | [relatório](2026-10-24_sessao-21.md) |

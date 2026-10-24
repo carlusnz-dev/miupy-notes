@@ -55,6 +55,9 @@ const notes = [
 
 const event = (extra: Partial<CalendarEventOutput>): CalendarEventOutput => ({ ...meta(), title: "Evento", description: "", location: "", allDay: false, start: at(0, 9), end: at(0, 10), timeZone: "America/Sao_Paulo", links: [], source: "local", readOnly: false, external: null, reflection: null, ...extra });
 const google = (extra: Partial<CalendarEventOutput>) => event({ source: "google", readOnly: true, external: { provider: "google", calendarId: "primary", syncedAt: stamp }, ...extra });
+const taskItem = (title: string, dueDay: number | null, dueTime: string | null = null, status: "pending" | "completed" = "pending") => ({ ...meta(), title, description: "", dueDate: dueDay === null ? null : dateOf(dueDay), dueTime, status, completedAt: null, inGoogle: false });
+// `?tarefas=vazio` esvazia a lista (estado "Nada para hoje" do Início).
+const tasks = params.get("tarefas") === "vazio" ? [] : [taskItem("Pagar a fatura do cartão", -2, "09:00"), taskItem("Enviar o relatório", -1), taskItem("Renovar o passaporte", -9), taskItem("Ligar para o dentista", -3), taskItem("Comprar presente", 2), taskItem("Arquivar notas antigas", -5, null, "completed")];
 const events = new Map<string, CalendarEventOutput>();
 for (const item of [
   event({ title: "Planejamento semanal", start: at(0, 9), end: at(0, 10, 30), location: "Sala 2", links: [{ kind: "note", id: notes[0].id }] }),
@@ -137,6 +140,7 @@ function route(config: InternalAxiosRequestConfig): unknown {
   }
   if (path === "/v1/folders" && method === "get") return { items: folders };
   if (path === "/v1/folders" && method === "post") { const created = folder(body.name, body.parentId ?? null); folders.push(created); return created; }
+  if (path === "/v1/calendar/tasks" && method === "get") return page(tasks);
   if (path === "/v1/calendar/events" && method === "get") {
     const inRange = [...events.values()].filter((e) => (e.allDay ? `${e.start}T00:00:00.000Z` : e.start) < query.to && (e.allDay ? `${e.end}T23:59:59.999Z` : e.end) > query.from);
     return page(inRange);
