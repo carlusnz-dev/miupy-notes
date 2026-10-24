@@ -13,3 +13,6 @@
 .page-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 /* Contêineres que já espaçam os filhos com gap não precisam da margem do cabeçalho. */
 .calendar-page > .page-header, .profile-page > .page-header, .settings-page > .page-header { margin-bottom: 0; }
+
+/* Piso de 12 px (A-08): o padrão do navegador para <small> (smaller) cai para 11,2 px em texto de 14 px. */
+small { font-size: max(12px, .8em); }

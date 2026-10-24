@@ -7,6 +7,7 @@ body { touch-action: manipulation; }
 
 /* Itens menores que o alvo (caixa de seleção, remover tag, links sublinhados) ganham zona de toque invisível. */
 @media (pointer: coarse) {
+  :root :is(.ui-button-sm, .tree-main, .date-toggle, .calendar-link-button) { min-block-size: var(--hit-min); }
   :root :is(input[type="checkbox"], .badge-remove, .text-link, .finance-page > a) { position: relative; }
   :root :is(input[type="checkbox"], .badge-remove, .text-link, .finance-page > a)::after { content: ""; position: absolute; inset: min(0px, calc((100% - var(--hit-min)) / 2)); }
   /* A faixa de tags rola na horizontal e por isso corta na vertical: precisa abrigar a zona de 44 px do botão de remover. */
