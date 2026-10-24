@@ -17,6 +17,8 @@ type ModalProps = {
 
 const focusable = "button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])";
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Mesmo ponto de quebra de modal.css: abaixo dele o diálogo é um bottom sheet e entra/sai deslizando.
+const sheet = () => window.matchMedia("(max-width: 700px)").matches;
 
 // <dialog> nativo com showModal(): isola o fundo (inert), prende o Tab e trata Esc.
 // GSAP só anima a entrada/saída; com movimento reduzido tudo é instantâneo.
@@ -47,7 +49,8 @@ export default function Modal({ open, title, onClose, children, busy = false, in
     (target ?? dialog.querySelector<HTMLElement>(".modal-close") ?? dialog).focus();
     if (reducedMotion()) return;
     const context = gsap.context(() => {
-      gsap.fromTo(dialog, { opacity: 0, y: 16, "--modal-fade": 0 }, { opacity: 1, y: 0, "--modal-fade": 1, duration: .28, ease: "power2.out", clearProps: "transform,opacity,--modal-fade" });
+      if (sheet()) gsap.fromTo(dialog, { yPercent: 100, "--modal-fade": 0 }, { yPercent: 0, "--modal-fade": 1, duration: .34, ease: "power3.out", clearProps: "transform,--modal-fade" });
+      else gsap.fromTo(dialog, { opacity: 0, y: 16, "--modal-fade": 0 }, { opacity: 1, y: 0, "--modal-fade": 1, duration: .28, ease: "power2.out", clearProps: "transform,opacity,--modal-fade" });
     }, dialog);
     return () => context.revert();
   }, [open, mounted]);
@@ -63,7 +66,8 @@ export default function Modal({ open, title, onClose, children, busy = false, in
     };
     if (reducedMotion()) { finish(); return; }
     const context = gsap.context(() => {
-      gsap.to(dialog, { opacity: 0, y: 10, "--modal-fade": 0, duration: .18, ease: "power1.in", onComplete: finish });
+      if (sheet()) gsap.to(dialog, { yPercent: 100, "--modal-fade": 0, duration: .24, ease: "power2.in", onComplete: finish });
+      else gsap.to(dialog, { opacity: 0, y: 10, "--modal-fade": 0, duration: .18, ease: "power1.in", onComplete: finish });
     }, dialog);
     return () => context.revert();
   }, [open, mounted]);
@@ -88,14 +92,15 @@ export default function Modal({ open, title, onClose, children, busy = false, in
         copy.style.font = computed.font;
         copy.style.color = computed.color;
         Object.assign(copy.style, { position: 'fixed', top: `${bounds.top}px`, left: `${bounds.left}px`, margin: '0', width: `${bounds.width}px`, maxHeight: `${bounds.height}px` });
-        const scrollTop = dialog.querySelector('.modal-panel')?.scrollTop ?? 0;
+        // Com o bottom sheet quem rola é o corpo; no desktop, o painel.
+        const scrollers = ['.modal-panel', '.modal-body'].map(selector => dialog.querySelector(selector)?.scrollTop ?? 0);
         queueMicrotask(() => {
           // StrictMode reexecuta os efeitos mantendo o nó conectado.
           if (dialog.isConnected) return;
           backdrop.append(copy); document.body.append(backdrop); copy.show();
-          const panel = copy.querySelector('.modal-panel');
-          if (panel) panel.scrollTop = scrollTop;
-          gsap.to(backdrop, { opacity: 0, duration: .18, ease: 'power1.in', onComplete: () => backdrop.remove() });
+          ['.modal-panel', '.modal-body'].forEach((selector, index) => { const node = copy.querySelector(selector); if (node) node.scrollTop = scrollers[index]; });
+          if (sheet()) gsap.to(copy, { yPercent: 100, duration: .24, ease: 'power2.in' });
+          gsap.to(backdrop, { opacity: 0, duration: sheet() ? .24 : .18, ease: 'power1.in', onComplete: () => backdrop.remove() });
         });
       }
       if (dialog?.open) dialog.close();

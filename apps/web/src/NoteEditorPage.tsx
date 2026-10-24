@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Save, Trash2, Settings, Type, BookOpen } from "lucide-react";
 import type { LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
+import Badge from "./components/Badge";
 import TagInput from "./components/TagInput";
 import ConfirmDialog from "./components/ConfirmDialog";
 import { SkeletonBody } from "./components/Skeleton";
@@ -171,7 +172,15 @@ function NoteEditorSession() {
     pendingDraft.current = null;
   }
   useEffect(() => () => window.clearTimeout(bodyTimer.current), []);
-  const toggleReading = useCallback(() => { flushPendingDraft(); setReading((value) => !value); }, [flushPendingDraft]);
+  // Alternar a leitura esconde (inert) o editor, onde estava o foco: ele volta ao botão que alterna o modo.
+  const readingToggle = useRef<HTMLButtonElement>(null);
+  const readingToggled = useRef(false);
+  const toggleReading = useCallback(() => { flushPendingDraft(); readingToggled.current = true; setReading((value) => !value); }, [flushPendingDraft]);
+  useEffect(() => {
+    if (!readingToggled.current) return;
+    readingToggled.current = false;
+    readingToggle.current?.focus();
+  }, [reading]);
 
   /** "Salvar agora": a fila envia assim que o scheduler permitir; `true` quando a nota ficou sincronizada. */
   const persist = useCallback(async (): Promise<boolean> => {
@@ -315,8 +324,8 @@ function NoteEditorSession() {
         <span className={`save-status${save.alert ? " save-status-alert" : ""}`} role="status" aria-live="polite">{save.text}</span>
         <div className="editor-actions" role="group" aria-label="Ações da nota">
           <button type="button" className="tool-button" aria-label="Salvar" title="Salvar (Ctrl+S)" onClick={() => void persist()} disabled={!dirty || busy || blocked}><Save size={18} /></button>
-          <button type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={toggleReading}><BookOpen size={18} /></button>
-          <button type="button" className="tool-button" aria-label="Alternar fonte dos títulos" title="Alternar fonte dos títulos" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
+          <button ref={readingToggle} type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={toggleReading}><BookOpen size={18} /></button>
+          <button type="button" className="tool-button" aria-label="Títulos em serifa" aria-pressed={preferences.headingFont !== "sans"} title="Alternar fonte dos títulos (serifa ou sans)" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
           <button type="button" className="tool-button" aria-label="Configurações" title="Configurações" onClick={() => navigate("/settings")}><Settings size={18} /></button>
           <button type="button" className="tool-button" aria-label="Excluir nota" title="Excluir nota" onClick={() => setConfirmDelete(true)} disabled={deleting}><Trash2 size={18} /></button>
         </div>
@@ -360,6 +369,11 @@ function NoteEditorSession() {
           <TagInput value={draft.tags} onChange={(tags) => edit({ tags })} maxTags={MAX_TAGS} maxLength={MAX_TAG} />
         </div>
       )}
+      {preferences.showTags && reading && draft.tags.length > 0 && (
+        <ul className="editor-meta editor-tags-read" aria-label="Tags">
+          {draft.tags.map((tag) => <li key={tag}><Badge>{tag}</Badge></li>)}
+        </ul>
+      )}
 
       {reading && <Suspense fallback={<SkeletonBody label="Preparando leitura" lines={6} />}><NoteReading body={draft.body} /></Suspense>}
       {/* Manter o editor montado preserva seleção e histórico de desfazer durante a leitura. */}
@@ -376,7 +390,7 @@ function NoteEditorSession() {
 
       <div className="editor-footer muted-small">
         <span>{countFormat.format(words)} {words === 1 ? "palavra" : "palavras"} · {countFormat.format(draft.body.length)} / {countFormat.format(MAX_BODY)} caracteres</span>
-        <span>{preferences.readingShortcut} alterna leitura · Ctrl+S salva · {!reading && "Ctrl+Enter alterna tarefa · "}versão {note.version}</span>
+        <span>{/* Sem teclado físico a dica não serve. */}<span className="editor-shortcuts">{preferences.readingShortcut} alterna leitura · Ctrl+S salva · {!reading && "Ctrl+Enter alterna tarefa · "}</span>versão {note.version}</span>
       </div>
     </div>
   );

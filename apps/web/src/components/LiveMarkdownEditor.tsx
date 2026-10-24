@@ -69,6 +69,21 @@ export default function LiveMarkdownEditor({ defaultValue, onChange, onSave, sou
 
   useEffect(() => animateIn(toolbarRef.current, { opacity: 0, y: -8 }, { duration: .24 }), []);
 
+  // A barra rola na horizontal quando não cabe: marca de que lado há botões escondidos para o CSS esmaecer a borda.
+  useEffect(() => {
+    const bar = toolbarRef.current;
+    if (!bar) return;
+    const update = () => {
+      bar.toggleAttribute("data-more-start", bar.scrollLeft > 1);
+      bar.toggleAttribute("data-more-end", bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 1);
+    };
+    update();
+    bar.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    return () => { bar.removeEventListener("scroll", update); observer.disconnect(); };
+  }, []);
+
   const extensions = useMemo(() => [
     markdown({ base: markdownLanguage }),
     ...(source ? [] : [liveMarkdown({ openLink: openExternal })]),
