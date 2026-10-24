@@ -1,6 +1,6 @@
 {
   "project": "miupy-notes",
-  "updatedAt": "2026-10-23",
+  "updatedAt": "2026-10-24",
   "statusValues": [
     "planned",
     "template",
@@ -43,8 +43,8 @@
     {
       "id": "infrastructure",
       "path": "infra",
-      "status": "planned",
-      "role": "Terraform para API Gateway, Lambda, DynamoDB, S3 e CloudWatch; apenas convenções documentadas."
+      "status": "partial",
+      "role": "Código Terraform para bootstrap S3/KMS separado, IAM MFA/boundary, S3 privado e observabilidade/custos composto em dev e validado localmente; nada implantado, sem plan contra conta. API/Lambda/DynamoDB e conectores AWS ainda dependem das próximas entregas."
     },
     {
       "id": "ci",
@@ -93,7 +93,8 @@
     "docs/decisoes/2026-10-22_calendar-local-oauth.md",
     "docs/decisoes/2026-10-22_calendar-oauth-client-reuse.md",
     "docs/decisoes/2026-10-22_calendar-login-unico.md",
-    "docs/decisoes/2026-10-23_biblioteca.md"
+    "docs/decisoes/2026-10-23_biblioteca.md",
+    "docs/decisoes/2026-10-24_infra-aws-base.md"
   ],
   "deployedResources": []
 }

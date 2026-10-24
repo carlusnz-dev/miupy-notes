@@ -17,11 +17,13 @@ Obrigatórios: `name_prefix`, `account_id`, `aws_region`, `tags` (`map(string)`)
 | `budget_arns` | `list(string) = []` | Serviço Budgets, `SourceAccount` e `SourceArn` exatos dos budgets publicadores |
 | `deletion_window_in_days` | `number = 30` | Inteiro entre 7 e 30 |
 
-Outputs: `key_arn`, `key_id`, `alias_name`; não são segredos. Listas de recursos não aceitam curingas. Alarmes podem vir de outra região (billing usa us-east-1); logs e tópicos devem coincidir com região/conta da chave. Uma instância não mistura contexto S3 e SNS. Fornecer publicadores CloudWatch/Budgets exige também lista de tópicos. Instância sem listas de serviço serve como chave genérica para usuários IAM explícitos; a raiz deve escolher essa opção conscientemente.
+Outputs: `key_arn`, `key_id`, `alias_name`; não são segredos. Listas de recursos são exatas, exceto alarmes, que aceitam um `*` final para o prefixo aprovado do ambiente. A policy usa `ArnLike` nessa origem; a conta permanece exata. Alarmes podem vir de outra região (billing usa us-east-1); logs e tópicos devem coincidir com região/conta da chave. Uma instância não mistura contexto S3 e SNS. Fornecer publicadores CloudWatch/Budgets exige também lista de tópicos. Instância sem listas de serviço serve como chave genérica para usuários IAM explícitos; a raiz deve escolher essa opção conscientemente.
 
 Para o S3, use ARN de bucket determinístico montado na raiz, não output de módulo que já depende desta chave. Para Logs/SNS, também prefira ARNs determinísticos ao criar recursos que usam a chave, evitando ciclos. Não se cria grant genérico nem autorização para serviço que não esteja na configuração.
 
 ## Políticas e riscos
+
+Na integração, administradores/usuários explícitos passaram a ser condições `ArnEquals` em `aws:PrincipalArn`, com a conta proprietária em `Principal`. Assim a policy aceita referências a roles ainda não criadas e evita o ciclo KMS → IAM → KMS. A delegação da conta exige também Allow na policy IAM e não concede acesso direto a uma sessão STS nem contorna a boundary. A identidade externa inicial deve estar em `administrator_arns` e possuir suas permissões IAM de bootstrap.
 
 A raiz da conta preserva administração e delegação IAM administrativa. Uso criptográfico direto da raiz é condicionado ao seu `aws:PrincipalArn`, para que delegação não contorne o contexto criptográfico dos usuários. Administradores explícitos não recebem decriptação por padrão; adicioná-los a `key_user_arns` somente se necessário. O provisionador tem administração e uso para impedir lockout durante manutenção. As permissões criptográficas normais de S3/SNS passam por contexto/serviço. KMS key policy usa `Resource = "*"` porque corresponde somente à chave que contém a policy, não a outras chaves da conta.
 

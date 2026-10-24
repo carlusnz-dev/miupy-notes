@@ -168,7 +168,7 @@ variable "additional_kms_key_arns" {
   type        = set(string)
   default     = []
   validation {
-    condition     = alltrue([for arn in var.additional_kms_key_arns : can(regex("^arn:aws:kms:${var.aws_region}:${var.account_id}:key/[a-zA-Z0-9-]+$", arn)) && arn != var.backend_kms_key_arn])
-    error_message = "Chaves auxiliares devem pertencer à conta/região e excluir a chave de estado."
+    condition     = alltrue([for arn in var.additional_kms_key_arns : can(regex("^arn:aws:kms:(${var.aws_region}|us-east-1):${var.account_id}:key/[a-zA-Z0-9-]+$", arn)) && arn != var.backend_kms_key_arn])
+    error_message = "Chaves auxiliares devem pertencer à conta/região ou us-east-1 para billing e excluir a chave de estado."
   }
 }

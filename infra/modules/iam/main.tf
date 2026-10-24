@@ -6,7 +6,7 @@ locals {
   boundary_arn   = "${local.iam_prefix}:policy${local.path}${var.name_prefix}-runtime-boundary"
   lambda_arn     = "arn:aws:lambda:${var.aws_region}:${var.account_id}:function:${var.name_prefix}-api"
   table_arn      = "arn:aws:dynamodb:${var.aws_region}:${var.account_id}:table/${var.name_prefix}-*"
-  log_group_arns = ["arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/aws/lambda/${var.name_prefix}-*", "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/${var.name_prefix}/*"]
+  log_group_arns = [for name in ["/aws/lambda/${var.name_prefix}-api", "/aws/apigateway/${var.name_prefix}-api", "/aws/cloudtrail/${var.name_prefix}-audit"] : "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:${name}"]
 
   runtime_statements = concat(
     var.api_table_arn == null ? [] : [{

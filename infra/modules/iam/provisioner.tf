@@ -51,6 +51,12 @@ locals {
       Resource = [for region in distinct([var.aws_region, "us-east-1"]) : "arn:aws:sns:${region}:${var.account_id}:${var.name_prefix}-*"]
     },
     {
+      # SNS autoriza operacoes de assinatura pelo ARN do topico.
+      Sid      = "EnvironmentSubscriptions", Effect = "Allow",
+      Action   = ["sns:GetSubscriptionAttributes", "sns:Unsubscribe"],
+      Resource = [for region in distinct([var.aws_region, "us-east-1"]) : "arn:aws:sns:${region}:${var.account_id}:${var.name_prefix}-*"]
+    },
+    {
       Sid      = "EnvironmentBudget", Effect = "Allow",
       Action   = ["budgets:ViewBudget", "budgets:ModifyBudget", "budgets:TagResource", "budgets:UntagResource", "budgets:ListTagsForResource"],
       Resource = ["arn:aws:budgets::${var.account_id}:budget/${var.name_prefix}-*"]
@@ -69,7 +75,7 @@ locals {
       # Métricas/grupos não suportam ARN; DescribeAlarms exige * para alarmes compostos.
       Sid      = "RegionalDiscovery", Effect = "Allow",
       Action   = ["logs:DescribeLogGroups", "cloudwatch:DescribeAlarms", "cloudwatch:ListMetrics", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics"],
-      Resource = ["*"], Condition = { StringEquals = { "aws:RequestedRegion" = var.aws_region } }
+      Resource = ["*"], Condition = { StringEquals = { "aws:RequestedRegion" = distinct([var.aws_region, "us-east-1"]) } }
     }
     ], jsondecode(var.backend_bucket_arn == null ? "[]" : jsonencode([
       {
@@ -79,9 +85,10 @@ locals {
       { Sid = "BackendState", Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject"], Resource = ["${var.backend_bucket_arn}/${var.backend_state_key}"] },
       { Sid = "BackendLock", Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["${var.backend_bucket_arn}/${var.backend_state_key}.tflock"] },
       {
-        Sid       = "BackendEncryptionViaS3", Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:DescribeKey"], Resource = [var.backend_kms_key_arn],
+        Sid       = "BackendEncryptionViaS3", Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], Resource = [var.backend_kms_key_arn],
         Condition = { StringLike = { "kms:ViaService" = "s3.*.amazonaws.com" }, StringEquals = { "kms:EncryptionContext:aws:s3:arn" = var.backend_bucket_arn } }
-      }
+      },
+      { Sid = "BackendKeyMetadata", Effect = "Allow", Action = ["kms:DescribeKey"], Resource = [var.backend_kms_key_arn] }
   ])))
 }
 resource "aws_iam_role_policy" "provisioner" {

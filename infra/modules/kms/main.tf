@@ -47,19 +47,22 @@ locals {
         Condition = { ArnEquals = { "aws:PrincipalArn" = local.root_arn } }
       },
       {
-        Sid       = "ExplicitKeyAdministrators"
-        Effect    = "Allow"
-        Principal = { AWS = local.administrators }
+        Sid    = "ExplicitKeyAdministrators"
+        Effect = "Allow"
+        # A conta delega via IAM; condicao aceita roles futuras sem Principal invalido.
+        Principal = { AWS = local.root_arn }
         Action    = local.administration_actions
         Resource  = "*"
+        Condition = { ArnEquals = { "aws:PrincipalArn" = local.administrators } }
       },
       merge({
         Sid       = "ExplicitKeyUsers"
         Effect    = "Allow"
-        Principal = { AWS = local.users }
+        Principal = { AWS = local.root_arn }
         Action    = local.crypto_actions
         Resource  = "*"
-      }, jsondecode(length(local.user_conditions) > 0 ? jsonencode({ Condition = local.user_conditions }) : "{}")),
+        Condition = merge(local.user_conditions, { ArnEquals = { "aws:PrincipalArn" = local.users } })
+      }),
       {
         Sid       = "DenyPrincipalsOutsideAllowlist"
         Effect    = "Deny"
@@ -93,7 +96,7 @@ locals {
         Resource  = "*"
         Condition = {
           StringEquals = { "aws:SourceAccount" = var.account_id }
-          ArnEquals    = { "aws:SourceArn" = source.arns }
+          ArnLike      = { "aws:SourceArn" = source.arns }
         }
     } if length(source.arns) > 0])
   }

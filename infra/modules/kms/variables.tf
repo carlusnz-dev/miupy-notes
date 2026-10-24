@@ -90,12 +90,12 @@ variable "sns_topic_arns" {
 }
 
 variable "cloudwatch_alarm_arns" {
-  description = "ARNs exatos de alarmes autorizados a publicar em SNS cifrado."
+  description = "ARNs de alarmes autorizados; aceita um curinga final no prefixo aprovado."
   type        = list(string)
   default     = []
   validation {
-    condition     = alltrue([for arn in var.cloudwatch_alarm_arns : can(regex("^arn:aws:cloudwatch:[a-z0-9-]+:${var.account_id}:alarm:[A-Za-z0-9_.-]+$", arn))])
-    error_message = "Informe ARNs exatos da conta/região/finalidade esperadas, sem curingas."
+    condition     = alltrue([for arn in var.cloudwatch_alarm_arns : can(regex("^arn:aws:cloudwatch:[a-z0-9-]+:${var.account_id}:alarm:[A-Za-z0-9_.-]+\\*?$", arn))])
+    error_message = "Informe ARNs da conta/finalidade esperadas; somente um curinga final e permitido."
   }
 }
 

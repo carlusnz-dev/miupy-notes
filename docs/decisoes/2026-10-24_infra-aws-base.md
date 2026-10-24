@@ -1,6 +1,6 @@
 # Base Terraform AWS
 
-Data: 2026-10-24. Estado: desenho para implementação local, sem autorização de implantação. Conta, região, orçamento, destinatário e retenções permanecem decisões do proprietário.
+Data: 2026-10-24. Estado: código Terraform integrado e validado localmente, sem autorização de implantação. Conta, região, orçamento, destinatário e retenções permanecem decisões do proprietário.
 
 ## Escopo e alternativas
 
@@ -20,7 +20,7 @@ Secrets Manager versus itens cifrados no DynamoDB permanece **pendente** para Ca
 
 Região `us-east-1`, orçamento mensal de US$ 10, logs da aplicação por 30 dias, auditoria por 90 dias e versões S3 antigas por 90 dias são propostas. Exportações por 30 dias, importações por sete dias e temporários por um dia também exigem aprovação. Alarmes de cobrança usam obrigatoriamente `us-east-1`, independentemente da região da aplicação. Alertas financeiros chegam com atraso de horas e não impõem teto rígido de gastos.
 
-CloudTrail completo, Cost Anomaly Detection, request metrics S3 e OIDC exigem avaliação de custo/escopo e ativação explícita. O destinatário dos alertas só entra por variável sem default; exemplos devem usar `voce@example.com`. Conta e região também entram por variáveis, sem identificador real versionado.
+CloudTrail completo permanece para sessão futura; filtros/alarmes de uma trilha externa, Cost Anomaly Detection, request metrics S3 e OIDC têm flags desligadas e exigem avaliação de custo/escopo e ativação explícita. O destinatário dos alertas só entra por variável sem default; exemplos devem usar `voce@example.com`. Conta e região também entram por variáveis, sem identificador real versionado.
 
 ## Referências verificadas
 
@@ -28,3 +28,7 @@ CloudTrail completo, Cost Anomaly Detection, request metrics S3 e OIDC exigem av
 - [Lock nativo S3 disponível desde Terraform 1.10](https://docs.aws.amazon.com/prescriptive-guidance/latest/terraform-aws-provider-best-practices/backend.html).
 - APIs oficiais consultadas em 2026-10-24: [provider AWS](https://registry.terraform.io/v1/providers/hashicorp/aws) retornou `6.70.0`; [Terraform](https://checkpoint-api.hashicorp.com/v1/check/terraform) retornou `1.17.0`. Restringir AWS a `~> 6.0` e versionar o lock; usar imagem Terraform fixa `1.17.0` nas instruções locais.
 - [KMS](https://aws.amazon.com/kms/pricing/), [CloudWatch](https://aws.amazon.com/cloudwatch/pricing/), [Budgets](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) e [CloudTrail](https://aws.amazon.com/cloudtrail/pricing/): custos variam por uso e região. Budgets de monitoramento/notificação são gratuitos; a franquia de dois refere-se a budgets com ações. Rotação KMS pode acrescentar custo das duas primeiras rotações.
+
+## Integração e limites confirmados
+
+A raiz dev cria as duas chaves de aplicação (objetos e observabilidade), acrescentando chave billing em us-east-1 se necessário; bootstrap tem chave própria. A identidade externa inicial é input obrigatório e permanece nas allowlists. Roles futuras aparecem em condições PrincipalArn, sem depender de sua existência na criação da chave. O provisionador não altera humanos/boundary nem cria chaves: instalação e alterações estruturais continuam externas. API e OIDC ficam desligados; nenhum serviço de aplicação foi criado. HTTP API começa com métricas por logs porque ApiId é gerado, e recebe métricas nativas somente quando informado. Validação usou binário oficial local por orientação do coordenador após falha Docker; testes com mocks não comprovam autorização AWS.

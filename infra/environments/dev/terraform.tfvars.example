@@ -1,1 +1,23 @@
+# SOMENTE PROPOSTAS: preencher localmente com decisoes aprovadas.
+account_id = "SUBSTITUA-PELA-CONTA-APROVADA"
+initial_provisioner_arn = "SUBSTITUA-PELO-ARN-IAM-DO-PROVISIONADOR-INICIAL"
 aws_region = "us-east-1"
+name_prefix = "miupy-dev"
+alert_email = "voce@example.com"
+monthly_budget_usd = 10
+app_log_retention_days = 30
+audit_log_retention_days = 90
+exports_retention_days = 30
+imports_retention_days = 7
+tmp_retention_days = 1
+noncurrent_retention_days = 90
+backup_transition_days = 90
+backup_retention_days = 365
+access_logs_retention_days = 90
+enable_api_role = false
+enable_github_oidc = false
+enable_s3_request_metrics = false
+enable_cloudtrail_alarms = false
+enable_cost_anomaly_detection = false
+# Futuro: configurar backend_bucket_arn, backend_state_key, backend_kms_key_arn juntos.
+# Futuro: api_table_arn (prefix-data), api_id e api_s3_prefixes somente com consumidor.
