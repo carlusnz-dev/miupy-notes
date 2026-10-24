@@ -11,7 +11,7 @@ mkdirSync(envDir, { recursive: true });
 const { config } = await loadConfigFromFile({ command: "serve", mode: "development" }, path.join(root, "vite.config.ts"));
 const server = await createServer({
   ...config, root, configFile: false, envDir,
-  server: { ...config.server, host: "127.0.0.1", port: 5204, strictPort: true, proxy: { "/v1": "http://127.0.0.1:3204" } },
+  server: { ...config.server, host: "127.0.0.1", port: 5183, strictPort: true, proxy: { "/v1": "http://127.0.0.1:3183" } },
 });
 await server.listen();
 server.printUrls();

@@ -1,5 +1,5 @@
 async (page) => {
-  const base = 'http://127.0.0.1:5204';
+  const base = 'http://127.0.0.1:5183';
   const assets = __LIBRARY_ASSETS__;
   const ensure = (condition, message) => { if (!condition) throw new Error(message); };
   let stage = 'início';

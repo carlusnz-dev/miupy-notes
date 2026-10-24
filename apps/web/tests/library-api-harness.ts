@@ -32,4 +32,4 @@ const app = createApp({
   notesRouter: express.Router(), libraryRouter: createLibraryRouter(new LibraryController(new LibraryServiceImpl(repo))),
 });
 // Identidade é fixa neste processo de testes; nunca use este servidor para dados reais.
-app.listen(3204, "127.0.0.1", () => process.stdout.write(`Biblioteca sintética: 3204 (${randomUUID()})\n`));
+app.listen(3183, "127.0.0.1", () => process.stdout.write(`Biblioteca sintética: 3183 (${randomUUID()})\n`));

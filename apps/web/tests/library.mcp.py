@@ -1,6 +1,6 @@
 """Playwright MCP isolado: Biblioteca com API em memória e dados sintéticos.
-Uso: timeout 150s python apps/web/tests/library.mcp.py http://127.0.0.1:5204
-Sirva Vite sem arquivos de ambiente e library-api-harness.ts na porta 3204.
+Uso: timeout 150s python apps/web/tests/library.mcp.py http://127.0.0.1:5183
+Sirva Vite sem arquivos de ambiente e library-api-harness.ts na porta 3183.
 """
 import json
 from pathlib import Path
@@ -47,7 +47,7 @@ try:
     assets = root / 'docs/relatorios/assets/2026-10-23_biblioteca'
     assets.mkdir(parents=True, exist_ok=True)
     code = code.replace('__LIBRARY_ASSETS__', json.dumps(str(assets)))
-    result = call(name, dict(code=code.replace('http://127.0.0.1:5204', sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:5204')))
+    result = call(name, dict(code=code.replace('http://127.0.0.1:5183', sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:5183')))
     print(result['content'][0]['text'].split('### Ran')[0])
     (assets / 'failure.png').unlink(missing_ok=True)
     call('browser_close', {})
