@@ -14,7 +14,7 @@ const DRAG_THRESHOLD_PX = 6;
  * Carrossel de cartões: `perPage` itens por vez (conforme a largura), setas, arrastar com o ponteiro (encaixa no item
  * mais próximo), setas do teclado e transição GSAP (instantânea com movimento reduzido). Itens fora da janela ficam inertes.
  */
-export default function EventCarousel({ label, children }: { label: string; children: ReactNode }) {
+export default function EventCarousel({ label, heading, children }: { label: string; /** Título da seção, na mesma linha dos controles. */ heading?: ReactNode; children: ReactNode }) {
   const items = Children.toArray(children);
   const count = items.length;
   const viewport = useRef<HTMLDivElement>(null);
@@ -126,13 +126,16 @@ export default function EventCarousel({ label, children }: { label: string; chil
   return (
     <div className="event-carousel" style={{ "--carousel-item": `${itemWidth}px`, "--carousel-gap": `${GAP_PX}px` } as React.CSSProperties}>
       <div className="event-carousel-controls">
-        <span className="event-carousel-count" aria-live="polite">{count > perPage ? `${first + 1}–${last} de ${count}` : `${count} ${count === 1 ? "item" : "itens"}`}</span>
-        {count > perPage && (
-          <div className="event-carousel-arrows">
-            <button type="button" className="event-carousel-arrow" aria-label="Itens anteriores" disabled={first === 0} onClick={() => go(first - perPage)}><ChevronLeft size={16} aria-hidden="true" /></button>
-            <button type="button" className="event-carousel-arrow" aria-label="Próximos itens" disabled={first >= maxIndex} onClick={() => go(first + perPage)}><ChevronRight size={16} aria-hidden="true" /></button>
-          </div>
-        )}
+        {heading}
+        <div className="event-carousel-nav">
+          <span className="event-carousel-count" aria-live="polite">{count > perPage ? `${first + 1}–${last} de ${count}` : `${count} ${count === 1 ? "item" : "itens"}`}</span>
+          {count > perPage && (
+            <div className="event-carousel-arrows">
+              <button type="button" className="event-carousel-arrow" aria-label="Itens anteriores" disabled={first === 0} onClick={() => go(first - perPage)}><ChevronLeft size={16} aria-hidden="true" /></button>
+              <button type="button" className="event-carousel-arrow" aria-label="Próximos itens" disabled={first >= maxIndex} onClick={() => go(first + perPage)}><ChevronRight size={16} aria-hidden="true" /></button>
+            </div>
+          )}
+        </div>
       </div>
       <div ref={viewport} className="event-carousel-viewport" role="region" aria-roledescription="carrossel" aria-label={label} data-draggable={count > perPage || undefined}
         onKeyDown={onKeyDown} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={(event) => endDrag(event, false)} onPointerCancel={(event) => endDrag(event, true)}
