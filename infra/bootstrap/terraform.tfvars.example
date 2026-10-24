@@ -1,0 +1,9 @@
+# PROPOSTAS: preencher e aprovar localmente antes de acessar a conta.
+aws_account_id                      = "SUBSTITUA-PELA-CONTA-APROVADA"
+aws_region                          = "us-east-1"
+name_prefix                         = "miupy-bootstrap"
+state_bucket_name                   = "miupy-terraform-state-substitua-por-nome-unico"
+noncurrent_version_retention_days   = 90
+abort_incomplete_multipart_days     = 7
+kms_deletion_window_days           = 30
+tags                               = { Environment = "bootstrap" }
