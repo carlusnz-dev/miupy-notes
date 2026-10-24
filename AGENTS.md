@@ -26,6 +26,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 ## Navegação e segurança do repositório
 
 - Orca neste Linux: o CLI dedicado está em `/home/cabeto/.config/orca/linux-orca-cli-shim/orca` e chama `/usr/lib/orca-ide/bin/orca-ide`. Use `ORCA_CLI_COMMAND` quando configurado. `/usr/bin/orca-ide` é launcher gráfico e injeta `--app`, incompatível com o parser CLI desta instalação. Confirme o runtime com `status --json`; acesso ao socket pode exigir execução fora do sandbox.
+- Worktrees do Orca seguem `docs/decisoes/2026-10-24_worktrees-orca.md` e a skill `worktrees-orca`: pai top-level a partir de `develop`, filhas criadas pelo coordenador com `--base-branch <pai>`, branch renomeada antes do primeiro commit, um Run por coordenador (worker não executa `run-create`), arquivos exclusivos por worker, briefs fora do Git e merge local das filhas na pai antes do PR.
 - Para localizar código, faça buscas direcionadas com `rg` e leia apenas os arquivos relevantes. Use o Graphify local quando houver um grafo disponível para navegar relações; não faça varredura geral do repositório.
 - Ao gerar ou atualizar um grafo, limite a extração a `apps/web/src` e `apps/api/src`, use `--code-only` e não processe documentos, notas, PDFs, imagens ou vídeo. Não envie o repositório nem notas a provedores LLM.
 - Mantenha resultados do Graphify no cache externo ao checkout, nunca no Git. Versione apenas skills e instruções de uso, sem grafos, índices, visualizações ou logs de consulta.
@@ -41,7 +42,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 
 ## Skills locais
 
-Leia a skill adequada em `.agents/skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge e `relatorio` ao encerrar trabalho. Claude usa atalhos em `.claude/skills/`; Codex descobre as skills em `.agents/skills/` e agentes em `.codex/agents/`.
+Leia a skill adequada em `.agents/skills/`: `codigo-enxuto` antes de implementar, `revisar-contrato` quando mudar API/persistência/integração, `validar-design` ao revisar telas, `revisar-pr` antes de merge, `worktrees-orca` ao trabalhar com worktrees/workers do Orca e `relatorio` ao encerrar trabalho. Claude usa atalhos em `.claude/skills/`; Codex descobre as skills em `.agents/skills/` e agentes em `.codex/agents/`.
 
 ## Fim de sessão
 
