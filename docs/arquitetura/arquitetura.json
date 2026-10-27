@@ -45,7 +45,7 @@
       "id": "infrastructure",
       "path": "infra",
       "status": "partial",
-      "role": "Bootstrap S3/KMS implantado em sa-east-1 (estado ainda local). Ambiente dev aplicado em 2026-10-27 (estado no S3, 96 recursos): IAM, KMS (4 chaves), S3 app/access logs, DynamoDB, Lambda arm64 sem reserva de concorrência, HTTP API v2 com JWT Google, throttling 5/s e allow list de IP na Lambda, CloudWatch/SNS/budget. Verificado só por curl: /health 200 e /v1 sem token ou com Bearer inválido 401; log da Lambda no CloudWatch. CRUD com token real, 403 por IP, 429, DynamoDB/S3/CloudWatch pelo roteiro docs/validacao/aws-dev.md ainda não executados."
+      "role": "Bootstrap S3/KMS implantado em sa-east-1 (estado ainda local). Ambiente dev aplicado em 2026-10-27 (estado no S3, 96 recursos, ainda com as versões anteriores): IAM, KMS (4 chaves), S3 app/access logs, DynamoDB, Lambda arm64 sem reserva de concorrência, HTTP API v2 com JWT Google, throttling 5/s e allow list de IP na Lambda, CloudWatch/SNS/budget. Verificado só por curl: /health 200 e /v1 sem token ou com Bearer inválido 401; log da Lambda no CloudWatch. CRUD com token real, 403 por IP, 429, DynamoDB/S3/CloudWatch pelo roteiro docs/validacao/aws-dev.md ainda não executados. Código da branch feat/infra-aws (2026-10-27, não aplicado): chaves KMS próprias removidas (S3 e estado SSE-S3, DynamoDB chave AWS owned, Logs/SNS sem KMS), TLS negado em S3/SNS, 7 alarmes de métrica + 3 de billing, CSP do Tauri e cliente exigindo HTTPS fora de loopback; as cinco chaves, 23 alarmes e o alarme composto continuam na conta até o próximo apply (docs/decisoes/2026-10-27_kms-gerenciado-aws.md)."
     },
     {
       "id": "ci",
@@ -95,7 +95,8 @@
     "docs/decisoes/2026-10-22_calendar-oauth-client-reuse.md",
     "docs/decisoes/2026-10-22_calendar-login-unico.md",
     "docs/decisoes/2026-10-23_biblioteca.md",
-    "docs/decisoes/2026-10-24_infra-aws-base.md"
+    "docs/decisoes/2026-10-24_infra-aws-base.md",
+    "docs/decisoes/2026-10-27_kms-gerenciado-aws.md"
   ],
   "deployedResources": [
     {
@@ -115,6 +116,7 @@
         "aws_s3_bucket_lifecycle_configuration.state",
         "aws_s3_bucket_policy.state"
       ],
+      "pendingChange": "Código sem aws_kms_key.state/alias (blocos removed, destroy=false) e com SSE-S3; a chave continua na conta até o apply e a exclusão manual posterior.",
       "verification": "Apply concluído; plan posterior retornou saída 0 e No changes. Proteções S3 e estado/rotação KMS conferidos via AWS CLI."
     },
     {
@@ -126,6 +128,7 @@
       "resources": [
         "96 recursos gerenciados (terraform state list)"
       ],
+      "pendingChange": "Código sem os módulos kms (4 chaves, esquecidas por removed/destroy=false), com SSE-S3, tabela com chave AWS owned, 7+3 alarmes e TLS no SNS; a conta ainda reflete a versão anterior até o próximo apply.",
       "verification": "Apply concluído (9 added, 1 changed, 0 destroyed na rodada final). curl: GET /health 200; GET /v1/notes sem token e com Bearer inválido 401. Roteiro de validação completo pendente."
     }
   ]

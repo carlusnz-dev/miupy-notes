@@ -1,5 +1,7 @@
 # Base Terraform AWS
 
+> **Atualização 2026-10-27:** as chaves KMS por finalidade descritas abaixo foram retiradas do código; veja [2026-10-27_kms-gerenciado-aws.md](2026-10-27_kms-gerenciado-aws.md). O restante (IAM, S3, observabilidade, bootstrap) segue válido.
+
 Data: 2026-10-24. Estado: código Terraform integrado e validado localmente, sem autorização de implantação. Conta, região, orçamento, destinatário e retenções permanecem decisões do proprietário.
 
 ## Escopo e alternativas

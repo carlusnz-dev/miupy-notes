@@ -1,5 +1,7 @@
 # Validação do ambiente AWS dev
 
+> Os scripts já esperam o estado **pós-migração** ([decisão](../decisoes/2026-10-27_kms-gerenciado-aws.md)): SSE-S3, tabela com chave AWS owned e log groups sem KMS. Antes do apply da migração, esses itens falham, o que confirma que ela ainda não foi aplicada.
+
 Roteiro executável (smoke, segurança, DynamoDB, S3, CloudWatch) para rodar **depois do `apply` do ambiente dev**, pelo proprietário. Os scripts ficam em `scripts/validacao-aws/` e **nunca foram executados contra a AWS**: o que foi ensaiado até aqui está em [Estado de verificação](#estado-de-verificação). Não há aprovação do ambiente até o resultado ser registrado em `docs/relatorios/`.
 
 ## Resumo dos scripts
@@ -8,8 +10,8 @@ Roteiro executável (smoke, segurança, DynamoDB, S3, CloudWatch) para rodar **d
 |---|---|---|---|
 | `smoke.sh` | API (curl) | `/health`; CRUD de notas e tarefas com ID token válido | sim, `[validacao]`, removidos no fim |
 | `security.sh` | API (curl) | 401, 403, 400, 413, 404 entre `sub`, CORS, métodos/rotas inesperados, vazamento em erros, rajada (429) | sim, removidos no fim |
-| `dynamodb.sh` | AWS CLI + API | SSE-KMS, PITR, proteção contra exclusão, chave KMS; confere o item criado pela API (só metadados) | 1 nota, removida |
-| `s3.sh` | AWS CLI | bloqueio público, versionamento, KMS, TLS-only, lifecycle, logging; `--write-test` opcional | só com `--write-test` (objeto sintético em `tmp/uploads/`) |
+| `dynamodb.sh` | AWS CLI + API | chave AWS owned (sem KMS próprio), PITR, proteção contra exclusão; confere o item criado pela API (só metadados) | 1 nota, removida |
+| `s3.sh` | AWS CLI | bloqueio público, versionamento, SSE-S3, TLS-only, lifecycle, logging; `--write-test` opcional | só com `--write-test` (objeto sintético em `tmp/uploads/`) |
 | `cloudwatch.sh` | AWS CLI | correlaciona requestIds com logs da Lambda e do API Gateway; retenção, descrição dos erros, ausência de token/corpo | não (somente leitura) |
 | `run-local.sh` | Docker local | ensaio de smoke/security contra o app real + DynamoDB Local | não toca a AWS |
 
@@ -27,7 +29,7 @@ Convenções: saída `[OK]`/`[FALHA]`/`[PULADO]`/`[AVISO]` por caso, com `apigw=
   export MIUPY_TF_OUTPUTS_FILE=~/.local/state/miupy-validacao/outputs.json
   ```
 
-  Os scripts usam os outputs `http_api_endpoint`, `data_table_name`, `app_bucket_name`, `access_logs_bucket_name`, `kms_key_arns` e `log_group_names`. Sem `MIUPY_TF_OUTPUTS_FILE` eles chamam `terraform output -json` por conta própria. `MIUPY_API_URL` substitui o endpoint.
+  Os scripts usam os outputs `http_api_endpoint`, `data_table_name`, `app_bucket_name`, `access_logs_bucket_name` e `log_group_names`. Sem `MIUPY_TF_OUTPUTS_FILE` eles chamam `terraform output -json` por conta própria. `MIUPY_API_URL` substitui o endpoint.
 - Região: inferida do endpoint `execute-api`; ou `AWS_REGION`.
 
 ### Perfil AWS (privilégio mínimo)
@@ -37,11 +39,11 @@ Use `AWS_PROFILE` com a sessão MFA da role humana certa para cada script (roles
 | Script | Perfil | Resultado esperado |
 |---|---|---|
 | `smoke.sh`, `security.sh` | nenhum (só HTTP) | completo |
-| `dynamodb.sh --skip-api`, `dynamodb.sh` | `operator` (`DescribeTable`, `DescribeContinuousBackups`) | tabela e PITR conferidos; `kms describe-key` provavelmente `PULADO` (operator não administra KMS) |
-| `dynamodb.sh` (leitura do item) | nenhum perfil humano tem `dynamodb:GetItem` + `kms:Decrypt` na chave de dados (só a role da API) | `PULADO` com a mensagem de privilégio mínimo; use `MIUPY_AWS_PROFILE_DADOS` só se o proprietário abrir uma sessão autorizada |
+| `dynamodb.sh --skip-api`, `dynamodb.sh` | `operator` (`DescribeTable`, `DescribeContinuousBackups`) | tabela e PITR conferidos |
+| `dynamodb.sh` (leitura do item) | nenhum perfil humano tem `dynamodb:GetItem` (só a role da API) | `PULADO` com a mensagem de privilégio mínimo; use `MIUPY_AWS_PROFILE_DADOS` só se o proprietário abrir uma sessão autorizada |
 | `s3.sh` | `provisioner` (`s3:GetBucket*`, `GetEncryptionConfiguration`, `GetLifecycleConfiguration`) | configuração completa |
-| `s3.sh --write-test` | `operator` (prefixo `tmp/uploads/`, KMS via S3) | put/head/get/negativas; versão restante é `AVISO` (sem `DeleteObjectVersion`) |
-| `cloudwatch.sh` | `operator` ou `monitor` | correlação e vazamento; se os grupos cifrados exigirem permissão KMS que a role não tem, a leitura é `PULADA`: registrar |
+| `s3.sh --write-test` | `operator` (prefixo `tmp/uploads/`) | put/head/get/negativas; versão restante é `AVISO` (sem `DeleteObjectVersion`) |
+| `cloudwatch.sh` | `operator` ou `monitor` | correlação e vazamento; a leitura de logs antigos cifrados pela CMK extinta pode ser `PULADA` até eles expirarem: registrar |
 
 Na ausência de permissão o script marca `PULADO` e diz qual. Nenhum script amplia permissões nem usa root.
 
@@ -104,9 +106,9 @@ Aprovação do ambiente exige **todos** os itens, com `FALHA = 0` em cada script
 | `security.sh` (IP permitido) | todos `OK` | tokens opcionais ausentes → aprovação **parcial** do item correspondente; CORS positivo sem `MIUPY_ALLOWED_ORIGIN` |
 | `security.sh --blocked-ip` | `GET /v1/notes` com token válido → 403 | — |
 | `security.sh --burst N --expect-throttle` | ao menos um 429 e sem 5xx | só após configurar o stage; antes disso o `AVISO` "nenhum 429" é esperado |
-| `dynamodb.sh` | tabela ACTIVE, SSE-KMS com a chave `data`, PITR, proteção de exclusão, chave com rotação | leitura do item `PULADA` por privilégio mínimo |
-| `s3.sh` | bloqueio público, versionamento, KMS (`objects`), TLS ≥ 1.2, nenhum Allow para `*`, lifecycle, logging | `PULADO` por permissão do perfil, desde que outro perfil cubra o item |
-| `s3.sh --write-test` | put com SSE-KMS ok; sem KMS e fora do prefixo negados | versão restante do objeto (expira pelo lifecycle) |
+| `dynamodb.sh` | tabela ACTIVE, chave AWS owned (sem `SSEDescription`), PITR, proteção de exclusão | leitura do item `PULADA` por privilégio mínimo |
+| `s3.sh` | bloqueio público, versionamento, SSE-S3, TLS ≥ 1.2, nenhum Allow para `*`, lifecycle, logging | `PULADO` por permissão do perfil, desde que outro perfil cubra o item |
+| `s3.sh --write-test` | put sem header SSE ok (AES256); `aws:kms` explícito e fora do prefixo negados | versão restante do objeto (expira pelo lifecycle) |
 | `cloudwatch.sh` | 100% das requisições correlacionadas e com status igual; sem token/`Authorization`/`Bearer`/corpo; retenção definida; erros com mensagem descritiva | `AVISO` de nível `error` só se o teste provocou 5xx |
 
 **Estado esperado hoje.** O código desta branch não tem allowlist de IP (`lambda.ts` não lê `sourceIp`) nem throttling no stage (`runtime.tf` sem `default_route_settings`). Portanto `--blocked-ip` deve **falhar** e a rajada deve dar `AVISO` até as etapas 4 e 5 do plano de `resultado-aws.md`/`arquitetura` serem implementadas. Registre como pendência de infraestrutura, não como defeito dos scripts.
