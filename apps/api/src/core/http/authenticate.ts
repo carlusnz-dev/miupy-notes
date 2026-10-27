@@ -15,8 +15,9 @@ const unauthorized = () => new AppError(401, "UNAUTHORIZED", "Autenticação nec
 /** API local: valida o ID token no próprio Express (assinatura RS256, `iss`, `aud`, `exp`). */
 export function bearerTokenClaims(keySet: JWTVerifyGetKey, audience: string): ClaimsSource {
   return async (req) => {
-    const [scheme, token] = (req.header("authorization") ?? "").split(" ");
-    if (scheme !== "Bearer" || !token) throw unauthorized();
+    const match = /^Bearer ([^\s]+)$/.exec(req.header("authorization") ?? "");
+    if (!match) throw unauthorized();
+    const token = match[1];
     try {
       const { payload } = await jwtVerify(token, keySet, { issuer: GOOGLE_ISSUERS, audience, algorithms: ["RS256"] });
       return payload;

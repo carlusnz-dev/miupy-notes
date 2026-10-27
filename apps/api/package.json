@@ -8,6 +8,7 @@
     "build": "tsc --noEmit",
     "check:modules": "node scripts/check-modules.mjs",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "check:secrets": "node scripts/check-secrets.mjs",
     "db:create-table": "node --env-file=.env.development --env-file-if-exists=../../.env.local scripts/create-local-table.mjs"
   },
   "dependencies": {
