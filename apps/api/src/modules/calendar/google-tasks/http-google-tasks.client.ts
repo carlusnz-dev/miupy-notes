@@ -27,7 +27,7 @@ export class HttpGoogleTasksClient extends GoogleTasksClient {
     try {
       response = await this.doFetch(url, { method, headers: { authorization: `Bearer ${await this.tokens.accessToken(ownerId)}`, "content-type": "application/json" }, body: body && JSON.stringify(body) });
     } catch { throw new GoogleTasksApiError("unavailable"); }
-    if (!response.ok) throw new GoogleTasksApiError(classify(response.status));
+    if (!response.ok) throw new GoogleTasksApiError(classify(response.status), response.status);
     return method === "DELETE" ? null : response.json();
   }
 
