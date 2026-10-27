@@ -1,9 +1,6 @@
 # Providers simulados: nenhuma autenticacao ou chamada AWS.
 mock_provider "aws" {
   override_during = plan
-  mock_resource "aws_kms_key" {
-    defaults = { arn = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000001" }
-  }
   mock_resource "aws_iam_user" {
     defaults = { arn = "arn:aws:iam::000000000000:user/miupy-test/miupy-test-admin" }
   }
@@ -11,16 +8,10 @@ mock_provider "aws" {
 mock_provider "aws" {
   alias           = "billing"
   override_during = plan
-  mock_resource "aws_kms_key" {
-    defaults = { arn = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000002" }
-  }
 }
 mock_provider "aws" {
   alias           = "west"
   override_during = plan
-  mock_resource "aws_kms_key" {
-    defaults = { arn = "arn:aws:kms:us-west-2:000000000000:key/00000000-0000-0000-0000-000000000003" }
-  }
   mock_resource "aws_iam_user" {
     defaults = { arn = "arn:aws:iam::000000000000:user/miupy-test/miupy-test-admin" }
   }
@@ -40,12 +31,20 @@ variables {
 run "default_region" {
   command = plan
   assert {
-    condition     = length(module.billing_key) == 0
-    error_message = "A mesma regiao deve compartilhar a chave de observabilidade."
+    condition     = length(module.observability.alarm_arns) == 10 && length([for key, arn in module.observability.alarm_arns : key if !startswith(key, "billing-")]) == 7
+    error_message = "Esperados 7 alarmes essenciais (Lambda, API, DynamoDB) e 3 de billing, sem alarme composto."
   }
   assert {
-    condition     = length(module.observability.alarm_arns) == 27
-    error_message = "Esperados alarmes da API nativa, de logs e operacionais."
+    condition     = length(aws_dynamodb_table.data.server_side_encryption) == 1 && aws_dynamodb_table.data.server_side_encryption[0].enabled == false
+    error_message = "A tabela usa a chave AWS owned, sem CMK."
+  }
+  assert {
+    condition     = toset(aws_apigatewayv2_api.this.cors_configuration[0].expose_headers) == toset(["retry-after", "x-request-id"])
+    error_message = "O CORS deve expor Retry-After e X-Request-Id ao app."
+  }
+  assert {
+    condition     = aws_apigatewayv2_route.health.route_key == "GET /health" && aws_apigatewayv2_route.health.authorizer_id == null && length(aws_apigatewayv2_api.this.cors_configuration[0].allow_origins) == 1
+    error_message = "O CORS é configuração da API e cobre GET /health para as origens do app."
   }
   assert {
     condition     = module.iam.github_deploy_role_arn == null
@@ -99,7 +98,7 @@ run "other_region_and_opt_ins" {
     allowed_subs_secret_arn       = "arn:aws:secretsmanager:us-west-2:000000000000:secret:miupy-test/allowed-subs-synthetic"
   }
   assert {
-    condition     = length(module.billing_key) == 1 && length(module.observability.alarm_arns) == 31
-    error_message = "Outra regiao precisa de chave billing e alarmes dos opt-ins."
+    condition     = length(module.observability.alarm_arns) == 14
+    error_message = "Outra regiao soma os alarmes dos opt-ins (S3 e CloudTrail) aos essenciais."
   }
 }

@@ -41,10 +41,6 @@ locals {
       {
         Sid       = "ListApprovedPrefixes", Effect = "Allow", Action = ["s3:ListBucket", "s3:ListBucketVersions"], Resource = [var.app_bucket_arn],
         Condition = { StringLike = { "s3:prefix" = [for p in sort(tolist(var.operator_s3_prefixes)) : "${p}*"] } }
-      },
-      {
-        Sid       = "ObjectEncryptionViaS3", Effect = "Allow", Action = ["kms:Decrypt", "kms:GenerateDataKey"], Resource = [var.app_kms_key_arn],
-        Condition = { StringEquals = { "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com", "kms:EncryptionContext:aws:s3:arn" = var.app_bucket_arn } }
       }
   ])))
   monitor_statements = concat(local.monitoring_statements, [

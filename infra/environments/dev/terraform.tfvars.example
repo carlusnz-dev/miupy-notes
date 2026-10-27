@@ -26,5 +26,5 @@ enable_github_oidc = false
 enable_s3_request_metrics = false
 enable_cloudtrail_alarms = false
 enable_cost_anomaly_detection = false
-# Futuro: configurar backend_bucket_arn, backend_state_key, backend_kms_key_arn juntos.
+# Futuro: configurar backend_bucket_arn e backend_state_key juntos.
 # Futuro: api_s3_prefixes somente quando houver consumidor.

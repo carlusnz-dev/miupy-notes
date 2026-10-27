@@ -9,13 +9,6 @@ locals {
     api    = { name = "/aws/apigateway/${var.name_prefix}-api", retention = var.app_log_retention_days }
     audit  = { name = "/aws/cloudtrail/${var.name_prefix}-audit", retention = var.audit_log_retention_days }
   }
-  log_filters = {
-    application_errors = { group = aws_cloudwatch_log_group.this["lambda"].name, pattern = "{ $.level = \"error\" || $.level = \"ERROR\" }", value = "1", unit = "Count" }
-    lambda_timeouts    = { group = aws_cloudwatch_log_group.this["lambda"].name, pattern = "\"Task timed out\"", value = "1", unit = "Count" }
-    api_5xx            = { group = aws_cloudwatch_log_group.this["api"].name, pattern = "{ $.status >= 500 && $.status < 600 }", value = "1", unit = "Count" }
-    api_4xx            = { group = aws_cloudwatch_log_group.this["api"].name, pattern = "{ $.status >= 400 && $.status < 500 }", value = "1", unit = "Count" }
-    api_latency        = { group = aws_cloudwatch_log_group.this["api"].name, pattern = "{ $.responseLatency >= 0 }", value = "$.responseLatency", unit = "Milliseconds" }
-  }
   security_filters = var.enable_cloudtrail_alarms ? {
     root_usage = {
       group   = coalesce(var.cloudtrail_log_group_name, aws_cloudwatch_log_group.this["audit"].name)
@@ -32,16 +25,16 @@ locals {
   } : {}
 }
 
+# Sem kms_key_id: o CloudWatch Logs cifra em repouso com chave própria do serviço.
 resource "aws_cloudwatch_log_group" "this" {
   for_each          = local.log_groups
   name              = each.value.name
   retention_in_days = each.value.retention
-  kms_key_id        = var.kms_key_arn
   tags              = var.tags
 }
 
 resource "aws_cloudwatch_log_metric_filter" "this" {
-  for_each       = merge(local.log_filters, local.security_filters)
+  for_each       = local.security_filters
   name           = "${var.name_prefix}-${each.key}"
   log_group_name = each.value.group
   pattern        = each.value.pattern

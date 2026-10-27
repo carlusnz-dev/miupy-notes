@@ -17,9 +17,10 @@ resource "aws_dynamodb_table" "data" {
   point_in_time_recovery {
     enabled = true
   }
+  # Chave AWS owned (sem custo, sem KMS). enabled = false é explícito porque, com kms_key_arn computado, apenas
+  # remover o argumento não troca a chave de uma tabela já cifrada com CMK.
   server_side_encryption {
-    enabled     = true
-    kms_key_arn = module.data_key.key_arn
+    enabled = false
   }
   lifecycle {
     prevent_destroy = true
@@ -69,7 +70,9 @@ resource "aws_apigatewayv2_api" "this" {
     allow_origins = sort(tolist(var.cors_allowed_origins))
     allow_methods = ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
-    max_age       = 3600
+    # Sem isto o navegador/webview esconde Retry-After (429/409) e X-Request-Id das respostas cross-origin.
+    expose_headers = ["retry-after", "x-request-id"]
+    max_age        = 3600
   }
 }
 

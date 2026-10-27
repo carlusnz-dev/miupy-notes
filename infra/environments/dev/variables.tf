@@ -150,32 +150,12 @@ variable "audit_log_retention_days" {
 }
 
 variable "lambda_timeout_seconds" {
-  description = "Timeout futuro; alerta Duration p95 a 80% deste valor."
+  description = "Timeout da função HTTP em segundos."
   type        = number
   default     = 30
   validation {
     condition     = var.lambda_timeout_seconds >= 1 && var.lambda_timeout_seconds <= 900
     error_message = "Valor inválido para lambda_timeout_seconds."
-  }
-}
-
-variable "lambda_concurrency_threshold" {
-  description = "Limiar proposto para concorrência máxima da função."
-  type        = number
-  default     = 10
-  validation {
-    condition     = var.lambda_concurrency_threshold > 0
-    error_message = "Valor inválido para lambda_concurrency_threshold."
-  }
-}
-
-variable "api_latency_threshold_ms" {
-  description = "Limiar proposto de latência HTTP p95."
-  type        = number
-  default     = 1000
-  validation {
-    condition     = var.api_latency_threshold_ms > 0
-    error_message = "Valor inválido para api_latency_threshold_ms."
   }
 }
 
@@ -298,7 +278,7 @@ variable "api_s3_prefixes" {
 }
 
 variable "backend_bucket_arn" {
-  description = "Referencia opcional do backend separado; configurar as tres entradas backend juntas."
+  description = "Referencia opcional do backend separado; configurar bucket e chave do estado juntos."
   type        = string
   default     = null
 }
@@ -311,12 +291,6 @@ variable "backend_state_key" {
     condition     = var.backend_state_key == null ? true : can(regex("^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$", var.backend_state_key)) && !endswith(var.backend_state_key, ".tflock")
     error_message = "Use chave relativa sem curingas e sem sufixo .tflock."
   }
-}
-
-variable "backend_kms_key_arn" {
-  description = "Referencia opcional do backend separado; configurar as tres entradas backend juntas."
-  type        = string
-  default     = null
 }
 
 variable "enable_github_oidc" {
@@ -360,7 +334,7 @@ variable "github_subject" {
 }
 
 variable "initial_provisioner_arn" {
-  description = "ARN IAM da identidade externa que cria IAM/KMS inicialmente; preservado para evitar lockout."
+  description = "ARN IAM da identidade externa que cria IAM inicialmente; preservado no perímetro dos buckets."
   type        = string
   validation {
     condition     = can(regex("^arn:aws:iam::${var.account_id}:(role|user)/[A-Za-z0-9+=,.@_/-]+$", var.initial_provisioner_arn))

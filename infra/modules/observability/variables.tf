@@ -54,22 +54,6 @@ variable "monthly_budget_usd" {
   }
 }
 
-variable "kms_key_arn" {
-  description = "Chave simétrica dedicada aos logs e SNS na região da aplicação."
-  type        = string
-  nullable    = false
-  validation {
-    condition     = can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/", var.kms_key_arn))
-    error_message = "Valor inválido para kms_key_arn."
-  }
-}
-
-variable "billing_kms_key_arn" {
-  description = "Chave em us-east-1 quando a região da aplicação for outra."
-  type        = string
-  default     = null
-}
-
 variable "app_log_retention_days" {
   description = "Retenção proposta dos logs da aplicação."
   type        = number
@@ -90,36 +74,6 @@ variable "audit_log_retention_days" {
   }
 }
 
-variable "lambda_timeout_seconds" {
-  description = "Timeout futuro; alerta Duration p95 a 80% deste valor."
-  type        = number
-  default     = 30
-  validation {
-    condition     = var.lambda_timeout_seconds >= 1 && var.lambda_timeout_seconds <= 900
-    error_message = "Valor inválido para lambda_timeout_seconds."
-  }
-}
-
-variable "lambda_concurrency_threshold" {
-  description = "Limiar proposto para concorrência máxima da função."
-  type        = number
-  default     = 10
-  validation {
-    condition     = var.lambda_concurrency_threshold > 0
-    error_message = "Valor inválido para lambda_concurrency_threshold."
-  }
-}
-
-variable "api_latency_threshold_ms" {
-  description = "Limiar proposto de latência HTTP p95."
-  type        = number
-  default     = 1000
-  validation {
-    condition     = var.api_latency_threshold_ms > 0
-    error_message = "Valor inválido para api_latency_threshold_ms."
-  }
-}
-
 variable "api_4xx_threshold" {
   description = "Contagem anormal proposta de 4xx em cinco minutos."
   type        = number
@@ -131,19 +85,9 @@ variable "api_4xx_threshold" {
 }
 
 variable "api_id" {
-  description = "ID gerado do HTTP API futuro; null mantém métricas derivadas de logs."
+  description = "ID gerado do HTTP API, dimensão dos alarmes nativos 5xx/4xx."
   type        = string
-  default     = null
-}
-
-variable "enable_native_api_alarms" {
-  description = "Ativa métricas nativas quando o ID da API é conhecido somente no apply."
-  type        = bool
-  default     = false
-  validation {
-    condition     = !var.enable_native_api_alarms || var.api_id != null
-    error_message = "Alarmes nativos exigem api_id."
-  }
+  nullable    = false
 }
 
 variable "s3_request_metrics_enabled" {

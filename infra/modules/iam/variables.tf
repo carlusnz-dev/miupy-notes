@@ -34,14 +34,6 @@ variable "app_bucket_arn" {
     error_message = "Informe ARN de bucket S3 comercial sem sufixo de objeto."
   }
 }
-variable "app_kms_key_arn" {
-  description = "ARN exato da chave KMS dedicada aos objetos do aplicativo."
-  type        = string
-  validation {
-    condition     = can(regex("^arn:aws:kms:${var.aws_region}:${var.account_id}:key/[a-zA-Z0-9-]+$", var.app_kms_key_arn))
-    error_message = "A chave deve pertencer à conta/região do ambiente; aliases e curingas não são aceitos."
-  }
-}
 variable "operator_s3_prefixes" {
   description = "Prefixos de objetos que o operador poderá ler/escrever, sem isolamento HTTP por usuário."
   type        = set(string)
@@ -70,15 +62,6 @@ variable "api_table_arn" {
   }
 }
 
-variable "api_dynamodb_kms_key_arn" {
-  description = "Chave exclusiva da tabela, usada somente via DynamoDB pelo runtime."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.api_dynamodb_kms_key_arn == null ? true : can(regex("^arn:aws:kms:${var.aws_region}:${var.account_id}:key/[a-zA-Z0-9-]+$", var.api_dynamodb_kms_key_arn))
-    error_message = "Informe ARN exato da chave DynamoDB nesta conta e região."
-  }
-}
 
 variable "api_allowed_subs_secret_arn" {
   description = "ARN exato do segredo com a allowlist de sub; somente leitura pelo runtime."
@@ -99,7 +82,7 @@ variable "api_log_group_arn" {
   }
 }
 variable "api_s3_prefixes" {
-  description = "Sem acesso S3/KMS de runtime até existir código consumidor e prefixos aprovados."
+  description = "Sem acesso S3 de runtime até existir código consumidor e prefixos aprovados."
   type        = set(string)
   default     = []
   validation {
@@ -116,8 +99,8 @@ variable "backend_bucket_arn" {
     error_message = "Use ARN de bucket de estado separado do aplicativo."
   }
   validation {
-    condition     = (var.backend_bucket_arn == null && var.backend_state_key == null && var.backend_kms_key_arn == null) || (var.backend_bucket_arn != null && var.backend_state_key != null && var.backend_kms_key_arn != null)
-    error_message = "Configure as três variáveis backend juntas ou mantenha todas nulas."
+    condition     = (var.backend_bucket_arn == null) == (var.backend_state_key == null)
+    error_message = "Configure bucket e chave do backend juntos ou mantenha ambos nulos."
   }
 }
 variable "backend_state_key" {
@@ -127,15 +110,6 @@ variable "backend_state_key" {
   validation {
     condition     = var.backend_state_key == null ? true : can(regex("^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$", var.backend_state_key)) && !endswith(var.backend_state_key, ".tflock")
     error_message = "Use chave relativa sem curingas e sem sufixo .tflock."
-  }
-}
-variable "backend_kms_key_arn" {
-  description = "ARN exato da chave de estado; permissão apenas no provisionador."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.backend_kms_key_arn == null ? true : can(regex("^arn:aws:kms:[a-z0-9-]+:${var.account_id}:key/[a-zA-Z0-9-]+$", var.backend_kms_key_arn)) && var.backend_kms_key_arn != var.app_kms_key_arn
-    error_message = "Use chave de estado da própria conta separada da chave do aplicativo."
   }
 }
 variable "enable_github_oidc" {
@@ -181,14 +155,5 @@ variable "additional_bucket_arns" {
   validation {
     condition     = alltrue([for arn in var.additional_bucket_arns : can(regex("^arn:aws:s3:::${var.name_prefix}-[a-z0-9.-]+$", arn)) && arn != var.backend_bucket_arn])
     error_message = "Buckets auxiliares devem usar o prefixo do ambiente e excluir o backend."
-  }
-}
-variable "additional_kms_key_arns" {
-  description = "Chaves auxiliares exatas do ambiente, aprovadas pelo proprietário (logs/alertas)."
-  type        = set(string)
-  default     = []
-  validation {
-    condition     = alltrue([for arn in var.additional_kms_key_arns : can(regex("^arn:aws:kms:(${var.aws_region}|us-east-1):${var.account_id}:key/[a-zA-Z0-9-]+$", arn)) && arn != var.backend_kms_key_arn])
-    error_message = "Chaves auxiliares devem pertencer à conta/região ou us-east-1 para billing e excluir a chave de estado."
   }
 }

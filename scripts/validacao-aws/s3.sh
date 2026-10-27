@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# S3 dev: configuração dos buckets do módulo s3 (bloqueio público, versionamento, KMS, TLS-only, lifecycle, logging).
+# S3 dev: configuração dos buckets do módulo s3 (bloqueio público, versionamento, SSE-S3, TLS-only, lifecycle, logging).
 # Somente leitura, exceto com --write-test (um objeto sintético em tmp/uploads/, criado e removido pelo script).
 # A API ainda não tem fluxo de arquivos (anexos/exportações estão em "Planejado" em docs/arquitetura/api.md),
 # portanto não há upload/download via API para exercitar.
@@ -15,7 +15,7 @@ usage() {
   cat <<'EOF'
 Uso: s3.sh [--write-test]
 
-  --write-test   cria um objeto sintético em tmp/uploads/ (SSE-KMS), confere criptografia e conteúdo,
+  --write-test   cria um objeto sintético em tmp/uploads/ (SSE-S3), confere criptografia e conteúdo,
                  testa as negativas (sem SSE e fora dos prefixos aprovados) e remove o objeto.
                  Use o perfil operator (prefixo tmp/uploads/ aprovado). Sem a flag: só leitura de configuração.
 
@@ -36,7 +36,6 @@ done
 need jq aws
 APP="$(tf_get '.app_bucket_name.value')"
 LOGS="$(tf_get '.access_logs_bucket_name.value')"
-OBJ_KEY_ARN="$(tf_get '.kms_key_arns.value.objects')"
 [[ -n "$APP" && -n "$LOGS" ]] || die "outputs app_bucket_name/access_logs_bucket_name ausentes."
 if [[ -n "${MIUPY_API_URL:-}" || -n "$(tf_get '.http_api_endpoint.value')" ]]; then resolve_api_url; fi
 resolve_region
@@ -64,13 +63,7 @@ check_bucket() {
   elif aws_denied; then skip "versionamento" "perfil sem s3:GetBucketVersioning"; else fail "versionamento" "$(aws_err_text)"; fi
 
   if aws_run "$f.enc" s3api get-bucket-encryption --bucket "$bucket" --output json; then
-    if [[ "$kind" == app ]]; then
-      jq -e '.ServerSideEncryptionConfiguration.Rules[0] | .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "aws:kms" and .BucketKeyEnabled == true' "$f.enc" >/dev/null && ok "criptografia padrão SSE-KMS com Bucket Key" || fail "criptografia padrão SSE-KMS com Bucket Key"
-      key="$(jq -r '.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID // empty' "$f.enc")"
-      if [[ -n "$OBJ_KEY_ARN" && "$key" == "$OBJ_KEY_ARN" ]]; then ok "chave KMS do bucket é a chave 'objects' do Terraform"; else fail "chave KMS do bucket é a chave 'objects' do Terraform"; fi
-    else
-      jq -e '.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm == "AES256"' "$f.enc" >/dev/null && ok "criptografia padrão SSE-S3 (destino de access logs)" || fail "criptografia padrão SSE-S3 (destino de access logs)"
-    fi
+    jq -e '.ServerSideEncryptionConfiguration.Rules[0] | .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "AES256" and (.ApplyServerSideEncryptionByDefault.KMSMasterKeyID == null)' "$f.enc" >/dev/null && ok "criptografia padrão SSE-S3 (AES256, sem chave KMS)" || fail "criptografia padrão SSE-S3 (AES256, sem chave KMS)"
   elif aws_denied; then skip "criptografia padrão" "perfil sem s3:GetEncryptionConfiguration"; else fail "criptografia padrão" "$(aws_err_text)"; fi
 
   if aws_run "$f.pol" s3api get-bucket-policy --bucket "$bucket" --query Policy --output text; then
@@ -79,9 +72,7 @@ check_bucket() {
     jq -e '.Statement[] | select(.Sid == "DenyOldTLS") | .Effect == "Deny" and .Condition.NumericLessThan["s3:TlsVersion"] == "1.2"' "$f.pol.json" >/dev/null && ok "política exige TLS ≥ 1.2" || fail "política exige TLS ≥ 1.2"
     jq -e '.Statement[] | select(.Sid == "DenyPrincipalsOutsideAllowlist") | .Effect == "Deny"' "$f.pol.json" >/dev/null && ok "política nega principais fora da allowlist" || fail "política nega principais fora da allowlist"
     jq -e '[.Statement[] | select(.Effect == "Allow" and (.Principal == "*" or .Principal.AWS == "*"))] | length == 0' "$f.pol.json" >/dev/null && ok "nenhum Allow para Principal '*'" || fail "há Allow para Principal '*'"
-    if [[ "$kind" == app ]]; then
-      jq -e '[.Statement[].Sid] | contains(["DenyMissingOrWrongEncryption", "DenyMissingOrWrongKey"])' "$f.pol.json" >/dev/null && ok "política exige SSE-KMS e a chave correta nos PutObject" || fail "política exige SSE-KMS e a chave correta nos PutObject"
-    fi
+    jq -e '.Statement[] | select(.Sid == "DenyExplicitNonSSES3") | .Effect == "Deny"' "$f.pol.json" >/dev/null && ok "política nega PutObject com modo SSE explícito diferente de AES256" || fail "política nega PutObject com modo SSE explícito diferente de AES256"
   elif aws_denied; then skip "política do bucket" "perfil sem s3:GetBucketPolicy"; else fail "política do bucket" "$(aws_err_text)"; fi
 
   if aws_run "$f.lc" s3api get-bucket-lifecycle-configuration --bucket "$bucket" --output json; then
@@ -107,7 +98,6 @@ skip "upload/download via API" "a API não expõe fluxo de arquivos (anexos/expo
 
 if ((WRITE_TEST)); then
   section "Objeto de teste (--write-test)"
-  [[ -n "$OBJ_KEY_ARN" ]] || die "output kms_key_arns.objects ausente: necessário para --write-test."
   key="tmp/uploads/validacao-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
   printf '%s objeto sintético de validação, pode ser apagado\n' "$MARKER" >"$WORK/payload.txt"
   VERSIONS=() OBJ_CLEANED=0
@@ -123,31 +113,31 @@ if ((WRITE_TEST)); then
   }
   CLEANUPS+=(cleanup_object)
 
-  if aws_run "$WORK/put.json" s3api put-object --bucket "$APP" --key "$key" --body "$WORK/payload.txt" --server-side-encryption aws:kms --ssekms-key-id "$OBJ_KEY_ARN" --output json; then
-    ok "put-object com SSE-KMS na chave 'objects'"
+  if aws_run "$WORK/put.json" s3api put-object --bucket "$APP" --key "$key" --body "$WORK/payload.txt" --output json; then
+    ok "put-object sem header SSE (criptografia padrão do bucket)"
     vid="$(jq -r '.VersionId // empty' "$WORK/put.json")"
     [[ -z "$vid" ]] || VERSIONS+=("$vid")
     if aws_run "$WORK/head.json" s3api head-object --bucket "$APP" --key "$key" --output json; then
-      jq -e --arg k "$OBJ_KEY_ARN" '.ServerSideEncryption == "aws:kms" and .SSEKMSKeyId == $k and .BucketKeyEnabled == true' "$WORK/head.json" >/dev/null && ok "head-object: aws:kms, chave 'objects', Bucket Key" || fail "head-object: aws:kms, chave 'objects', Bucket Key"
+      jq -e '.ServerSideEncryption == "AES256"' "$WORK/head.json" >/dev/null && ok "head-object: AES256 (SSE-S3)" || fail "head-object: AES256 (SSE-S3)"
     else fail "head-object" "$(aws_err_text)"; fi
     if aws_run "$WORK/get.json" s3api get-object --bucket "$APP" --key "$key" "$WORK/download.txt" --output json; then
       cmp -s "$WORK/payload.txt" "$WORK/download.txt" && ok "download idêntico ao enviado" || fail "download idêntico ao enviado"
     else fail "get-object" "$(aws_err_text)"; fi
   elif aws_denied; then
-    fail "put-object em tmp/uploads/" "negado: o perfil precisa ser operator (s3:PutObject e kms:GenerateDataKey via S3) — $(aws_err_text)"
+    fail "put-object em tmp/uploads/" "negado: o perfil precisa ser operator (s3:PutObject) — $(aws_err_text)"
   else
     fail "put-object em tmp/uploads/" "$(aws_err_text)"
   fi
 
   # Negativas: devem ser recusadas pela bucket policy / IAM.
-  if aws_run "$WORK/neg1.json" s3api put-object --bucket "$APP" --key "tmp/uploads/validacao-sem-sse-$$.txt" --body "$WORK/payload.txt" --server-side-encryption AES256 --output json; then
-    fail "PutObject com SSE-S3 (sem KMS) deveria ser negado" "o objeto foi aceito; removendo"
+  if aws_run "$WORK/neg1.json" s3api put-object --bucket "$APP" --key "tmp/uploads/validacao-sem-sse-$$.txt" --body "$WORK/payload.txt" --server-side-encryption aws:kms --output json; then
+    fail "PutObject com SSE-KMS explícito deveria ser negado" "o objeto foi aceito; removendo"
     VERSIONS+=("$(jq -r '.VersionId // empty' "$WORK/neg1.json")")
     aws --no-cli-pager --region "$REGION" s3api delete-object --bucket "$APP" --key "tmp/uploads/validacao-sem-sse-$$.txt" >/dev/null 2>&1 || true
-  elif aws_denied; then ok "PutObject com SSE-S3 (sem KMS) negado pela bucket policy"
-  else fail "PutObject com SSE-S3 negado" "erro inesperado: $(aws_err_text)"; fi
+  elif aws_denied; then ok "PutObject com SSE-KMS explícito negado pela bucket policy"
+  else fail "PutObject com SSE-KMS explícito negado" "erro inesperado: $(aws_err_text)"; fi
 
-  if aws_run "$WORK/neg2.json" s3api put-object --bucket "$APP" --key "validacao-fora-do-prefixo-$$.txt" --body "$WORK/payload.txt" --server-side-encryption aws:kms --ssekms-key-id "$OBJ_KEY_ARN" --output json; then
+  if aws_run "$WORK/neg2.json" s3api put-object --bucket "$APP" --key "validacao-fora-do-prefixo-$$.txt" --body "$WORK/payload.txt" --output json; then
     fail "PutObject fora dos prefixos aprovados deveria ser negado" "o objeto foi aceito; removendo"
     aws --no-cli-pager --region "$REGION" s3api delete-object --bucket "$APP" --key "validacao-fora-do-prefixo-$$.txt" --version-id "$(jq -r '.VersionId // "null"' "$WORK/neg2.json")" >/dev/null 2>&1 || true
   elif aws_denied; then ok "PutObject fora dos prefixos aprovados negado (IAM de privilégio mínimo)"

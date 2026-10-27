@@ -39,25 +39,25 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
-  bucket = aws_s3_bucket.this["app"].id
-  rule {
-    bucket_key_enabled = true
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.kms_key_arn
-    }
-  }
-}
-
-# Destino de server access logging usa SSE-S3, separado dos objetos pessoais.
-resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
-  bucket = aws_s3_bucket.this["access_logs"].id
+# SSE-S3 (chave gerenciada pelo S3) nos dois buckets: sem custo por request e sem dependência de chave própria.
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  for_each = local.bucket_names
+  bucket   = aws_s3_bucket.this[each.key].id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
   }
+}
+
+moved {
+  from = aws_s3_bucket_server_side_encryption_configuration.app
+  to   = aws_s3_bucket_server_side_encryption_configuration.this["app"]
+}
+
+moved {
+  from = aws_s3_bucket_server_side_encryption_configuration.access_logs
+  to   = aws_s3_bucket_server_side_encryption_configuration.this["access_logs"]
 }
 
 resource "aws_s3_bucket_policy" "this" {
@@ -97,25 +97,21 @@ resource "aws_s3_bucket_policy" "this" {
           # Apenas o bucket de logs aceita principal de serviço, por Allow exato abaixo.
           each.key == "access_logs" ? { Bool = { "aws:PrincipalIsAWSService" = "false" } } : {}
         )
+      },
+      {
+        Sid       = "DenyExplicitNonSSES3"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.this[each.key].arn}/*"
+        # A criptografia padrão aplica AES256; o deny só barra quem pede explicitamente outro modo (aws:kms, dsse).
+        # A entrega de access logs não envia o header e continua válida.
+        Condition = {
+          Null            = { "s3:x-amz-server-side-encryption" = "false" }
+          StringNotEquals = { "s3:x-amz-server-side-encryption" = "AES256" }
+        }
       }
       ], [for statement in [
-        {
-          Sid       = "DenyMissingOrWrongEncryption"
-          Effect    = "Deny"
-          Principal = "*"
-          Action    = "s3:PutObject"
-          Resource  = "${aws_s3_bucket.this[each.key].arn}/*"
-          Condition = { StringNotEquals = { "s3:x-amz-server-side-encryption" = "aws:kms" } }
-        },
-        {
-          Sid       = "DenyMissingOrWrongKey"
-          Effect    = "Deny"
-          Principal = "*"
-          Action    = "s3:PutObject"
-          Resource  = "${aws_s3_bucket.this[each.key].arn}/*"
-          Condition = { StringNotEquals = { "s3:x-amz-server-side-encryption-aws-kms-key-id" = var.kms_key_arn } }
-        }
-        ] : statement if each.key == "app"], [for statement in [
         {
           Sid       = "AllowS3AccessLogDelivery"
           Effect    = "Allow"
@@ -125,18 +121,6 @@ resource "aws_s3_bucket_policy" "this" {
           Condition = {
             StringEquals = { "aws:SourceAccount" = var.account_id }
             ArnEquals    = { "aws:SourceArn" = aws_s3_bucket.this["app"].arn }
-          }
-        },
-        {
-          Sid       = "DenyExplicitWrongLogEncryption"
-          Effect    = "Deny"
-          Principal = "*"
-          Action    = "s3:PutObject"
-          Resource  = "${aws_s3_bucket.this[each.key].arn}/*"
-          # Entrega S3 não envia header SSE; criptografia padrão permanece obrigatória.
-          Condition = {
-            Null            = { "s3:x-amz-server-side-encryption" = "false" }
-            StringNotEquals = { "s3:x-amz-server-side-encryption" = "AES256" }
           }
         }
     ] : statement if each.key == "access_logs"])
@@ -151,7 +135,7 @@ resource "aws_s3_bucket_logging" "app" {
   depends_on = [
     aws_s3_bucket_policy.this,
     aws_s3_bucket_ownership_controls.this,
-    aws_s3_bucket_server_side_encryption_configuration.access_logs
+    aws_s3_bucket_server_side_encryption_configuration.this
   ]
 }
 

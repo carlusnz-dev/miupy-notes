@@ -6,38 +6,21 @@ provider "aws" {
   }
 }
 
-resource "aws_kms_key" "state" {
-  description             = "Chave exclusiva do estado Terraform de ${var.name_prefix}"
-  enable_key_rotation     = true
-  deletion_window_in_days = var.kms_deletion_window_days
-  # A raiz delega via IAM; a identidade de bootstrap precisa de policy própria.
-  # Resource '*' numa key policy representa somente esta chave KMS.
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid       = "EnableAccountDelegation"
-      Effect    = "Allow"
-      Principal = { AWS = "arn:aws:iam::${var.aws_account_id}:root" }
-      Action = [
-        "kms:DescribeKey", "kms:GetKeyPolicy", "kms:PutKeyPolicy",
-        "kms:GetKeyRotationStatus", "kms:EnableKeyRotation", "kms:DisableKeyRotation",
-        "kms:EnableKey", "kms:DisableKey", "kms:UpdateKeyDescription",
-        "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion",
-        "kms:ListResourceTags", "kms:TagResource", "kms:UntagResource",
-        "kms:CreateAlias",
-        "kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:ReEncryptFrom", "kms:ReEncryptTo"
-      ]
-      Resource = "*"
-    }]
-  })
+# A chave KMS do estado sai do código mas continua na conta: destroy = false evita agendar a exclusão enquanto
+# versões antigas do estado ainda estão cifradas com ela. A exclusão é manual e posterior
+# (docs/decisoes/2026-10-27_kms-gerenciado-aws.md). Remova estes blocos depois do apply.
+removed {
+  from = aws_kms_key.state
   lifecycle {
-    prevent_destroy = true
+    destroy = false
   }
 }
 
-resource "aws_kms_alias" "state" {
-  name          = "alias/${var.name_prefix}-terraform-state"
-  target_key_id = aws_kms_key.state.key_id
+removed {
+  from = aws_kms_alias.state
+  lifecycle {
+    destroy = false
+  }
 }
 
 resource "aws_s3_bucket" "state" {
@@ -70,13 +53,12 @@ resource "aws_s3_bucket_versioning" "state" {
   }
 }
 
+# SSE-S3: sem chave própria nem custo por request. O backend S3 com encrypt = true envia AES256.
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
   rule {
-    bucket_key_enabled = true
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.state.arn
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -121,20 +103,16 @@ resource "aws_s3_bucket_policy" "state" {
         Condition = { NumericLessThan = { "s3:TlsVersion" = "1.2" } }
       },
       {
-        Sid       = "DenyUnexpectedEncryption"
+        Sid       = "DenyExplicitNonSSES3"
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.state.arn}/*"
-        Condition = { StringNotEquals = { "s3:x-amz-server-side-encryption" = "aws:kms" } }
-      },
-      {
-        Sid       = "DenyUnexpectedKey"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.state.arn}/*"
-        Condition = { StringNotEquals = { "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.state.arn } }
+        # A criptografia padrão aplica AES256; barra só quem pede explicitamente outro modo (ex.: aws:kms).
+        Condition = {
+          Null            = { "s3:x-amz-server-side-encryption" = "false" }
+          StringNotEquals = { "s3:x-amz-server-side-encryption" = "AES256" }
+        }
       }
     ]
   })

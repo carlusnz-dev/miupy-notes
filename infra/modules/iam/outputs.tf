@@ -1,5 +1,5 @@
 output "role_arns" {
-  description = "ARNs determinísticos, inclusive API/OIDC ainda desligados; use em condições aws:PrincipalArn de S3/KMS para evitar ciclos."
+  description = "ARNs determinísticos, inclusive API/OIDC ainda desligados; use em condições aws:PrincipalArn de S3 para evitar ciclos."
   value       = local.role_arns
 }
 output "human_user_names" {

@@ -3,6 +3,5 @@ bucket               = "SUBSTITUA-PELO-BUCKET-CRIADO"
 key                  = "bootstrap/terraform.tfstate"
 region               = "us-east-1" # PROPOSTA, ainda não aprovada.
 encrypt              = true
-kms_key_id           = "SUBSTITUA-PELO-ARN-DA-CHAVE-CRIADA"
 use_lockfile         = true
 allowed_account_ids  = ["SUBSTITUA-PELA-CONTA-APROVADA"]

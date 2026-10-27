@@ -1,6 +1,5 @@
 locals {
   environment_bucket_arns = concat([var.app_bucket_arn], sort(tolist(var.additional_bucket_arns)))
-  environment_key_arns    = concat([var.app_kms_key_arn], sort(tolist(var.additional_kms_key_arns)))
   provisioner_statements = concat([
     {
       Sid       = "CreateRuntimeWithFixedBoundary", Effect = "Allow", Action = ["iam:CreateRole", "iam:PutRolePermissionsBoundary"],
@@ -22,18 +21,15 @@ locals {
       Resource = concat(values(local.role_arns), [local.boundary_arn], [for key in keys(local.human_roles) : "${local.iam_prefix}:user${local.path}${var.name_prefix}-${key}"], [for key in keys(local.human_roles) : "${local.iam_prefix}:group${local.path}${var.name_prefix}-${key}"])
     },
     {
-      Sid      = "EnvironmentBuckets", Effect = "Allow",
-      Action   = ["s3:CreateBucket", "s3:DeleteBucket", "s3:GetBucketLocation", "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:GetBucketVersioning", "s3:PutBucketVersioning", "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration", "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock", "s3:GetBucketOwnershipControls", "s3:PutBucketOwnershipControls", "s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration", "s3:GetBucketLogging", "s3:PutBucketLogging", "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:GetMetricsConfiguration", "s3:PutMetricsConfiguration", "s3:ListBucket"],
+      Sid = "EnvironmentBuckets", Effect = "Allow",
+      Action = ["s3:CreateBucket", "s3:DeleteBucket", "s3:GetBucketLocation", "s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:GetBucketVersioning", "s3:PutBucketVersioning", "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration", "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock", "s3:GetBucketOwnershipControls", "s3:PutBucketOwnershipControls", "s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration", "s3:GetBucketLogging", "s3:PutBucketLogging", "s3:GetBucketTagging", "s3:PutBucketTagging", "s3:GetMetricsConfiguration", "s3:PutMetricsConfiguration", "s3:ListBucket",
+        # Leituras que o provider faz a cada refresh de aws_s3_bucket (sem elas o plan falha com 403).
+      "s3:GetAccelerateConfiguration", "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketWebsite", "s3:GetBucketRequestPayment", "s3:GetBucketObjectLockConfiguration", "s3:GetReplicationConfiguration"],
       Resource = local.environment_bucket_arns
     },
     {
-      Sid      = "EnvironmentKeys", Effect = "Allow",
-      Action   = ["kms:DescribeKey", "kms:GetKeyPolicy", "kms:PutKeyPolicy", "kms:GetKeyRotationStatus", "kms:EnableKeyRotation", "kms:DisableKeyRotation", "kms:ListResourceTags", "kms:TagResource", "kms:UntagResource", "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion", "kms:EnableKey", "kms:DisableKey"],
-      Resource = local.environment_key_arns
-    },
-    {
       Sid      = "EnvironmentLogs", Effect = "Allow",
-      Action   = ["logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy", "logs:AssociateKmsKey", "logs:DisassociateKmsKey", "logs:PutMetricFilter", "logs:DeleteMetricFilter", "logs:DescribeMetricFilters", "logs:TagResource", "logs:UntagResource", "logs:ListTagsForResource"],
+      Action   = ["logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy", "logs:DisassociateKmsKey", "logs:PutMetricFilter", "logs:DeleteMetricFilter", "logs:DescribeMetricFilters", "logs:TagResource", "logs:UntagResource", "logs:ListTagsForResource"],
       Resource = concat(local.log_group_arns, [for arn in local.log_group_arns : "${arn}:*"])
     },
     {
@@ -67,6 +63,12 @@ locals {
       Resource = [local.lambda_arn, "${local.lambda_arn}:*"]
     },
     {
+      # HTTP API v2 não tem ARN por nome; o escopo é a região, apenas /apis e tags. A conta só hospeda esta API.
+      Sid      = "EnvironmentHttpApi", Effect = "Allow",
+      Action   = ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"],
+      Resource = ["arn:aws:apigateway:${var.aws_region}::/apis", "arn:aws:apigateway:${var.aws_region}::/apis/*", "arn:aws:apigateway:${var.aws_region}::/tags/*"]
+    },
+    {
       Sid      = "EnvironmentTables", Effect = "Allow",
       Action   = ["dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:UpdateTable", "dynamodb:DescribeTable", "dynamodb:DescribeContinuousBackups", "dynamodb:UpdateContinuousBackups", "dynamodb:DescribeTimeToLive", "dynamodb:UpdateTimeToLive", "dynamodb:ListTagsOfResource", "dynamodb:TagResource", "dynamodb:UntagResource"],
       Resource = [local.table_arn]
@@ -83,12 +85,7 @@ locals {
         Condition = { StringEquals = { "s3:prefix" = [var.backend_state_key, "${var.backend_state_key}.tflock"] } }
       },
       { Sid = "BackendState", Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject"], Resource = ["${var.backend_bucket_arn}/${var.backend_state_key}"] },
-      { Sid = "BackendLock", Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["${var.backend_bucket_arn}/${var.backend_state_key}.tflock"] },
-      {
-        Sid       = "BackendEncryptionViaS3", Effect = "Allow", Action = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], Resource = [var.backend_kms_key_arn],
-        Condition = { StringLike = { "kms:ViaService" = "s3.*.amazonaws.com" }, StringEquals = { "kms:EncryptionContext:aws:s3:arn" = var.backend_bucket_arn } }
-      },
-      { Sid = "BackendKeyMetadata", Effect = "Allow", Action = ["kms:DescribeKey"], Resource = [var.backend_kms_key_arn] }
+      { Sid = "BackendLock", Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["${var.backend_bucket_arn}/${var.backend_state_key}.tflock"] }
   ])))
 }
 resource "aws_iam_role_policy" "provisioner" {

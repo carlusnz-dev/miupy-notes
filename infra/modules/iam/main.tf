@@ -14,12 +14,6 @@ locals {
       Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
       Resource = [var.api_table_arn]
     }],
-    var.api_dynamodb_kms_key_arn == null ? [] : [{
-      Sid       = "ApplicationTableKey", Effect = "Allow",
-      Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncryptFrom", "kms:ReEncryptTo", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:DescribeKey", "kms:CreateGrant"],
-      Resource  = [var.api_dynamodb_kms_key_arn],
-      Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${var.aws_region}.amazonaws.com" } }
-    }],
     var.api_allowed_subs_secret_arn == null ? [] : [{
       Sid      = "ReadAllowedSubs", Effect = "Allow",
       Action   = ["secretsmanager:GetSecretValue"],
@@ -35,11 +29,6 @@ locals {
         Sid      = "ApplicationObjects", Effect = "Allow",
         Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
         Resource = [for prefix in sort(tolist(var.api_s3_prefixes)) : "${var.app_bucket_arn}/${prefix}*"]
-      },
-      {
-        Sid       = "ApplicationObjectEncryption", Effect = "Allow",
-        Action    = ["kms:Decrypt", "kms:GenerateDataKey"], Resource = [var.app_kms_key_arn],
-        Condition = { StringEquals = { "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com", "kms:EncryptionContext:aws:s3:arn" = var.app_bucket_arn } }
       }
     ]))
   )

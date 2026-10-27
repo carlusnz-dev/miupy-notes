@@ -70,7 +70,8 @@ for entry in "lambda:$G_LAMBDA" "api:$G_API" "audit:$G_AUDIT"; do
       if [[ -n "$EXPECT_RETENTION" && "$name" != audit ]]; then
         [[ "$days" == "$EXPECT_RETENTION" ]] && ok "$name: retenção = $EXPECT_RETENTION dias" || fail "$name: retenção = $EXPECT_RETENTION dias" "atual: $days"
       fi
-      jq -e --arg g "$group" '.logGroups[] | select(.logGroupName == $g) | .kmsKeyId != null' "$WORK/lg.json" >/dev/null && ok "$name: grupo cifrado com KMS" || fail "$name: grupo cifrado com KMS"
+      # Sem kmsKeyId o CloudWatch Logs cifra em repouso com chave própria do serviço.
+      jq -e --arg g "$group" '.logGroups[] | select(.logGroupName == $g) | .kmsKeyId == null' "$WORK/lg.json" >/dev/null && ok "$name: criptografia padrão do serviço (sem chave KMS própria)" || fail "$name: sem chave KMS própria" "grupo ainda associado a uma chave: migração não aplicada?"
     else
       fail "$name: grupo $group existe"
     fi
@@ -121,11 +122,11 @@ section "Busca nos logs (aguardando ingestão por até ${WAIT}s)"
 deadline=$((SECONDS + WAIT))
 while :; do
   if ! fetch_events "$G_API" "$WORK/api.json"; then
-    if aws_denied; then skip "leitura do access log do API Gateway" "perfil sem logs:FilterLogEvents/kms (log group cifrado)"; else fail "leitura do access log" "$(aws_err_text)"; fi
+    if aws_denied; then skip "leitura do access log do API Gateway" "perfil sem logs:FilterLogEvents"; else fail "leitura do access log" "$(aws_err_text)"; fi
     echo '{"events":[]}' >"$WORK/api.json"
   fi
   if ! fetch_events "$G_LAMBDA" "$WORK/lambda.json"; then
-    if aws_denied; then skip "leitura dos logs da Lambda" "perfil sem logs:FilterLogEvents/kms (log group cifrado)"; else fail "leitura dos logs da Lambda" "$(aws_err_text)"; fi
+    if aws_denied; then skip "leitura dos logs da Lambda" "perfil sem logs:FilterLogEvents"; else fail "leitura dos logs da Lambda" "$(aws_err_text)"; fi
     echo '{"events":[]}' >"$WORK/lambda.json"
   fi
   index_events

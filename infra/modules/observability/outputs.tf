@@ -1,5 +1,5 @@
 output "alert_topic_arn" {
-  description = "Tópico SNS cifrado da aplicação."
+  description = "Tópico SNS de alertas da aplicação (TLS obrigatório na publicação)."
   value       = aws_sns_topic.alerts.arn
 }
 
@@ -19,11 +19,10 @@ output "log_group_arns" {
 }
 
 output "alarm_arns" {
-  description = "ARNs dos alarmes operacionais, financeiros e composto."
+  description = "ARNs dos alarmes operacionais e financeiros."
   value = merge(
     { for key, alarm in aws_cloudwatch_metric_alarm.application : key => alarm.arn },
-    { for key, alarm in aws_cloudwatch_metric_alarm.billing : "billing-${key}" => alarm.arn },
-    { degraded = aws_cloudwatch_composite_alarm.degraded.arn }
+    { for key, alarm in aws_cloudwatch_metric_alarm.billing : "billing-${key}" => alarm.arn }
   )
 }
 

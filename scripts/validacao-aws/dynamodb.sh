@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DynamoDB dev: configuração da tabela (SSE-KMS, PITR, proteção) e conferência de um item criado via API.
+# DynamoDB dev: configuração da tabela (criptografia em repouso, PITR, proteção) e conferência de um item criado via API.
 # Somente leitura na AWS. Nunca imprime título, corpo, sub ou outros dados pessoais: só nomes de atributos e metadados.
 # `A && ok || fail` é intencional: ok() nunca retorna erro.
 # shellcheck disable=SC2015
@@ -13,10 +13,10 @@ usage() {
   cat <<'EOF'
 Uso: dynamodb.sh [--skip-api]
 
-  --skip-api   só confere a configuração (describe-table / describe-continuous-backups / chave KMS)
+  --skip-api   só confere a configuração (describe-table / describe-continuous-backups)
 
 Perfil AWS: AWS_PROFILE (ex.: role operator ou provisioner). A leitura do item (get-item) exige
-dynamodb:GetItem e kms:Decrypt na chave de dados, hoje concedidos só à role da API: sem isso o passo é
+dynamodb:GetItem, hoje concedido só à role da API: sem isso o passo é
 PULADO. Para usar outro perfil só nessa leitura, defina MIUPY_AWS_PROFILE_DADOS.
 
 Variáveis: MIUPY_TF_OUTPUTS_FILE, MIUPY_API_URL, MIUPY_ID_TOKEN[_FILE], AWS_REGION (padrão: região do endpoint).
@@ -33,7 +33,6 @@ done
 
 need jq aws
 TABLE="${MIUPY_DYNAMODB_TABLE:-$(tf_get '.data_table_name.value')}"
-KMS_ARN="$(tf_get '.kms_key_arns.value.data')"
 BUCKET="$(tf_get '.app_bucket_name.value')"
 [[ -n "$TABLE" ]] || die "tabela desconhecida: forneça o output data_table_name (MIUPY_TF_OUTPUTS_FILE) ou MIUPY_DYNAMODB_TABLE."
 resolve_api_url
@@ -48,9 +47,8 @@ if aws_run "$WORK/table.json" dynamodb describe-table --table-name "$TABLE" --ou
   jq -e '[.Table.KeySchema[] | "\(.AttributeName):\(.KeyType)"] == ["pk:HASH", "sk:RANGE"]' "$t" >/dev/null && ok "chaves pk (HASH) + sk (RANGE)" || fail "chaves pk/sk"
   jq -e '(.Table.BillingModeSummary.BillingMode // "") == "PAY_PER_REQUEST"' "$t" >/dev/null && ok "cobrança sob demanda (PAY_PER_REQUEST)" || fail "cobrança sob demanda"
   jq -e '.Table.DeletionProtectionEnabled == true' "$t" >/dev/null && ok "proteção contra exclusão ligada" || fail "proteção contra exclusão ligada"
-  jq -e '.Table.SSEDescription.Status == "ENABLED" and .Table.SSEDescription.SSEType == "KMS"' "$t" >/dev/null && ok "SSE-KMS ativo (chave gerenciada pelo cliente)" || fail "SSE-KMS ativo" "SSEDescription ausente: a tabela usa a chave AWS-owned padrão?"
-  actual_key="$(jq -r '.Table.SSEDescription.KMSMasterKeyArn // empty' "$t")"
-  if [[ -n "$KMS_ARN" && "$actual_key" == "$KMS_ARN" ]]; then ok "chave KMS da tabela é a chave 'data' do Terraform"; else fail "chave KMS da tabela é a chave 'data' do Terraform" "diferente ou ausente"; fi
+  # Chave AWS owned: a tabela é sempre cifrada, mas sem SSEDescription (só aparece com aws/dynamodb ou CMK).
+  jq -e '(.Table.SSEDescription // null) == null' "$t" >/dev/null && ok "criptografia em repouso com chave AWS owned (sem chave KMS própria)" || fail "tabela sem SSEDescription" "$(jq -c '.Table.SSEDescription' "$t"): a migração da chave ainda não foi aplicada?"
   jq -e '(.Table.GlobalTableVersion // null) == null and ((.Table.StreamSpecification // null) == null)' "$t" >/dev/null && ok "sem streams nem réplicas globais" || warn "tabela tem stream/réplica global" "não previsto no Terraform"
 elif aws_denied; then
   skip "describe-table" "perfil sem dynamodb:DescribeTable ($(aws_err_text))"
@@ -65,18 +63,6 @@ if aws_run "$WORK/pitr.json" dynamodb describe-continuous-backups --table-name "
 elif aws_denied; then skip "describe-continuous-backups" "perfil sem permissão"
 else fail "describe-continuous-backups" "$(aws_err_text)"; fi
 
-section "Chave KMS dos dados"
-if [[ -n "$KMS_ARN" ]]; then
-  if aws_run "$WORK/key.json" kms describe-key --key-id "$KMS_ARN" --output json; then
-    jq -e '.KeyMetadata.KeyState == "Enabled" and .KeyMetadata.KeyManager == "CUSTOMER"' "$WORK/key.json" >/dev/null && ok "chave Enabled e gerenciada pelo cliente" || fail "chave Enabled e gerenciada pelo cliente"
-    if aws_run "$WORK/rot.json" kms get-key-rotation-status --key-id "$KMS_ARN" --output json; then
-      jq -e '.KeyRotationEnabled == true' "$WORK/rot.json" >/dev/null && ok "rotação automática da chave ligada" || fail "rotação automática da chave ligada"
-    elif aws_denied; then skip "rotação da chave" "perfil sem kms:GetKeyRotationStatus"; else fail "rotação da chave" "$(aws_err_text)"; fi
-  elif aws_denied; then skip "chave KMS" "perfil sem kms:DescribeKey (esperado para operator)"
-  else fail "chave KMS" "$(aws_err_text)"; fi
-else
-  skip "chave KMS" "output kms_key_arns.data ausente"
-fi
 
 if ((SKIP_API)); then summary; exit $?; fi
 
@@ -112,7 +98,7 @@ else
       fail "item existe na tabela" "get-item não devolveu Item para a chave esperada"
     fi
   elif aws_denied; then
-    skip "get-item do item criado" "perfil sem dynamodb:GetItem/kms:Decrypt (privilégio mínimo: só a role da API lê itens). Use MIUPY_AWS_PROFILE_DADOS com uma sessão autorizada, se quiser este passo."
+    skip "get-item do item criado" "perfil sem dynamodb:GetItem (privilégio mínimo: só a role da API lê itens). Use MIUPY_AWS_PROFILE_DADOS com uma sessão autorizada, se quiser este passo."
   else
     fail "get-item do item criado" "$(aws_err_text)"
   fi

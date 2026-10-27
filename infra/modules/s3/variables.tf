@@ -39,15 +39,6 @@ variable "provisioner_arn" {
   }
 }
 
-variable "kms_key_arn" {
-  description = "ARN da chave KMS dedicada ao app, na mesma conta e região."
-  type        = string
-  validation {
-    condition     = can(regex("^arn:aws:kms:${var.aws_region}:${var.account_id}:key/[a-zA-Z0-9-]+$", var.kms_key_arn))
-    error_message = "Informe ARN de chave KMS desta conta e região (não alias)."
-  }
-}
-
 variable "allowed_principal_arns" {
   description = "Usuários/roles autorizados no perímetro; IAM ainda define operações permitidas."
   type        = list(string)

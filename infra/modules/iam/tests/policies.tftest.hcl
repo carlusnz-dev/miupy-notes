@@ -9,12 +9,11 @@ mock_provider "aws" {
 }
 
 variables {
-  name_prefix     = "miupy-test"
-  account_id      = "000000000000"
-  aws_region      = "us-east-1"
-  tags            = { Environment = "test" }
-  app_bucket_arn  = "arn:aws:s3:::miupy-test-objects"
-  app_kms_key_arn = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000001"
+  name_prefix    = "miupy-test"
+  account_id     = "000000000000"
+  aws_region     = "us-east-1"
+  tags           = { Environment = "test" }
+  app_bucket_arn = "arn:aws:s3:::miupy-test-objects"
 }
 
 run "closed_defaults" {
@@ -40,8 +39,19 @@ run "closed_defaults" {
     error_message = "PassRole deve ser exclusivo da API para Lambda."
   }
   assert {
-    condition     = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement : alltrue([for a in s.Action : !startswith(a, "iam:") && !startswith(a, "budgets:") && !startswith(a, "ce:") && !contains(["kms:PutKeyPolicy", "kms:CreateGrant", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration"], a)])])
-    error_message = "O operador não pode administrar IAM, billing, KMS ou implantar código."
+    condition     = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement : alltrue([for a in s.Action : !startswith(a, "iam:") && !startswith(a, "budgets:") && !startswith(a, "ce:") && !contains(["lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration"], a)])])
+    error_message = "O operador não pode administrar IAM, billing ou implantar código."
+  }
+}
+run "provisioner_scopes" {
+  command = plan
+  assert {
+    condition     = alltrue([for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : alltrue([for a in s.Action : !startswith(a, "kms:")])])
+    error_message = "O provisionador não administra mais chaves KMS próprias."
+  }
+  assert {
+    condition     = [for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : s.Resource if s.Sid == "EnvironmentHttpApi"][0] == ["arn:aws:apigateway:us-east-1::/apis", "arn:aws:apigateway:us-east-1::/apis/*", "arn:aws:apigateway:us-east-1::/tags/*"]
+    error_message = "API Gateway v2 deve ficar restrito a /apis e tags da região."
   }
 }
 run "runtime_scoped" {
@@ -50,7 +60,6 @@ run "runtime_scoped" {
     enable_api_role             = true
     api_table_arn               = "arn:aws:dynamodb:us-east-1:000000000000:table/miupy-test-notes"
     api_log_group_arn           = "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/miupy-test-api"
-    api_dynamodb_kms_key_arn    = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000003"
     api_allowed_subs_secret_arn = "arn:aws:secretsmanager:us-east-1:000000000000:secret:miupy-test/allowed-subs-abcdef"
     api_s3_prefixes             = ["attachments/"]
   }
@@ -71,8 +80,8 @@ run "runtime_scoped" {
     error_message = "A role deve ler somente o segredo informado."
   }
   assert {
-    condition     = [for s in jsondecode(aws_iam_role_policy.api[0].policy).Statement : s.Condition.StringEquals["kms:ViaService"] if s.Sid == "ApplicationTableKey"][0] == "dynamodb.us-east-1.amazonaws.com"
-    error_message = "O runtime só pode usar a chave por DynamoDB."
+    condition     = alltrue([for s in jsondecode(aws_iam_role_policy.api[0].policy).Statement : alltrue([for a in s.Action : !startswith(a, "kms:")])])
+    error_message = "Com criptografia gerenciada pela AWS o runtime não precisa de permissão KMS."
   }
 }
 run "backend_separate" {
@@ -82,9 +91,8 @@ run "backend_separate" {
     error_message = "A policy com backend também deve caber na quota da role."
   }
   variables {
-    backend_bucket_arn  = "arn:aws:s3:::miupy-test-state"
-    backend_state_key   = "dev/terraform.tfstate"
-    backend_kms_key_arn = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000002"
+    backend_bucket_arn = "arn:aws:s3:::miupy-test-state"
+    backend_state_key  = "dev/terraform.tfstate"
   }
   assert {
     condition     = [for s in jsondecode(aws_iam_role_policy.provisioner.policy).Statement : contains(s.Action, "s3:DeleteObject") if s.Sid == "BackendState"] == [false]

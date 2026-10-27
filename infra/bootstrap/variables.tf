@@ -59,15 +59,6 @@ variable "abort_incomplete_multipart_days" {
   }
 }
 
-variable "kms_deletion_window_days" {
-  description = "Janela de segurança para eventual exclusão aprovada da chave."
-  type        = number
-  validation {
-    condition     = var.kms_deletion_window_days >= 7 && var.kms_deletion_window_days <= 30 && floor(var.kms_deletion_window_days) == var.kms_deletion_window_days
-    error_message = "A janela KMS deve ser um inteiro entre 7 e 30 dias."
-  }
-}
-
 variable "tags" {
   description = "Tags adicionais sem dados pessoais."
   type        = map(string)

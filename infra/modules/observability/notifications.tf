@@ -4,32 +4,19 @@ locals {
   budget_name          = "${var.name_prefix}-total-monthly"
 }
 
+# Sem kms_master_key_id: a chave gerenciada alias/aws/sns não permite que CloudWatch Alarms e Budgets publiquem
+# (a key policy dela não é editável), e uma CMK custaria US$ 1/mês. O conteúdo é nome e estado de alarme, sem dado
+# pessoal; o transporte é protegido pela policy abaixo.
 resource "aws_sns_topic" "alerts" {
-  name              = "${var.name_prefix}-alerts"
-  kms_master_key_id = var.kms_key_arn
-  tags              = var.tags
-
-  lifecycle {
-    precondition {
-      condition     = startswith(var.kms_key_arn, "arn:aws:kms:${var.aws_region}:${var.account_id}:key/")
-      error_message = "A chave de logs/SNS deve pertencer à conta e região da aplicação."
-    }
-  }
+  name = "${var.name_prefix}-alerts"
+  tags = var.tags
 }
 
 resource "aws_sns_topic" "billing" {
-  count             = local.cross_region_billing ? 1 : 0
-  provider          = aws.billing
-  name              = "${var.name_prefix}-billing-alerts"
-  kms_master_key_id = var.billing_kms_key_arn
-  tags              = var.tags
-
-  lifecycle {
-    precondition {
-      condition     = var.billing_kms_key_arn != null && try(startswith(var.billing_kms_key_arn, "arn:aws:kms:us-east-1:${var.account_id}:key/"), false)
-      error_message = "Billing fora da região da aplicação exige billing_kms_key_arn da conta em us-east-1."
-    }
-  }
+  count    = local.cross_region_billing ? 1 : 0
+  provider = aws.billing
+  name     = "${var.name_prefix}-billing-alerts"
+  tags     = var.tags
 }
 
 locals {
@@ -48,6 +35,14 @@ locals {
     for key, topic in local.topic_policies : key => jsonencode({
       Version = "2012-10-17"
       Statement = [
+        {
+          Sid       = "DenyPublishWithoutTLS"
+          Effect    = "Deny"
+          Principal = "*"
+          Action    = "sns:Publish"
+          Resource  = topic.arn
+          Condition = { Bool = { "aws:SecureTransport" = "false" } }
+        },
         {
           Sid       = "CloudWatchFromThisEnvironment"
           Effect    = "Allow"
