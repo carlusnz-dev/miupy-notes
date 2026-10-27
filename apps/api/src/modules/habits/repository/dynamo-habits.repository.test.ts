@@ -50,7 +50,7 @@ test("DynamoDB: concluir grava execução e XP numa única transação, sem escr
   const [put, update] = sent[0].input.TransactItems as Item[];
   assert.equal(put.Put.Item.sk, `HLOG#2026-10-26#${id}`);
   assert.equal(update.Update.Key.sk, `HXP#${id}#2026-10-26#completion`); assert.equal(update.Update.Key.pk, "USER#alice");
-  assert.match(update.Update.UpdateExpression, /points = if_not_exists\(points, :points\)/); assert.match(update.Update.UpdateExpression, /createdAt = if_not_exists\(createdAt, :createdAt\)/);
+  assert.match(update.Update.UpdateExpression, /#points = if_not_exists\(#points, :points\)/); assert.match(update.Update.UpdateExpression, /#createdAt = if_not_exists\(#createdAt, :createdAt\)/);
   assert.equal(update.Update.ExpressionAttributeValues[":none"], null);
 });
 

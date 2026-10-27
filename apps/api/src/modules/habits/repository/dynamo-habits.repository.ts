@@ -81,8 +81,8 @@ export class DynamoHabitsRepository extends HabitsRepository {
       await this.client.send(new TransactWriteCommand({ TransactItems: [
         { Put: { TableName: this.tableName, Item: { ...logKey(log.ownerId, log.habitId, log.date), ...log } } },
         { Update: { TableName: this.tableName, Key: xpKey(log.ownerId, event.habitId, event.date, event.type),
-          UpdateExpression: "SET habitId = :habitId, #date = :date, #type = :type, points = if_not_exists(points, :points), createdAt = if_not_exists(createdAt, :createdAt), revokedAt = :none",
-          ExpressionAttributeNames: { "#date": "date", "#type": "type" },
+          UpdateExpression: "SET #habitId = :habitId, #date = :date, #type = :type, #points = if_not_exists(#points, :points), #createdAt = if_not_exists(#createdAt, :createdAt), #revokedAt = :none",
+          ExpressionAttributeNames: { "#habitId": "habitId", "#date": "date", "#type": "type", "#points": "points", "#createdAt": "createdAt", "#revokedAt": "revokedAt" },
           ExpressionAttributeValues: { ":habitId": event.habitId, ":date": event.date, ":type": event.type, ":points": event.points, ":createdAt": event.createdAt, ":none": null } } },
       ] }));
     } catch (error) { throw cancelCodes(error)?.includes("TransactionConflict") ? busy() : error; }
@@ -96,7 +96,7 @@ export class DynamoHabitsRepository extends HabitsRepository {
     const xp = xpKey(ownerId, habitId, date, type), drop = { Delete: { TableName: this.tableName, Key: logKey(ownerId, habitId, date) } };
     try {
       await this.client.send(new TransactWriteCommand({ TransactItems: [drop,
-        { Update: { TableName: this.tableName, Key: xp, UpdateExpression: "SET revokedAt = :at", ConditionExpression: "attribute_exists(pk)", ExpressionAttributeValues: { ":at": revokedAt } } }] }));
+        { Update: { TableName: this.tableName, Key: xp, UpdateExpression: "SET #revokedAt = :at", ConditionExpression: "attribute_exists(pk)", ExpressionAttributeNames: { "#revokedAt": "revokedAt" }, ExpressionAttributeValues: { ":at": revokedAt } } }] }));
       return;
     } catch (error) {
       const codes = cancelCodes(error);
