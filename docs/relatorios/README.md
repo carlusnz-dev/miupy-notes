@@ -45,4 +45,11 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Design/UX — refresh da Agenda e controles próprios | [relatório](2026-10-22_design-ux-refresh.md) |
 | 2026-10-23 | Design — Agenda e tarefas | [relatório](2026-10-23_design-agenda.md) |
 | 2026-10-23 | Design — UI, notas e finanças | [relatório](2026-10-23_design-ui-codex.md) |
+| 2026-10-22 | 17 — Calendar API GCP e permissões gcloud | [relatório](2026-10-22_sessao-17.md) |
+| 2026-10-23 | 18 — revisões, design, Biblioteca e Calendar | [relatório](2026-10-23_sessao-18.md) |
+| 2026-10-23 | 19 — validação, integração do design, Google Tasks e editor | [relatório](2026-10-23_sessao-19.md) |
+| 2026-10-24 | 20 — higiene do repositório e validação de design ao vivo | [relatório](2026-10-24_sessao-20.md) |
+| 2026-10-24 | Design — revisão visual de develop (28 achados) | [relatório](2026-10-24_design-revisao.md) |
+| 2026-10-24 | Continuidade — polimento de design e UX | [prompt](2026-10-24_prompt-polimento-design.md) |
 | 2026-10-24 | Design — polimento visual (A-01 a A-28) | [relatório](2026-10-24_design-polimento.md) |
+| 2026-10-24 | 21 — polimento visual com workers e regra de worktrees do Orca | [relatório](2026-10-24_sessao-21.md) |

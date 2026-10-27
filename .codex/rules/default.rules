@@ -47,6 +47,45 @@ prefix_rule(
     justification = "Verificação local de módulos autorizada",
 )
 
+# Consultas de metadados GCP autorizadas; não libera gcloud inteiro.
+prefix_rule(
+    pattern = ["gcloud", ["version", "--version", "--help"]],
+    decision = "allow",
+    justification = "Consultar versão e ajuda do gcloud.",
+)
+prefix_rule(
+    pattern = ["gcloud", "config", "get-value", "project"],
+    decision = "allow",
+    justification = "Consultar somente o projeto GCP ativo.",
+)
+prefix_rule(
+    pattern = ["gcloud", ["projects", "services"], ["list", "describe"]],
+    decision = "allow",
+    justification = "Consultar metadados de projetos e serviços sem alterar recursos.",
+)
+prefix_rule(
+    pattern = ["gcloud", ["projects", "services"], ["create", "delete", "update", "enable", "disable", "undelete", "add-iam-policy-binding", "remove-iam-policy-binding", "set-iam-policy"]],
+    decision = "prompt",
+    justification = "Criação, exclusão, ativação e alterações GCP exigem aprovação específica.",
+)
+
+# GitHub: gerenciar PRs (inclusive merge) e acompanhar checks e execuções do Actions.
+prefix_rule(
+    pattern = ["gh", "pr"],
+    decision = "allow",
+    justification = "Criar, editar, revisar, conferir checks e mergear PRs autorizado pelo proprietário.",
+)
+prefix_rule(
+    pattern = ["gh", "run", ["list", "view", "watch"]],
+    decision = "allow",
+    justification = "Acompanhar execuções do GitHub Actions sem alterá-las.",
+)
+prefix_rule(
+    pattern = ["gh", "workflow", ["list", "view"]],
+    decision = "allow",
+    justification = "Consultar workflows do GitHub Actions sem alterá-los.",
+)
+
 # Operações remotas/deploy e destrutivas ficam bloqueadas.
 prefix_rule(
     pattern = ["aws"],
