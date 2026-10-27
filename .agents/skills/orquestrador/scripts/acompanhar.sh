@@ -20,4 +20,4 @@ with open(os.environ["SEEN"],"a") as f:
   for m in msgs:
     if m.get("type")=="heartbeat" or m.get("id") in seen: continue
     f.write(m["id"]+"\n")
-    print("MSG", m["id"], m.get("from") or m.get("sender"), m.get("type"), str(m.get("subject") or m.get("body") or "")[:200].replace("\n"," "))'
+    print("MSG", m["id"], m.get("from_handle") or m.get("from"), m.get("type"), str(m.get("subject") or m.get("body") or "")[:200].replace("\n"," "))'
