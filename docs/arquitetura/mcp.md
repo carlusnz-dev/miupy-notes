@@ -122,6 +122,12 @@ Pesquisa em 2026-10-26, sem implementar ponte:
 - Sem idempotência de `POST /v1/notes` na API: um retry do agente cria nota duplicada.
 - Sem rate limit próprio no processo stdio.
 
+## Aba "MCP" no app e testes contra a API remota (2026-10-27)
+
+- **Aba `/mcp`** (`apps/web/src/McpPage.tsx`, na Sidebar e no menu "mais" do celular): estado da conexão (consulta o `/health` público, sem token), lista estática das cinco ferramentas (espelha `apps/mcp/src/tools.ts`; atualizar junto) e comandos de registro para Claude Code e Codex com HTTPS. Nenhum token na tela nem no bundle. Em dev, o proxy do Vite passou a encaminhar `/health`. Em build Tauri/produção o `/health` é entre origens: precisa de CORS no API Gateway, ainda não verificado.
+- **HTTPS remoto** é aceito pelo cliente (`assertSafeBaseUrl`, teste em `test/base-url.test.ts`); HTTP só em loopback.
+- **Testes opt-in** `apps/mcp/test/remote.test.ts`: pulados sem `MIUPY_API_URL`; `/health` e 401 só precisam dela; o CRUD também exige `MIUPY_ID_TOKEN`. O CRUD cria uma nota e a apaga ao final via `DELETE /v1/notes/{id}` (o MCP não tem exclusão). Não executados contra a nuvem nesta sessão (variáveis ausentes).
+
 ## Pendências
 
 1. Decidir servidor de autorização e a troca de identidade MCP → API (decisão pendente; muda autenticação da API: exige aprovação).
