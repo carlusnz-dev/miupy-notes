@@ -16,6 +16,7 @@ const MAX_PAUSES = 50;
 const notFound = () => new AppError(404, "NOT_FOUND", "Hábito não encontrado.");
 const conflict = () => new AppError(409, "CONFLICT", "Este hábito foi alterado por outra operação. Feche e abra novamente para recarregar.");
 const inTrash = () => new AppError(409, "CONFLICT", "O hábito está na lixeira; restaure-o antes de alterar.");
+const limitReached = () => new AppError(409, "CONFLICT", `Limite de ${MAX_HABITS} hábitos atingido; exclua um hábito antes de restaurar este.`);
 const invalid = (message: string) => new AppError(400, "VALIDATION_ERROR", message);
 
 export class HabitsServiceImpl extends HabitsService {
@@ -25,8 +26,11 @@ export class HabitsServiceImpl extends HabitsService {
   /** Na lixeira vencida o hábito já não existe para a API, mesmo antes do expurgo físico. */
   private visible(habit: Habit) { return habit.deletedAt === null || (habit.purgeAfter !== null && habit.purgeAfter > this.now); }
 
+  /** O limite conta só os hábitos fora da lixeira: excluir libera uma vaga e restaurar a consome. */
+  private async activeCount(ownerId: string) { return (await this.repository.list(ownerId)).filter(h => h.deletedAt === null).length; }
+
   async create(ownerId: string, input: CreateHabitInput) {
-    if ((await this.repository.list(ownerId)).filter(h => this.visible(h)).length >= MAX_HABITS) throw invalid(`Limite de ${MAX_HABITS} hábitos atingido.`);
+    if (await this.activeCount(ownerId) >= MAX_HABITS) throw invalid(`Limite de ${MAX_HABITS} hábitos atingido.`);
     const now = this.now;
     return this.repository.create(new Habit(ownerId, { ...input, id: randomUUID(), pauses: [], deletedAt: null, purgeAfter: null, createdAt: now, updatedAt: now, version: 1 }));
   }
@@ -81,6 +85,7 @@ export class HabitsServiceImpl extends HabitsService {
   async restore(ownerId: string, id: string) {
     const current = await this.findById(ownerId, id);
     if (current.deletedAt === null) return current;
+    if (await this.activeCount(ownerId) >= MAX_HABITS) throw limitReached();
     return this.save(current, current.version, { deletedAt: null, purgeAfter: null });
   }
   async purgeExpired(ownerId: string) {
@@ -105,16 +110,12 @@ export class HabitsServiceImpl extends HabitsService {
     const type = "completion" as const;
     if (status === "completed") {
       const now = this.now;
-      const log: HabitLog = { ownerId, habitId, date, completedAt: now, title: habit.title, kind: habit.kind, priority: habit.priority };
       const existing = (await this.repository.listLogs(ownerId, date, date)).find(l => l.habitId === habitId);
-      const saved = existing ?? log;
-      if (!existing) await this.repository.putLog(log);
-      const event = await this.repository.grantXp(ownerId, { habitId, date, type, points: pointsFor(type, habit.priority), createdAt: now, revokedAt: null });
-      if (event.revokedAt !== null) await this.repository.setXpRevoked(ownerId, habitId, date, type, null);
-      return HabitDtoAdapter.occurrence(habit, date, saved);
+      const log: HabitLog = existing ?? { ownerId, habitId, date, completedAt: now, title: habit.title, kind: habit.kind, priority: habit.priority };
+      await this.repository.completeOccurrence(log, { habitId, date, type, points: pointsFor(type, habit.priority), createdAt: now, revokedAt: null });
+      return HabitDtoAdapter.occurrence(habit, date, log);
     }
-    await this.repository.deleteLog(ownerId, habitId, date);
-    await this.repository.setXpRevoked(ownerId, habitId, date, type, this.now);
+    await this.repository.reopenOccurrence(ownerId, habitId, date, type, this.now);
     return HabitDtoAdapter.occurrence(habit, date, undefined);
   }
 

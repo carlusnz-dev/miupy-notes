@@ -15,19 +15,18 @@ export class MemoryHabitsRepository extends HabitsRepository {
     this.habits.set(key, habit); return habit;
   }
   async deleteHabit(ownerId: string, id: string) { this.habits.delete(`${ownerId}:${id}`); }
-  async putLog(log: HabitLog) { this.logs.set(`${log.ownerId}:${log.date}:${log.habitId}`, log); }
-  async deleteLog(ownerId: string, habitId: string, date: string) { this.logs.delete(`${ownerId}:${date}:${habitId}`); }
   async listLogs(ownerId: string, from: string, to: string) {
     return [...this.logs.values()].filter(log => log.ownerId === ownerId && log.date >= from && log.date <= to)
       .sort((a, b) => a.date.localeCompare(b.date) || a.habitId.localeCompare(b.habitId));
   }
-  async grantXp(ownerId: string, event: XpEvent) {
-    const key = `${ownerId}:${xpEventKey(event.habitId, event.date, event.type)}`;
-    const existing = this.events.get(key);
-    if (existing) return existing;
-    this.events.set(key, { ...event, ownerId }); return event;
+  /** Os dois mapas mudam sem `await` no meio: atômico para quem chama, como a transação do DynamoDB. */
+  async completeOccurrence(log: HabitLog, event: XpEvent) {
+    this.logs.set(`${log.ownerId}:${log.date}:${log.habitId}`, log);
+    const key = `${log.ownerId}:${xpEventKey(event.habitId, event.date, event.type)}`;
+    this.events.set(key, { ...(this.events.get(key) ?? event), ownerId: log.ownerId, revokedAt: null });
   }
-  async setXpRevoked(ownerId: string, habitId: string, date: string, type: XpEvent["type"], revokedAt: string | null) {
+  async reopenOccurrence(ownerId: string, habitId: string, date: string, type: XpEvent["type"], revokedAt: string) {
+    this.logs.delete(`${ownerId}:${date}:${habitId}`);
     const key = `${ownerId}:${xpEventKey(habitId, date, type)}`;
     const existing = this.events.get(key);
     if (existing) this.events.set(key, { ...existing, revokedAt });

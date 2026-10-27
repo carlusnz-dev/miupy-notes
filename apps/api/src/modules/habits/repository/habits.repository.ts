@@ -12,14 +12,18 @@ export abstract class HabitsRepository extends BaseRepository<Habit> {
   /** Remoção física do cadastro, só para a rotina de expurgo. */
   abstract deleteHabit(ownerId: string, id: string): Promise<void>;
 
-  abstract putLog(log: HabitLog): Promise<void>;
-  abstract deleteLog(ownerId: string, habitId: string, date: string): Promise<void>;
   /** Execuções no intervalo inclusivo de datas, em ordem de data. */
   abstract listLogs(ownerId: string, from: string, to: string): Promise<HabitLog[]>;
 
-  /** Cria o evento se a chave ainda não existe; devolve o que está gravado (idempotente). */
-  abstract grantXp(ownerId: string, event: XpEvent): Promise<XpEvent>;
-  /** `revokedAt` não nulo compensa o evento; `null` o reativa. Sem efeito se o evento não existe. */
-  abstract setXpRevoked(ownerId: string, habitId: string, date: string, type: XpEvent["type"], revokedAt: string | null): Promise<void>;
+  /**
+   * Conclui a ocorrência numa única escrita atômica: grava a execução e cria o evento de XP ou o reativa
+   * (`revokedAt` nulo). Idempotente: o evento existente conserva `points` e `createdAt`.
+   */
+  abstract completeOccurrence(log: HabitLog, event: XpEvent): Promise<void>;
+  /**
+   * Desfaz a conclusão numa única escrita atômica: apaga a execução e compensa o evento de XP (`revokedAt`), se ele existe.
+   * Idempotente. `409` se outra escrita da mesma ocorrência está em andamento.
+   */
+  abstract reopenOccurrence(ownerId: string, habitId: string, date: string, type: XpEvent["type"], revokedAt: string): Promise<void>;
   abstract listXpEvents(ownerId: string): Promise<XpEvent[]>;
 }

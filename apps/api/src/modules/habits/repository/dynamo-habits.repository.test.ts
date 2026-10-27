@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { ServiceError } from "../../../core/domain/app-error.js";
 import { Habit } from "../domain/habit.js";
 import { createHabitInputSchema } from "../dto/input.js";
 import { DynamoHabitsRepository } from "./dynamo-habits.repository.js";
@@ -37,14 +38,52 @@ test("DynamoDB: listagens paginam por prefixo e intervalo do proprietário", asy
   await repo.list("bob"); assert.deepEqual(sent[2].input.ExpressionAttributeValues, { ":pk": "USER#bob", ":p": "HABIT#" });
 });
 
-test("DynamoDB: XP idempotente por chave determinística; compensação só atualiza o que existe", async () => {
-  const stored = { ...event, pk: "USER#alice", sk: `HXP#${id}#2026-10-26#completion`, revokedAt: now };
-  const { client, sent } = fake((command, calls) => { if (calls === 1) throw failed(); return command.constructor.name === "GetCommand" ? { Item: stored } : {}; });
+type Item = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const log = { ownerId: "alice", habitId: id, date: "2026-10-26", completedAt: now, title: "Ler", kind: "other" as const, priority: "medium" as const };
+const canceled = (...codes: string[]) => new TransactionCanceledException({ message: "test", $metadata: {}, CancellationReasons: codes.map(Code => ({ Code })) });
+
+test("DynamoDB: concluir grava execução e XP numa única transação, sem escritas soltas", async () => {
+  const { client, sent } = fake(() => ({}));
   const repo = new DynamoHabitsRepository(client, "t");
-  const granted = await repo.grantXp("alice", event);
-  assert.equal(sent[0].input.ConditionExpression, "attribute_not_exists(pk)"); assert.equal(granted.revokedAt, now);
-  assert.equal((sent[0].input.Item as { sk: string }).sk, `HXP#${id}#2026-10-26#completion`);
-  await repo.setXpRevoked("alice", id, "2026-10-26", "completion", null);
-  assert.equal(sent[2].input.ConditionExpression, "attribute_exists(pk)");
-  await new DynamoHabitsRepository(fake(() => { throw failed(); }).client, "t").setXpRevoked("alice", id, "2026-10-26", "completion", now);
+  await repo.completeOccurrence(log, event);
+  assert.deepEqual(sent.map(c => c.constructor.name), ["TransactWriteCommand"]);
+  const [put, update] = sent[0].input.TransactItems as Item[];
+  assert.equal(put.Put.Item.sk, `HLOG#2026-10-26#${id}`);
+  assert.equal(update.Update.Key.sk, `HXP#${id}#2026-10-26#completion`); assert.equal(update.Update.Key.pk, "USER#alice");
+  assert.match(update.Update.UpdateExpression, /points = if_not_exists\(points, :points\)/); assert.match(update.Update.UpdateExpression, /createdAt = if_not_exists\(createdAt, :createdAt\)/);
+  assert.equal(update.Update.ExpressionAttributeValues[":none"], null);
+});
+
+test("DynamoDB: desmarcar apaga a execução e compensa o XP na mesma transação, condicionado ao evento existir", async () => {
+  const { client, sent } = fake(() => ({}));
+  await new DynamoHabitsRepository(client, "t").reopenOccurrence("alice", id, "2026-10-26", "completion", now);
+  assert.equal(sent.length, 1);
+  const [drop, update] = sent[0].input.TransactItems as Item[];
+  assert.deepEqual(drop.Delete.Key, { pk: "USER#alice", sk: `HLOG#2026-10-26#${id}` });
+  assert.equal(update.Update.ConditionExpression, "attribute_exists(pk)"); assert.equal(update.Update.ExpressionAttributeValues[":at"], now);
+});
+
+test("DynamoDB: desmarcar sem evento apaga só a execução, com o evento ainda ausente; evento surgido no meio vira 409", async () => {
+  const { client, sent } = fake((_c, calls) => { if (calls === 1) throw canceled("None", "ConditionalCheckFailed"); return {}; });
+  await new DynamoHabitsRepository(client, "t").reopenOccurrence("alice", id, "2026-10-26", "completion", now);
+  assert.equal(sent.length, 2);
+  const [drop, check] = sent[1].input.TransactItems as Item[];
+  assert.ok(drop.Delete); assert.equal(check.ConditionCheck.ConditionExpression, "attribute_not_exists(pk)");
+  const raced = new DynamoHabitsRepository(fake(() => { throw canceled("None", "ConditionalCheckFailed"); }).client, "t");
+  await assert.rejects(raced.reopenOccurrence("alice", id, "2026-10-26", "completion", now), { status: 409, code: "CONFLICT" });
+});
+
+test("DynamoDB: transação concorrente na mesma ocorrência vira 409; outras falhas passam como estão", async () => {
+  const conflicted = new DynamoHabitsRepository(fake(() => { throw canceled("None", "TransactionConflict"); }).client, "t");
+  await assert.rejects(conflicted.completeOccurrence(log, event), { status: 409, code: "CONFLICT" });
+  await assert.rejects(conflicted.reopenOccurrence("alice", id, "2026-10-26", "completion", now), { status: 409 });
+  const outage = new Error("down");
+  await assert.rejects(new DynamoHabitsRepository(fake(() => { throw outage; }).client, "t").completeOccurrence(log, event), outage);
+});
+
+test("DynamoDB: item armazenado inválido é falha interna (ServiceError), sem o conteúdo na mensagem", async () => {
+  const repo = new DynamoHabitsRepository(fake(() => ({ Items: [{ ownerId: "alice", title: "segredo-123" }] })).client, "t");
+  for (const read of [() => repo.list("alice"), () => repo.listLogs("alice", "2026-10-01", "2026-10-31"), () => repo.listXpEvents("alice")]) {
+    await assert.rejects(read(), (error: unknown) => error instanceof ServiceError && !error.message.includes("segredo-123") && error.context.service === "DynamoDB (hábitos)");
+  }
 });

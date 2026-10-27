@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { AppError } from "../../../core/domain/app-error.js";
 import { createHabitInputSchema } from "../dto/input.js";
 import { MemoryHabitsRepository } from "../repository/memory-habits.repository.js";
-import { HabitsServiceImpl } from "./habits.service.impl.js";
+import { HabitsServiceImpl, MAX_HABITS } from "./habits.service.impl.js";
 
 function setup(start = "2026-10-26T12:00:00.000Z") {
   const clock = { now: new Date(start) };
@@ -115,4 +115,83 @@ test("pausa indefinida, com data e retomada; edição valida intervalo e versão
 test("exceções são AppError com códigos estáveis", async () => {
   const { service } = setup();
   await assert.rejects(service.findById("a", "00000000-0000-4000-8000-000000000000"), (error: unknown) => error instanceof AppError && error.code === "NOT_FOUND");
+});
+
+/** Segura a primeira escrita de conclusão até `release()`, para forçar o entrelaçamento com outra chamada. */
+function holdCompletion(repository: MemoryHabitsRepository) {
+  const original = repository.completeOccurrence.bind(repository);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => release = resolve), started = new Promise<void>(resolve => entered = resolve);
+  repository.completeOccurrence = async (...args) => { entered(); await gate; return original(...args); };
+  return { release, started };
+}
+async function state(service: HabitsServiceImpl, date: string) {
+  return { status: (await service.occurrences("a", { from: date, to: date }))[0].status, totalXp: (await service.xp("a")).totalXp };
+}
+
+test("concluir e desmarcar em paralelo nunca deixam ocorrência e XP em desacordo", async () => {
+  const { service, repository } = setup();
+  const habit = await service.create("a", input());
+  const { release, started } = holdCompletion(repository);
+  const completion = service.setOccurrence("a", habit.id, "2026-10-26", "completed");
+  await started;
+  await service.setOccurrence("a", habit.id, "2026-10-26", "pending");
+  release(); await completion;
+  const { status, totalXp } = await state(service, "2026-10-26");
+  assert.equal(totalXp, status === "completed" ? 10 : 0);
+  assert.equal((await service.history("a", range)).length, status === "completed" ? 1 : 0);
+});
+
+test("desmarcar durante uma conclusão em andamento também mantém o acordo", async () => {
+  const { service } = setup();
+  const habit = await service.create("a", input());
+  await Promise.all([1, 2, 3].flatMap(() => [service.setOccurrence("a", habit.id, "2026-10-26", "completed"), service.setOccurrence("a", habit.id, "2026-10-26", "pending")]));
+  const { status, totalXp } = await state(service, "2026-10-26");
+  assert.equal(totalXp, status === "completed" ? 10 : 0);
+});
+
+test("falha ao gravar o XP não deixa a ocorrência concluída sem pontos", async () => {
+  const { service, repository } = setup();
+  const habit = await service.create("a", input());
+  repository.completeOccurrence = async () => { throw new Error("dependência indisponível"); };
+  await assert.rejects(service.setOccurrence("a", habit.id, "2026-10-26", "completed"), /indisponível/);
+  assert.deepEqual(await state(service, "2026-10-26"), { status: "pending", totalXp: 0 });
+  assert.equal((await service.history("a", range)).length, 0);
+});
+
+test("falha ao desmarcar não apaga a execução nem compensa o XP pela metade", async () => {
+  const { service, repository } = setup();
+  const habit = await service.create("a", input());
+  await service.setOccurrence("a", habit.id, "2026-10-26", "completed");
+  repository.reopenOccurrence = async () => { throw new Error("dependência indisponível"); };
+  await assert.rejects(service.setOccurrence("a", habit.id, "2026-10-26", "pending"), /indisponível/);
+  assert.deepEqual(await state(service, "2026-10-26"), { status: "completed", totalXp: 10 });
+});
+
+test("concluir de novo conserva o horário original e o XP; desmarcar sem conclusão não cria evento", async () => {
+  const { service, repository, clock } = setup();
+  const habit = await service.create("a", input());
+  await service.setOccurrence("a", habit.id, "2026-10-26", "pending");
+  assert.equal((await repository.listXpEvents("a")).length, 0);
+  const first = await service.setOccurrence("a", habit.id, "2026-10-26", "completed");
+  clock.now = new Date("2026-10-26T18:00:00.000Z");
+  const again = await service.setOccurrence("a", habit.id, "2026-10-26", "completed");
+  assert.equal(again.completedAt, first.completedAt);
+  assert.equal((await service.history("a", range))[0].completedAt, first.completedAt);
+  assert.equal((await service.xp("a")).totalXp, 10);
+});
+
+test("limite de 300: só conta hábitos fora da lixeira; excluir libera vaga e restaurar acima do limite é recusado", async () => {
+  const { service } = setup();
+  const created = [];
+  for (let n = 0; n < MAX_HABITS; n++) created.push(await service.create("a", input({ title: `Hábito ${n}` })));
+  await assert.rejects(service.create("a", input()), { status: 400, message: /Limite de 300/ });
+  await service.create("outro", input());
+  await service.remove("a", created[0].id);
+  const replacement = await service.create("a", input({ title: "Substituto" }));
+  await assert.rejects(service.restore("a", created[0].id), { status: 409, code: "CONFLICT", message: /Limite de 300/ });
+  assert.equal((await service.list("a", true)).length, 1);
+  await service.remove("a", replacement.id);
+  assert.equal((await service.restore("a", created[0].id)).deletedAt, null);
+  assert.equal((await service.list("a", false)).length, MAX_HABITS);
 });
