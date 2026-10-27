@@ -14,10 +14,14 @@ noncurrent_retention_days = 90
 backup_transition_days = 90
 backup_retention_days = 365
 access_logs_retention_days = 90
-enable_api_role = false
+google_client_id = "SUBSTITUA.apps.googleusercontent.com"
+allowed_subs_secret_arn = "arn:aws:secretsmanager:us-east-1:000000000000:secret:SUBSTITUA-ARN-REAL"
+cors_allowed_origins = ["http://tauri.localhost"]
+lambda_memory_mb = 512
+lambda_reserved_concurrency = 5
 enable_github_oidc = false
 enable_s3_request_metrics = false
 enable_cloudtrail_alarms = false
 enable_cost_anomaly_detection = false
 # Futuro: configurar backend_bucket_arn, backend_state_key, backend_kms_key_arn juntos.
-# Futuro: api_table_arn (prefix-data), api_id e api_s3_prefixes somente com consumidor.
+# Futuro: api_s3_prefixes somente quando houver consumidor.

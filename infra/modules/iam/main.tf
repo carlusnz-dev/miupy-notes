@@ -14,6 +14,17 @@ locals {
       Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
       Resource = [var.api_table_arn]
     }],
+    var.api_dynamodb_kms_key_arn == null ? [] : [{
+      Sid       = "ApplicationTableKey", Effect = "Allow",
+      Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncryptFrom", "kms:ReEncryptTo", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:DescribeKey", "kms:CreateGrant"],
+      Resource  = [var.api_dynamodb_kms_key_arn],
+      Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${var.aws_region}.amazonaws.com" } }
+    }],
+    var.api_allowed_subs_secret_arn == null ? [] : [{
+      Sid      = "ReadAllowedSubs", Effect = "Allow",
+      Action   = ["secretsmanager:GetSecretValue"],
+      Resource = [var.api_allowed_subs_secret_arn]
+    }],
     var.api_log_group_arn == null ? [] : [{
       Sid      = "ApplicationLogStreams", Effect = "Allow",
       Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],

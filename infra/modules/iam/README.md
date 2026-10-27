@@ -9,7 +9,7 @@ Código preparado para RF-02/RF-03 e RNF-02/RNF-04. Nenhum recurso foi implantad
 | `<prefix>-admin` → grupo admin → role provisioner | Somente esse usuário, com MFA | Recursos nomeados do ambiente e ARNs explícitos; `PassRole` apenas da API para Lambda. Backend opcional e separado. |
 | `<prefix>-operator` → grupo operator → role operator | Somente esse usuário, com MFA | Logs/métricas, inspeção da Lambda/tabela, pausa/retomada por concorrência Lambda e objetos dos prefixos aprovados. KMS apenas uso via S3; sem administração KMS/IAM/billing ou alteração de código. |
 | `<prefix>-monitor` → grupo monitor → role monitor | Somente esse usuário, com MFA | Logs/métricas/alarmes e custos/orçamentos em leitura. Cost Explorer usa endpoint `us-east-1` e pode gerar cobrança por consulta. |
-| Role api, desligada por padrão | `lambda.amazonaws.com` | Quando habilitada: cinco ações de itens DynamoDB, streams do log group informado e, somente com prefixos aprovados, objetos/KMS via S3. Sem Scan, IAM, CreateLogGroup ou acesso ao backend. |
+| Role api, desligada por padrão no módulo | `lambda.amazonaws.com` | A raiz dev habilita cinco ações de itens DynamoDB, chave da tabela somente via DynamoDB, leitura do segredo exato da allowlist e streams do log group. S3 continua desabilitado por padrão. Sem Scan, IAM, CreateLogGroup ou acesso ao backend. |
 | Role github-deploy, desligada por padrão | Provider GitHub existente; audience e subject exatos | Somente esqueleto de confiança: nenhuma policy de deploy anexada, mesmo quando habilitada. |
 
 Os grupos concedem exclusivamente `sts:AssumeRole` da função atribuída e autogestão mínima de senha/MFA. Não concedem acesso direto à aplicação. Sessões humanas duram no máximo uma hora. Não se concede listagem global de usuários ou dispositivos MFA; algumas telas do console poderão exigir o acesso direto à página do próprio usuário.
@@ -33,6 +33,7 @@ Obrigatórias, sem defaults: `name_prefix` (3–32 caracteres), `account_id`, `a
 | `additional_kms_key_arns` | `[]` | Chaves auxiliares exatas de logs/alertas, excluindo chave do backend; administração pelo provisionador. |
 | `enable_api_role` | `false` | Exige `api_table_arn` e `api_log_group_arn`; recurso não é criado antes disso. |
 | `api_table_arn`, `api_log_group_arn` | `null` | Tabela do prefixo e log group `/aws/lambda/<prefix>-api`; ARN de logs **sem** `:*`. Query não inclui índices implicitamente. |
+| `api_dynamodb_kms_key_arn`, `api_allowed_subs_secret_arn` | `null` | Chave exclusiva da tabela via serviço DynamoDB e um segredo exato para `GetSecretValue`. |
 | `api_s3_prefixes` | `[]` | Habilitar apenas quando houver código de anexos/exportação autorizado; não inclui ListBucket. |
 | `backend_bucket_arn`, `backend_state_key`, `backend_kms_key_arn` | `null` | Configurar as três juntas; bucket/chave KMS distintos do app, permissões exclusivas do provisionador. |
 | `enable_github_oidc` | `false` | Não cria provider nem concede deploy. |

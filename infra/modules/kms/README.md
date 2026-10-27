@@ -11,6 +11,7 @@ Obrigatórios: `name_prefix`, `account_id`, `aws_region`, `tags` (`map(string)`)
 | `administrator_arns` | `list(string) = []` | Administração explícita; provisionador sempre incluído |
 | `key_user_arns` | `list(string) = []` | Uso criptográfico explícito; provisionador sempre incluído |
 | `s3_bucket_arns` | `list(string) = []` | ViaService S3 regional + contexto exato de bucket ou seus objetos |
+| `dynamodb_table_name` | `string = null` | Habilita `CreateGrant` apenas via DynamoDB regional; a instância deve ser exclusiva da tabela |
 | `cloudwatch_log_group_arns` | `list(string) = []` | Serviço Logs regional com contexto de log group exato (sem `:*`) |
 | `sns_topic_arns` | `list(string) = []` | ViaService SNS regional + contexto `aws:sns:topicArn` dos usuários IAM |
 | `cloudwatch_alarm_arns` | `list(string) = []` | Serviço CloudWatch, `SourceAccount` e `SourceArn` exatos dos alarmes publicadores |

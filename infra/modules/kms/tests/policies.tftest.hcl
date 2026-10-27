@@ -36,3 +36,11 @@ run "logs_and_sns_publishers" {
     error_message = "Allows KMS precisam enumerar acoes."
   }
 }
+run "dynamodb_grants" {
+  command = plan
+  variables { dynamodb_table_name = "miupy-test-data" }
+  assert {
+    condition     = [for s in jsondecode(aws_kms_key.this.policy).Statement : s.Condition.StringEquals["kms:ViaService"] if s.Sid == "DynamoDBGrantsForTableUsers"][0] == "dynamodb.us-east-1.amazonaws.com"
+    error_message = "Grants só podem ser criados por DynamoDB na região da tabela."
+  }
+}

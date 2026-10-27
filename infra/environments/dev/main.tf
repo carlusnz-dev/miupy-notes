@@ -29,6 +29,18 @@ module "objects_key" {
   s3_bucket_arns     = [local.bucket_arn]
 }
 
+module "data_key" {
+  source              = "../../modules/kms"
+  name_prefix         = "${var.name_prefix}-data"
+  account_id          = var.account_id
+  aws_region          = var.aws_region
+  tags                = local.tags
+  provisioner_arn     = local.role_arns.provisioner
+  administrator_arns  = [var.initial_provisioner_arn]
+  key_user_arns       = [local.role_arns.api]
+  dynamodb_table_name = "${var.name_prefix}-data"
+}
+
 module "observability_key" {
   source                    = "../../modules/kms"
   name_prefix               = "${var.name_prefix}-observability"
@@ -78,27 +90,29 @@ module "storage" {
 }
 
 module "iam" {
-  source                   = "../../modules/iam"
-  name_prefix              = var.name_prefix
-  account_id               = var.account_id
-  aws_region               = var.aws_region
-  tags                     = local.tags
-  app_bucket_arn           = local.bucket_arn
-  app_kms_key_arn          = module.objects_key.key_arn
-  additional_bucket_arns   = ["arn:aws:s3:::${var.name_prefix}-${var.account_id}-access-logs"]
-  additional_kms_key_arns  = concat([module.observability_key.key_arn], module.billing_key[*].key_arn)
-  api_log_group_arn        = local.log_group_arns[0]
-  operator_s3_prefixes     = var.operator_s3_prefixes
-  enable_api_role          = var.enable_api_role
-  api_table_arn            = var.api_table_arn
-  api_s3_prefixes          = var.api_s3_prefixes
-  backend_bucket_arn       = var.backend_bucket_arn
-  backend_state_key        = var.backend_state_key
-  backend_kms_key_arn      = var.backend_kms_key_arn
-  enable_github_oidc       = var.enable_github_oidc
-  github_oidc_provider_arn = var.github_oidc_provider_arn
-  github_repository        = var.github_repository
-  github_subject           = var.github_subject
+  source                      = "../../modules/iam"
+  name_prefix                 = var.name_prefix
+  account_id                  = var.account_id
+  aws_region                  = var.aws_region
+  tags                        = local.tags
+  app_bucket_arn              = local.bucket_arn
+  app_kms_key_arn             = module.objects_key.key_arn
+  additional_bucket_arns      = ["arn:aws:s3:::${var.name_prefix}-${var.account_id}-access-logs"]
+  additional_kms_key_arns     = concat([module.observability_key.key_arn, module.data_key.key_arn], module.billing_key[*].key_arn)
+  api_log_group_arn           = local.log_group_arns[0]
+  operator_s3_prefixes        = var.operator_s3_prefixes
+  enable_api_role             = true
+  api_table_arn               = aws_dynamodb_table.data.arn
+  api_dynamodb_kms_key_arn    = module.data_key.key_arn
+  api_allowed_subs_secret_arn = var.allowed_subs_secret_arn
+  api_s3_prefixes             = var.api_s3_prefixes
+  backend_bucket_arn          = var.backend_bucket_arn
+  backend_state_key           = var.backend_state_key
+  backend_kms_key_arn         = var.backend_kms_key_arn
+  enable_github_oidc          = var.enable_github_oidc
+  github_oidc_provider_arn    = var.github_oidc_provider_arn
+  github_repository           = var.github_repository
+  github_subject              = var.github_subject
 }
 
 module "observability" {
@@ -118,10 +132,11 @@ module "observability" {
   app_log_retention_days        = var.app_log_retention_days
   audit_log_retention_days      = var.audit_log_retention_days
   lambda_timeout_seconds        = var.lambda_timeout_seconds
-  lambda_concurrency_threshold  = var.lambda_concurrency_threshold
+  lambda_concurrency_threshold  = min(var.lambda_concurrency_threshold, var.lambda_reserved_concurrency)
   api_latency_threshold_ms      = var.api_latency_threshold_ms
   api_4xx_threshold             = var.api_4xx_threshold
-  api_id                        = var.api_id
+  api_id                        = aws_apigatewayv2_api.this.id
+  enable_native_api_alarms      = true
   enable_cloudtrail_alarms      = var.enable_cloudtrail_alarms
   cloudtrail_log_group_name     = var.cloudtrail_log_group_name
   enable_cost_anomaly_detection = var.enable_cost_anomaly_detection

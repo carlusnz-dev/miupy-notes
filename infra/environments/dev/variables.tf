@@ -28,6 +28,56 @@ variable "aws_region" {
   }
 }
 
+variable "google_client_id" {
+  description = "Audience do ID token Google validado pelo JWT authorizer."
+  type        = string
+  nullable    = false
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$", var.google_client_id))
+    error_message = "Informe o Client ID Google completo."
+  }
+}
+
+variable "allowed_subs_secret_arn" {
+  description = "Segredo pré-existente com sub Google separados por vírgula; o conteúdo não entra no Terraform."
+  type        = string
+  nullable    = false
+  validation {
+    condition     = can(regex("^arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:[A-Za-z0-9/_+=.@-]+$", var.allowed_subs_secret_arn))
+    error_message = "Informe ARN exato do segredo nesta conta e região."
+  }
+}
+
+variable "cors_allowed_origins" {
+  description = "Origens exatas do aplicativo desktop autorizadas no HTTP API."
+  type        = set(string)
+  nullable    = false
+  validation {
+    condition     = length(var.cors_allowed_origins) > 0 && alltrue([for origin in var.cors_allowed_origins : can(regex("^(https?://|tauri://)[A-Za-z0-9.:-]+$", origin))])
+    error_message = "Informe ao menos uma origem HTTP(S) ou tauri:// exata, sem curingas."
+  }
+}
+
+variable "lambda_memory_mb" {
+  description = "Memória da função HTTP."
+  type        = number
+  default     = 512
+  validation {
+    condition     = var.lambda_memory_mb >= 128 && var.lambda_memory_mb <= 10240 && floor(var.lambda_memory_mb) == var.lambda_memory_mb
+    error_message = "Memória deve ser inteira entre 128 e 10240 MB."
+  }
+}
+
+variable "lambda_reserved_concurrency" {
+  description = "Limite inicial de invocações simultâneas da API."
+  type        = number
+  default     = 5
+  validation {
+    condition     = var.lambda_reserved_concurrency >= 1 && floor(var.lambda_reserved_concurrency) == var.lambda_reserved_concurrency
+    error_message = "Concorrência reservada deve ser inteira e positiva."
+  }
+}
+
 variable "alert_email" {
   description = "Destino de alertas; confirmação SNS manual obrigatória."
   type        = string
@@ -106,12 +156,6 @@ variable "api_4xx_threshold" {
     condition     = var.api_4xx_threshold > 0
     error_message = "Valor inválido para api_4xx_threshold."
   }
-}
-
-variable "api_id" {
-  description = "ID gerado do HTTP API futuro; null mantém métricas derivadas de logs."
-  type        = string
-  default     = null
 }
 
 variable "enable_cloudtrail_alarms" {
@@ -209,26 +253,6 @@ variable "operator_s3_prefixes" {
   validation {
     condition     = alltrue([for p in var.operator_s3_prefixes : can(regex("^[a-zA-Z0-9/_-]+/$", p)) && !startswith(p, "/")])
     error_message = "Prefixos devem ser relativos, terminar em / e não conter curingas."
-  }
-}
-
-variable "enable_api_role" {
-  description = "Cria a role Lambda somente após definir tabela e log group futuros."
-  type        = bool
-  default     = false
-  validation {
-    condition     = !var.enable_api_role || (var.api_table_arn != null)
-    error_message = "Habilitar API exige api_table_arn; o grupo de logs é calculado pela raiz."
-  }
-}
-
-variable "api_table_arn" {
-  description = "ARN exato da futura tabela; Query não recebe acesso automático a índices."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.api_table_arn == null ? true : can(regex("^arn:aws:dynamodb:${var.aws_region}:${var.account_id}:table/${var.name_prefix}-[a-zA-Z0-9_.-]+$", var.api_table_arn))
-    error_message = "A tabela deve pertencer à conta/região e ao prefixo do ambiente."
   }
 }
 

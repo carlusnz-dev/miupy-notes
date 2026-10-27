@@ -47,10 +47,12 @@ run "closed_defaults" {
 run "runtime_scoped" {
   command = plan
   variables {
-    enable_api_role   = true
-    api_table_arn     = "arn:aws:dynamodb:us-east-1:000000000000:table/miupy-test-notes"
-    api_log_group_arn = "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/miupy-test-api"
-    api_s3_prefixes   = ["attachments/"]
+    enable_api_role             = true
+    api_table_arn               = "arn:aws:dynamodb:us-east-1:000000000000:table/miupy-test-notes"
+    api_log_group_arn           = "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/miupy-test-api"
+    api_dynamodb_kms_key_arn    = "arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000003"
+    api_allowed_subs_secret_arn = "arn:aws:secretsmanager:us-east-1:000000000000:secret:miupy-test/allowed-subs-abcdef"
+    api_s3_prefixes             = ["attachments/"]
   }
   assert {
     condition     = length(aws_iam_role.api) == 1 && aws_iam_role.api[0].permissions_boundary == aws_iam_policy.runtime_boundary.arn && aws_iam_role_policy.api[0].policy == aws_iam_policy.runtime_boundary.policy
@@ -63,6 +65,14 @@ run "runtime_scoped" {
   assert {
     condition     = [for s in jsondecode(aws_iam_role_policy.api[0].policy).Statement : s.Resource if s.Sid == "ApplicationObjects"][0] == ["arn:aws:s3:::miupy-test-objects/attachments/*"]
     error_message = "O runtime só pode acessar o prefixo habilitado."
+  }
+  assert {
+    condition     = [for s in jsondecode(aws_iam_role_policy.api[0].policy).Statement : s.Resource if s.Sid == "ReadAllowedSubs"][0] == [var.api_allowed_subs_secret_arn]
+    error_message = "A role deve ler somente o segredo informado."
+  }
+  assert {
+    condition     = [for s in jsondecode(aws_iam_role_policy.api[0].policy).Statement : s.Condition.StringEquals["kms:ViaService"] if s.Sid == "ApplicationTableKey"][0] == "dynamodb.us-east-1.amazonaws.com"
+    error_message = "O runtime só pode usar a chave por DynamoDB."
   }
 }
 run "backend_separate" {

@@ -14,7 +14,7 @@ Obrigatórios, sem default: `name_prefix: string`, `account_id: string`, `aws_re
 | lambda_concurrency_threshold | 10 | Concorrência máxima da função |
 | api_latency_threshold_ms | 1000 | Latência p95 |
 | api_4xx_threshold | 20 | 4xx em cinco minutos; limiar estático proposto para volume anormal |
-| api_id | null | ID gerado da API HTTP futura para métricas nativas |
+| api_id / enable_native_api_alarms | null / false | ID gerado da HTTP API e flag explícita para métricas nativas quando o ID só aparece no apply |
 | s3_request_metrics_enabled | false | Alarmes S3 somente com métricas de request habilitadas no bucket |
 | s3_bucket_name | null | Obrigatório ao habilitar alarmes S3 |
 | s3_metrics_filter_id | all-requests | Deve coincidir com o FilterId das métricas do bucket |

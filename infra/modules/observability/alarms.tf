@@ -27,7 +27,7 @@ locals {
       dimensions = {}
     }
   }
-  native_api_alarms = var.api_id != null ? {
+  native_api_alarms = var.enable_native_api_alarms ? {
     for key, metric in {
       errors5xx = { name = "5xx", stat = "Sum", percentile = null, threshold = 1 }
       errors4xx = { name = "4xx", stat = "Sum", percentile = null, threshold = var.api_4xx_threshold }

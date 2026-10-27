@@ -69,6 +69,16 @@ variable "s3_bucket_arns" {
   }
 }
 
+variable "dynamodb_table_name" {
+  description = "Tabela exclusiva desta chave; autoriza grants somente via DynamoDB."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.dynamodb_table_name == null ? true : can(regex("^[A-Za-z0-9_.-]{3,255}$", var.dynamodb_table_name))
+    error_message = "Informe o nome exato da tabela DynamoDB."
+  }
+}
+
 variable "cloudwatch_log_group_arns" {
   description = "ARNs exatos de log groups, sem sufixo :*, para encryption context CloudWatch Logs."
   type        = list(string)

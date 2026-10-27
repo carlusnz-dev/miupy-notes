@@ -136,6 +136,16 @@ variable "api_id" {
   default     = null
 }
 
+variable "enable_native_api_alarms" {
+  description = "Ativa métricas nativas quando o ID da API é conhecido somente no apply."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_native_api_alarms || var.api_id != null
+    error_message = "Alarmes nativos exigem api_id."
+  }
+}
+
 variable "s3_request_metrics_enabled" {
   description = "Só habilitar junto das métricas de request no bucket (custo adicional)."
   type        = bool

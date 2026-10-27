@@ -75,6 +75,18 @@ locals {
           Bool         = { "aws:PrincipalIsAWSService" = "false" }
         }
       }
+      ], var.dynamodb_table_name == null ? [] : [
+      {
+        Sid       = "DynamoDBGrantsForTableUsers"
+        Effect    = "Allow"
+        Principal = { AWS = local.root_arn }
+        Action    = ["kms:CreateGrant"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = { "kms:ViaService" = "dynamodb.${var.aws_region}.amazonaws.com" }
+          ArnEquals    = { "aws:PrincipalArn" = local.users }
+        }
+      }
       ], length(var.cloudwatch_log_group_arns) == 0 ? [] : [
       {
         Sid       = "CloudWatchLogsForExplicitGroups"
@@ -118,6 +130,10 @@ resource "aws_kms_key" "this" {
     precondition {
       condition     = (length(var.cloudwatch_alarm_arns) == 0 && length(var.budget_arns) == 0) || length(var.sns_topic_arns) > 0
       error_message = "Publicadores CloudWatch/Budgets exigem tópicos SNS explícitos."
+    }
+    precondition {
+      condition     = var.dynamodb_table_name == null || (length(var.s3_bucket_arns) == 0 && length(var.sns_topic_arns) == 0 && length(var.cloudwatch_log_group_arns) == 0)
+      error_message = "A chave DynamoDB deve ser exclusiva da tabela."
     }
   }
 }

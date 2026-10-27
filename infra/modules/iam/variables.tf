@@ -69,6 +69,26 @@ variable "api_table_arn" {
     error_message = "A tabela deve pertencer à conta/região e ao prefixo do ambiente."
   }
 }
+
+variable "api_dynamodb_kms_key_arn" {
+  description = "Chave exclusiva da tabela, usada somente via DynamoDB pelo runtime."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.api_dynamodb_kms_key_arn == null ? true : can(regex("^arn:aws:kms:${var.aws_region}:${var.account_id}:key/[a-zA-Z0-9-]+$", var.api_dynamodb_kms_key_arn))
+    error_message = "Informe ARN exato da chave DynamoDB nesta conta e região."
+  }
+}
+
+variable "api_allowed_subs_secret_arn" {
+  description = "ARN exato do segredo com a allowlist de sub; somente leitura pelo runtime."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.api_allowed_subs_secret_arn == null ? true : can(regex("^arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:[A-Za-z0-9/_+=.@-]+$", var.api_allowed_subs_secret_arn))
+    error_message = "Informe ARN exato do segredo nesta conta e região."
+  }
+}
 variable "api_log_group_arn" {
   description = "ARN do log group da API sem :*; provisionado fora da role."
   type        = string
