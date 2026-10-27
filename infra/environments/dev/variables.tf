@@ -100,12 +100,12 @@ variable "lambda_memory_mb" {
 }
 
 variable "lambda_reserved_concurrency" {
-  description = "Teto de invocações simultâneas da API; limita o custo de tráfego negado, que ainda invoca a Lambda."
+  description = "Teto de invocações simultâneas da API; limita o custo de tráfego negado, que ainda invoca a Lambda. null dispensa a reserva (contas com limite 10 não aceitam reservar)."
   type        = number
   default     = 5
   validation {
-    condition     = var.lambda_reserved_concurrency >= 1 && var.lambda_reserved_concurrency <= 20 && floor(var.lambda_reserved_concurrency) == var.lambda_reserved_concurrency
-    error_message = "Concorrência reservada deve ser inteira entre 1 e 20."
+    condition     = var.lambda_reserved_concurrency == null ? true : var.lambda_reserved_concurrency >= 1 && var.lambda_reserved_concurrency <= 20 && floor(var.lambda_reserved_concurrency) == var.lambda_reserved_concurrency
+    error_message = "Concorrência reservada deve ser null ou inteira entre 1 e 20."
   }
 }
 

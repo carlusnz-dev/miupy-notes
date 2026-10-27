@@ -132,7 +132,7 @@ module "observability" {
   app_log_retention_days        = var.app_log_retention_days
   audit_log_retention_days      = var.audit_log_retention_days
   lambda_timeout_seconds        = var.lambda_timeout_seconds
-  lambda_concurrency_threshold  = min(var.lambda_concurrency_threshold, var.lambda_reserved_concurrency)
+  lambda_concurrency_threshold  = min(var.lambda_concurrency_threshold, coalesce(var.lambda_reserved_concurrency, var.lambda_concurrency_threshold))
   api_latency_threshold_ms      = var.api_latency_threshold_ms
   api_4xx_threshold             = var.api_4xx_threshold
   api_id                        = aws_apigatewayv2_api.this.id

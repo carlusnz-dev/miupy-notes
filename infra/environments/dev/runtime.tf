@@ -44,7 +44,7 @@ resource "aws_lambda_function" "api" {
   source_code_hash               = data.archive_file.lambda.output_base64sha256
   timeout                        = var.lambda_timeout_seconds
   memory_size                    = var.lambda_memory_mb
-  reserved_concurrent_executions = var.lambda_reserved_concurrency
+  reserved_concurrent_executions = coalesce(var.lambda_reserved_concurrency, -1)
   tags                           = local.tags
 
   environment {

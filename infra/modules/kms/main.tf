@@ -82,9 +82,11 @@ locals {
         Principal = { AWS = local.root_arn }
         Action    = ["kms:CreateGrant"]
         Resource  = "*"
+        # Quem cria/atualiza a tabela (root ou administradores) também precisa do grant do DynamoDB.
         Condition = {
           StringEquals = { "kms:ViaService" = "dynamodb.${var.aws_region}.amazonaws.com" }
-          ArnEquals    = { "aws:PrincipalArn" = local.users }
+          Bool         = { "kms:GrantIsForAWSResource" = "true" }
+          ArnEquals    = { "aws:PrincipalArn" = local.allowed_arns }
         }
       }
       ], length(var.cloudwatch_log_group_arns) == 0 ? [] : [
