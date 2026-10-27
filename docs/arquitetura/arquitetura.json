@@ -1,6 +1,6 @@
 {
   "project": "miupy-notes",
-  "updatedAt": "2026-10-24",
+  "updatedAt": "2026-10-27",
   "statusValues": [
     "planned",
     "template",
@@ -45,7 +45,7 @@
       "id": "infrastructure",
       "path": "infra",
       "status": "partial",
-      "role": "Bootstrap S3/KMS implantado e verificado em sa-east-1: nove recursos Terraform; plan posterior sem mudanças. Corrigida delegação kms:CreateAlias na key policy. Estado ainda local, migração S3/lock/restauração pendentes. IAM MFA/boundary, S3 do app e observabilidade/custos compostos em dev e validados apenas localmente, sem implantação. API/Lambda/DynamoDB e conectores AWS ainda dependem das próximas entregas."
+      "role": "Bootstrap S3/KMS implantado em sa-east-1 (estado ainda local). Ambiente dev aplicado em 2026-10-27 (estado no S3, 96 recursos): IAM, KMS (4 chaves), S3 app/access logs, DynamoDB, Lambda arm64 sem reserva de concorrência, HTTP API v2 com JWT Google, throttling 5/s e allow list de IP na Lambda, CloudWatch/SNS/budget. Verificado só por curl: /health 200 e /v1 sem token ou com Bearer inválido 401; log da Lambda no CloudWatch. CRUD com token real, 403 por IP, 429, DynamoDB/S3/CloudWatch pelo roteiro docs/validacao/aws-dev.md ainda não executados."
     },
     {
       "id": "ci",
@@ -116,6 +116,17 @@
         "aws_s3_bucket_policy.state"
       ],
       "verification": "Apply concluído; plan posterior retornou saída 0 e No changes. Proteções S3 e estado/rotação KMS conferidos via AWS CLI."
+    },
+    {
+      "scope": "dev",
+      "terraformRoot": "infra/environments/dev",
+      "region": "sa-east-1",
+      "stateBackend": "s3",
+      "verifiedAt": "2026-10-27",
+      "resources": [
+        "96 recursos gerenciados (terraform state list)"
+      ],
+      "verification": "Apply concluído (9 added, 1 changed, 0 destroyed na rodada final). curl: GET /health 200; GET /v1/notes sem token e com Bearer inválido 401. Roteiro de validação completo pendente."
     }
   ]
 }
