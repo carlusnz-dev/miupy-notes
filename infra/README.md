@@ -1,6 +1,6 @@
 # Infraestrutura Terraform AWS
 
-Base preparada e validada localmente em 2026-10-24: bootstrap separado e módulos IAM, KMS, S3 e observabilidade compostos em `environments/dev`. **Nada implantado; nenhum plan contra conta ou acesso AWS real.** Terraform `>= 1.10.0, < 2.0.0`, execução local com versão oficial `1.17.0`, provider AWS `~> 6.0` travado em `6.70.0`. Contas e valores aprovados entram somente em configuração local ignorada.
+Base preparada em 2026-10-24: bootstrap separado e módulos IAM, KMS, S3 e observabilidade compostos em `environments/dev`. **Bootstrap implantado em sa-east-1 com autorização do proprietário; nove recursos Terraform e plan posterior sem mudanças. Estado ainda local; migração S3 e dev pendentes.** Veja o [relatório do apply](../docs/relatorios/2026-10-24_infra-aws-apply.md). Terraform `>= 1.10.0, < 2.0.0`, execução local com versão oficial `1.17.0`, provider AWS `~> 6.0` travado em `6.70.0`. Contas e valores aprovados entram somente em configuração local ignorada.
 
 ```text
 infra/
@@ -27,6 +27,8 @@ Antes de qualquer chamada real, o proprietário deve aprovar conta, região, or�
 6. Confirmar **cada** assinatura SNS pelo link Confirm subscription enviado ao e-mail. Até isso ocorrer, fica `PendingConfirmation`. Se a aplicação estiver fora de us-east-1, há também tópico/assinatura/chave exclusivos de billing nessa região. Confirmar e testar a entrega em manutenção autorizada; nada disso foi feito nesta sessão.
 
 ## Ordem futura de execução — não executada nesta entrega
+
+Atualização de continuidade: criação do bootstrap concluída em 2026-10-24. O roteiro abaixo foi preservado como referência; neste checkout, não sobrescrever configurações/estado nem repetir a criação. O próximo passo é preparar a migração conforme o README do bootstrap.
 
 Comandos abaixo partem da raiz do repositório, com Terraform 1.17.0 no PATH e sessão temporária externa já autorizada. Arquivos de configuração devem permanecer privados, inclusive planos (podem conter dados sensíveis). Cada `plan`/`apply` depende de autorização específica para a conta real e revisão de custo/policies.
 

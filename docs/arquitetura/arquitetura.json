@@ -44,7 +44,7 @@
       "id": "infrastructure",
       "path": "infra",
       "status": "partial",
-      "role": "Código Terraform para bootstrap S3/KMS separado, IAM MFA/boundary, S3 privado e observabilidade/custos composto em dev e validado localmente; nada implantado, sem plan contra conta. API/Lambda/DynamoDB e conectores AWS ainda dependem das próximas entregas."
+      "role": "Bootstrap S3/KMS implantado e verificado em sa-east-1: nove recursos Terraform; plan posterior sem mudanças. Corrigida delegação kms:CreateAlias na key policy. Estado ainda local, migração S3/lock/restauração pendentes. IAM MFA/boundary, S3 do app e observabilidade/custos compostos em dev e validados apenas localmente, sem implantação. API/Lambda/DynamoDB e conectores AWS ainda dependem das próximas entregas."
     },
     {
       "id": "ci",
@@ -96,5 +96,25 @@
     "docs/decisoes/2026-10-23_biblioteca.md",
     "docs/decisoes/2026-10-24_infra-aws-base.md"
   ],
-  "deployedResources": []
+  "deployedResources": [
+    {
+      "scope": "bootstrap",
+      "terraformRoot": "infra/bootstrap",
+      "region": "sa-east-1",
+      "stateBackend": "local",
+      "verifiedAt": "2026-10-24",
+      "resources": [
+        "aws_kms_key.state",
+        "aws_kms_alias.state",
+        "aws_s3_bucket.state",
+        "aws_s3_bucket_public_access_block.state",
+        "aws_s3_bucket_ownership_controls.state",
+        "aws_s3_bucket_versioning.state",
+        "aws_s3_bucket_server_side_encryption_configuration.state",
+        "aws_s3_bucket_lifecycle_configuration.state",
+        "aws_s3_bucket_policy.state"
+      ],
+      "verification": "Apply concluído; plan posterior retornou saída 0 e No changes. Proteções S3 e estado/rotação KMS conferidos via AWS CLI."
+    }
+  ]
 }

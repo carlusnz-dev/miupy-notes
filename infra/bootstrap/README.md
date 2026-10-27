@@ -1,6 +1,6 @@
 # Bootstrap do estado Terraform
 
-Raiz independente da aplicação: cria apenas bucket de estado e chave KMS dedicada. Nenhum recurso foi implantado ou consultado na AWS. Não altera contrato HTTP, dados do app ou isolamento por `sub`; prepara RNF-02/RNF-03. A aplicação e seus operadores não devem receber acesso a este bucket.
+Raiz independente da aplicação: cria apenas bucket de estado e chave KMS dedicada. Bootstrap implantado em `sa-east-1` em 2026-10-24 com autorização do proprietário; nove recursos Terraform, consultas de proteção aprovadas e plan posterior sem mudanças. Estado ainda local; migração S3, lock e restauração permanecem pendentes. Veja o [relatório do apply](../../docs/relatorios/2026-10-24_infra-aws-apply.md). Não altera contrato HTTP, dados do app ou isolamento por `sub`; prepara RNF-02/RNF-03. A aplicação e seus operadores não devem receber acesso a este bucket.
 
 Terraform `>= 1.10.0, < 2.0.0`, provider AWS `~> 6.0`, lock gerado em `6.70.0`; imagem de referência fixa `hashicorp/terraform:1.17.0`. O backend inicial é local para evitar depender do bucket antes de sua criação. O [backend S3 oficial](https://developer.hashicorp.com/terraform/language/backend/s3) orienta o lock nativo e as permissões abaixo; não existe tabela DynamoDB de lock.
 
@@ -29,7 +29,7 @@ A chave permite à conta proprietária delegar ações enumeradas via IAM. `Reso
 
 ## Ordem futura, somente após autorização específica
 
-Os comandos desta seção **não foram executados**. Exigem aprovar conta, região, identidade de acesso, retenção e custo; autenticar uma sessão temporária fora do Git, sem credenciais em flags ou arquivos de backend. Executar da raiz do repositório, com Terraform 1.17.0 no PATH. Começar somente em diretório novo, sem backend remoto previamente configurado.
+O passo de criação foi concluído com plano salvo e autorização específica em 2026-10-24; os exemplos abaixo preservam o procedimento para instalações novas. Neste checkout, continuar pela preparação da migração (passo 2), sem sobrescrever configuração ou estado existente. Migração e dev não foram executados. Exigem aprovar os parâmetros aplicáveis e autenticar uma sessão temporária fora do Git, sem credenciais em flags ou arquivos de backend. Executar da raiz do repositório, com Terraform 1.17.0 no PATH.
 
 1. Criar o bootstrap com estado local protegido por permissões do sistema e disco cifrado:
 

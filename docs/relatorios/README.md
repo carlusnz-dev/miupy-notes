@@ -6,6 +6,8 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 
 | Data | Sessão | Arquivo |
 |---|---|---|
+| 2026-10-24 | Infra AWS — bootstrap aplicado e verificado em São Paulo | [relatório](2026-10-24_infra-aws-apply.md) |
+| 2026-10-24 | Infra AWS — primeiro plan real do bootstrap e estado das worktrees | [relatório](2026-10-24_infra-aws-plan.md) |
 | 2026-10-24 | Infra AWS — login IAM confirmado e continuidade do plan | [relatório](2026-10-24_infra-aws-login.md) |
 | 2026-10-24 | Infra AWS — Terraform integrado e validado localmente | [relatório](2026-10-24_infra-aws.md) |
 | 2026-10-18 | 01 — estrutura inicial | [relatório](2026-10-18_sessao-01.md) |
