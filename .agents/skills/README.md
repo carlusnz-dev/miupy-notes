@@ -8,6 +8,7 @@
 | [`validar-design`](validar-design/SKILL.md) | Ao conferir telas em navegador com MCP disponível. |
 | [`revisar-pr`](revisar-pr/SKILL.md) | Ao revisar um diff ou PR antes de merge. |
 | [`worktrees-orca`](worktrees-orca/SKILL.md) | Ao criar, coordenar, integrar ou limpar worktrees e workers do Orca. |
+| [`orquestrador`](orquestrador/SKILL.md) | Ao coordenar workers Codex/Claude no Orca: agente e esforço, briefs, acompanhamento e contexto enxuto. |
 
 Skills de terceiros, fixadas por commit em [SOURCES.md](SOURCES.md):
 
