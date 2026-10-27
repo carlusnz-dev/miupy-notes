@@ -48,7 +48,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   ownerId: string;
   store: CalendarStore;
   remote: RangeRemote;
-  loadNotes: () => Promise<NoteChoice[]>;
+  loadNotes: (signal?: AbortSignal) => Promise<NoteChoice[]>;
   google: GoogleApi;
   /** Ausente = sem tarefas (o formulário não oferece "Tarefa"). */
   tasksApi?: TasksApi;
@@ -70,7 +70,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   const [notes, setNotes] = useState<NoteChoice[]>(() => calendarFetchCache.recall<NoteChoice[]>(ownerId, "notes") ?? []);
   const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">(() => (calendarFetchCache.recall(ownerId, "notes") ? "ready" : "loading"));
   const [status, setStatusState] = useState<GoogleStatusOutput | null>(() => calendarFetchCache.recall<GoogleStatusOutput>(ownerId, "googleStatus") ?? null);
-  const setStatus = useCallback((value: GoogleStatusOutput) => { calendarFetchCache.remember(ownerId, "googleStatus", value); setStatusState(value); }, [ownerId]);
+  const setStatus = useCallback((value: GoogleStatusOutput) => { if (isCurrent?.() === false) return; calendarFetchCache.remember(ownerId, "googleStatus", value); setStatusState(value); }, [ownerId, isCurrent]);
   const [statusError, setStatusError] = useState<string | null>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const counter = useRef(0);
@@ -84,10 +84,10 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
     const abort = new AbortController();
     if (!calendarFetchCache.recall(ownerId, "notes")) {
       setNotesState("loading");
-      loadNotes().then((items) => { if (!abort.signal.aborted) { calendarFetchCache.remember(ownerId, "notes", items); setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted) setNotesState("unavailable"); });
+      loadNotes(abort.signal).then((items) => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) { calendarFetchCache.remember(ownerId, "notes", items); setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) setNotesState("unavailable"); });
     }
     if (reconnected || !calendarFetchCache.recall(ownerId, "googleStatus")) {
-      google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
+      google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
     }
     return () => abort.abort();
   }, [loadNotes, google, ownerId, calendar.connectivity, setStatus]);

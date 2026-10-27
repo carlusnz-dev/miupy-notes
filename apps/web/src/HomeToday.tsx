@@ -5,7 +5,7 @@ import ArrowIcon from "./components/ArrowIcon";
 import { SkeletonBody } from "./components/Skeleton";
 import { relativeDay, startDay, timeRange } from "./calendar/format";
 import { listEventsInRange, listTasks, type CalendarEventOutput, type TaskOutput } from "./lib/calendar-api";
-import { useAllNotes } from "./lib/notes-queries";
+import { useRecentNoteCandidates } from "./lib/notes-queries";
 import type { NoteMetadataOutput } from "./lib/notes-api";
 import { overdueLabel, pickToday, TODAY_EVENT_DAYS, TODAY_LIMIT } from "./home-today";
 import "./home-today.css";
@@ -39,13 +39,13 @@ function previewSources(name: TodayPreview): { events: Source<CalendarEventOutpu
   return { events: { status: "ready", data: events }, tasks: { status: "ready", data: tasks }, notes: { status: "ready", data: notes } };
 }
 
-function Column<T>({ title, source, loading, children }: { title: string; source: Source<T>; loading: string; children: React.ReactNode }) {
+function Column<T>({ title, source, loading, unavailable = "Indisponível agora.", children }: { title: string; source: Source<T>; loading: string; unavailable?: string; children: React.ReactNode }) {
   return (
     <article className="today-column">
       <h3>{title}</h3>
       {source.status === "loading" && <SkeletonBody label={loading} lines={3} />}
       {source.status === "error" && (
-        <p className="today-note" role="status">Indisponível agora. {source.retry && <button type="button" className="today-retry" onClick={source.retry}>Tentar de novo</button>}</p>
+        <p className="today-note" role="status">{unavailable} {source.retry && <button type="button" className="today-retry" onClick={source.retry}>Tentar de novo</button>}</p>
       )}
       {source.status === "ready" && children}
     </article>
@@ -68,11 +68,11 @@ export default function HomeToday({ enabled, preview }: { enabled: boolean; prev
     enabled: live,
   });
   const tasksQuery = useQuery({ queryKey: ["home", "today-tasks"], queryFn: ({ signal }) => listTasks(signal), enabled: live });
-  const notesQuery = useAllNotes(live);
+  const notesQuery = useRecentNoteCandidates(live);
 
   const events = useMemo(() => (preview ? previewSources(preview).events : fromQuery(eventsQuery, (items) => items)), [preview, eventsQuery]);
   const tasks = useMemo(() => (preview ? previewSources(preview).tasks : fromQuery(tasksQuery, (items) => items)), [preview, tasksQuery]);
-  const notes = useMemo(() => (preview ? previewSources(preview).notes : fromQuery(notesQuery, ({ items }) => items)), [preview, notesQuery]);
+  const notes = useMemo(() => (preview ? previewSources(preview).notes : notesQuery.data?.nextCursor ? { status: "error" as const, data: [] } : fromQuery(notesQuery, ({ items }) => items)), [preview, notesQuery]);
   const picked = useMemo(() => pickToday({ events: events.data, tasks: tasks.data, notes: notes.data }), [events.data, tasks.data, notes.data]);
   const settled = [events, tasks, notes].every((source) => source.status === "ready");
   const nothing = settled && picked.events.length === 0 && picked.overdueTotal === 0 && !picked.note;
@@ -105,7 +105,7 @@ export default function HomeToday({ enabled, preview }: { enabled: boolean; prev
               </ul>
             )}
           </Column>
-          <Column title="Nota recente" source={notes} loading="Carregando notas…">
+          <Column title="Nota recente" source={notes} loading="Carregando notas…" unavailable={notesQuery.data?.nextCursor ? "A consulta de nota recente ainda não está disponível para acervos maiores." : undefined}>
             {picked.note === null ? <p className="today-note">Nenhuma nota ainda.</p> : (
               <ul><li><Link className="today-item" to={`/notes/${picked.note.id}`}><strong>{picked.note.title || "Sem título"}</strong><span>Editada em {editedFormat.format(new Date(picked.note.updatedAt))}</span></Link></li></ul>
             )}

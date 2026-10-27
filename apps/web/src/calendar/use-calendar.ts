@@ -5,6 +5,8 @@ import { calendarFetchCache, rangeKey, UPCOMING_KEY } from "./fetch-cache";
 import { apiRange, upcomingEvents, type ViewMode } from "./layout";
 import { reconcileRange } from "./reconcile";
 import { discardOp, enqueue, flushOutbox, resolveConflict, withOutbox, type CalendarRemote, type DisplayEvent, type FlushResult } from "./outbox";
+import { expireSession } from "../lib/auth";
+import { trackCalendarWork } from "./session";
 import type { CalendarStore, OutboxOp } from "./store";
 
 /** Janela dos "próximos eventos", independente do modo de visualização. */
@@ -49,7 +51,7 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
 
   /** Reconcilia um período (ver `reconcileRange`); se algo mudou localmente durante a busca, descarta e busca de novo. */
   const refreshRange = useCallback(async (range: { from: string; to: string }, signal: AbortSignal) => {
-    const outcome = await reconcileRange(store, remote, ownerId, range, signal, current);
+    const outcome = await trackCalendarWork(reconcileRange(store, remote, ownerId, range, signal, current));
     if (outcome === "changed") bump();
     return outcome === "ok";
   }, [remote, store, ownerId, current, bump]);
@@ -74,7 +76,8 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
         const okUpcoming = upcomingFresh !== null || await refreshRange(upcomingRange, abort.signal);
         if (!okUpcoming) return;
         if (upcomingFresh === null) calendarFetchCache.mark(ownerId, UPCOMING_KEY);
-        await store.setMeta(ownerId, "lastFetchedAt", String(Date.now())).catch(() => undefined);
+        if (!current()) return;
+        await trackCalendarWork(store.setMeta(ownerId, "lastFetchedAt", String(Date.now()))).catch(() => undefined);
         await reload();
         if (current()) setFetchState({ status: "ok", at: Date.now() });
       } catch (error) {
@@ -90,10 +93,11 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
   }, [viewKey, connectivity, tick, refreshRange, reload, store, ownerId, current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flush = useCallback(async (force = false) => {
-    if (flushing.current) return null;
+    if (flushing.current || !current()) return null;
     flushing.current = true;
     try {
-      const result = await flushOutbox(store, remote, ownerId, { force, isCurrent: current });
+      const result = await trackCalendarWork(flushOutbox(store, remote, ownerId, { force, isCurrent: current }));
+      if (result.stopped === "unauthorized") { expireSession(); return result; }
       if (!current()) return result;
       setLastFlush(result);
       if (result.stopped === "offline") setConnectivity("offline");
@@ -121,19 +125,21 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
 
   /** Grava no dispositivo e só então tenta enviar. Lança se a gravação local falhar (o formulário continua aberto). */
   const submit = useCallback(async (change: Parameters<typeof enqueue>[2]) => {
-    await enqueue(store, ownerId, change);
+    if (!current()) return;
+    await trackCalendarWork(enqueue(store, ownerId, change));
     // O cache otimista é a sobreposição do envio; nada é escrito como "salvo no servidor".
     await reload();
     void flush(true);
-  }, [store, ownerId, reload, flush]);
+  }, [store, ownerId, reload, flush, current]);
 
   const resolve = useCallback(async (eventId: string, choice: "mine" | "server") => {
-    await resolveConflict(store, ownerId, eventId, choice);
+    if (!current()) return;
+    await trackCalendarWork(resolveConflict(store, ownerId, eventId, choice));
     await reload();
     void flush(true);
-  }, [store, ownerId, reload, flush]);
+  }, [store, ownerId, reload, flush, current]);
 
-  const discard = useCallback(async (eventId: string) => { await discardOp(store, ownerId, eventId); await reload(); }, [store, ownerId, reload]);
+  const discard = useCallback(async (eventId: string) => { if (!current()) return; await trackCalendarWork(discardOp(store, ownerId, eventId)); await reload(); }, [store, ownerId, reload, current]);
   const retryNow = useCallback(() => { setConnectivity(typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "online"); bump(); void flush(true); }, [flush, bump]);
 
   const events: DisplayEvent[] = useMemo(() => withOutbox(cache, ops), [cache, ops]);

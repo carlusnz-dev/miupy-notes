@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getFinanceBalances, listTransactions, getFinanceSummary, listAllBanks, exportFinanceCsv, type Bank } from '../lib/finance-api';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getFinanceBalances, listTransactions, getFinanceSummary, listAllBanks, exportFinanceCsv } from '../lib/finance-api';
 import { formatMoney } from './money';
 import { Link, useNavigate } from 'react-router-dom';
 import { FinanceAccess } from './FinanceAccess';
@@ -17,27 +18,26 @@ export default function FinancePage() {
 }
 function FinanceList() {
   const navigate = useNavigate();
-  const [page, setPage] = useState<Awaited<ReturnType<typeof listTransactions>>>();
-  const [summary, setSummary] = useState<Awaited<ReturnType<typeof getFinanceSummary>>>();
-  const [balances, setBalances] = useState<Awaited<ReturnType<typeof getFinanceBalances>>>();
-  const [banks, setBanks] = useState<Bank[]>([]);
+  const client = useQueryClient();
   const [cursors, setCursors] = useState<Array<string | undefined>>([undefined]);
-  const [revision, setRevision] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const cursor = cursors[cursors.length - 1];
-  useEffect(() => {
-    const abort = new AbortController();
-    setLoading(true); setError('');
-    Promise.all([listTransactions(cursor, abort.signal), getFinanceSummary(abort.signal), listAllBanks(abort.signal), getFinanceBalances(abort.signal)])
-      .then(([nextPage, totals, bankItems, balanceItems]) => { if (!abort.signal.aborted) { setBalances(balanceItems); setPage(nextPage); setSummary(totals); setBanks(bankItems); } })
-      .catch(error => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : 'Falha ao carregar finanças.'); })
-      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
-    return () => abort.abort();
-  }, [cursor, revision]);
-  function reload() { setCursors([undefined]); setRevision(value => value + 1); }
+  const options = { staleTime: 5 * 60_000, refetchOnWindowFocus: false };
+  const pageQuery = useQuery({ ...options, queryKey: ['finance', 'transactions', cursor], queryFn: ({ signal }) => listTransactions(cursor, signal) });
+  const summaryQuery = useQuery({ ...options, queryKey: ['finance', 'summary'], queryFn: ({ signal }) => getFinanceSummary(signal) });
+  const banksQuery = useQuery({ ...options, queryKey: ['finance', 'banks'], queryFn: ({ signal }) => listAllBanks(signal) });
+  const balancesQuery = useQuery({ ...options, queryKey: ['finance', 'balances'], queryFn: ({ signal }) => getFinanceBalances(signal) });
+  const queries = [pageQuery, summaryQuery, banksQuery, balancesQuery];
+  const loading = queries.some(query => query.isPending);
+  const loadError = queries.find(query => query.error)?.error;
+  const message = error || (loadError instanceof Error ? loadError.message : '');
+  const page = pageQuery.data;
+  const summary = summaryQuery.data;
+  const banks = banksQuery.data ?? [];
+  const balances = balancesQuery.data;
+  function reload() { setError(''); setCursors([undefined]); void client.invalidateQueries({ queryKey: ['finance'] }); }
   async function exportCsv() {
     setExporting(true); setError('');
     try {
@@ -53,8 +53,8 @@ function FinanceList() {
       <Button variant="ghost" aria-label="Exportar CSV" title="Exportar CSV" className="finance-action" onClick={() => void exportCsv()} disabled={exporting || loading}><Download size={16} aria-hidden="true" /><span className="finance-action-label">{exporting ? 'Exportando…' : 'Exportar CSV'}</span></Button>
       <Button variant="primary" className="finance-action-primary" onClick={() => setCreating(true)} disabled={loading}>Novo lançamento</Button>
     </>} />
-    {error && <div role="alert" className="finance-error">{error} <Button size="sm" onClick={reload}>Recarregar dados</Button></div>}
-    {loading ? <p role="status">Carregando finanças…</p> : !error ? <>
+    {message && <div role="alert" className="finance-error">{message} <Button size="sm" onClick={reload}>Recarregar dados</Button></div>}
+    {loading ? <p role="status">Carregando finanças…</p> : !message ? <>
       <section aria-label="Balanço geral"><h2>Balanço geral</h2><p className="finance-muted">Referências de abertura + movimentos posteriores das contas + movimentos sem conta. Moedas são mantidas separadas.</p><div className="finance-totals">{balances?.currencies.map(total => <article key={total.currency}><span className="finance-eyebrow">Saldo em {total.currency}</span><strong>{formatMoney(total.balanceCents, total.currency)}</strong><small>Sem conta: {formatMoney(total.unallocatedCents, total.currency)}</small></article>)}</div></section>
       <section aria-label="Saldo por instituição"><h2>Suas instituições</h2><p className="finance-muted">Saldo consolidado de cada banco, por moeda.</p><div className="finance-totals">{balances?.banks.map(bank => <article key={bank.bankId ?? 'none'}><h3>{bank.title}</h3>{bank.currencies.length ? bank.currencies.map(total => <p key={total.currency}>{formatMoney(total.balanceCents, total.currency)}</p>) : <p>Sem saldo registrado</p>}</article>)}</div></section>
       <h2>Movimentação registrada</h2><p className="finance-muted">Totais dos lançamentos, sem somar referências de abertura.</p>

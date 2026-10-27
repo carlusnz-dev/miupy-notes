@@ -15,7 +15,7 @@ export default function SignOutButton({ disabled = false }: { disabled?: boolean
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   function finish(result: SignOutResult) {
-    if (result.status === "signed-out" && !result.draftsPurged) window.alert(purgeWarning);
+    if (result.status === "signed-out" && result.cleanupErrors.length) window.alert(result.cleanupErrors.join(" ") + (!result.draftsPurged ? " " + purgeWarning : ""));
   }
 
   async function request() {
@@ -34,8 +34,8 @@ export default function SignOutButton({ disabled = false }: { disabled?: boolean
       <Button type="button" onClick={() => void request()} disabled={disabled}>Sair</Button>
       <Modal open={open} title="Sair com alterações não sincronizadas?" onClose={() => setOpen(false)} initialFocusRef={cancelRef}>
         <p>
-          {pending === null ? "Não foi possível verificar se há notas com alterações ainda não enviadas." : pending === 1 ? "Uma nota tem alterações que ainda não chegaram à nuvem." : `${pending} notas têm alterações que ainda não chegaram à nuvem.`}
-          {" "}Sair apaga os rascunhos locais desta conta.
+          {pending === null ? "Não foi possível verificar se há alterações de notas ou eventos ainda não enviadas." : pending === 1 ? "Uma alteração ainda não chegou à nuvem." : `${pending} alterações ainda não chegaram à nuvem.`}
+          {" "}Sair apaga os rascunhos de notas e os envios pendentes da agenda desta conta.
         </p>
         <div className="modal-actions">
           <Button ref={cancelRef} type="button" onClick={() => setOpen(false)}>Continuar logado</Button>

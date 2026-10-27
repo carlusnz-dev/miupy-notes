@@ -15,6 +15,10 @@ export function createFetchCache(freshMs = FRESH_MS) {
   const values = new Map<string, { at: number; value: unknown }>();
   const key = (ownerId: string, range: string) => `${ownerId}\u0000${range}`;
   return {
+    clearOwner(ownerId: string) {
+      for (const map of [fetchedAt, values]) for (const k of map.keys()) if (k.startsWith(`${ownerId}\u0000`)) map.delete(k);
+      views.delete(ownerId);
+    },
     /** Instante da última reconciliação ainda fresca, ou `null` se precisa buscar. */
     freshAt(ownerId: string, range: string, now = Date.now()): number | null {
       const at = fetchedAt.get(key(ownerId, range));
