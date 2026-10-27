@@ -24,6 +24,7 @@ resource "aws_kms_key" "state" {
         "kms:EnableKey", "kms:DisableKey", "kms:UpdateKeyDescription",
         "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion",
         "kms:ListResourceTags", "kms:TagResource", "kms:UntagResource",
+        "kms:CreateAlias",
         "kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:ReEncryptFrom", "kms:ReEncryptTo"
       ]
       Resource = "*"
