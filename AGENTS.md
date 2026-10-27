@@ -21,6 +21,7 @@ Sistema pessoal em Tauri 2 + React, com template de API Express/TypeScript e inf
 - Tauri é a casca desktop. O backend AWS é a autoridade dos dados sincronizados; acesso a provedores passa por conector autorizado. Não duplique regra de domínio entre React e Lambda.
 - Infraestrutura em `infra/` com Terraform. Não coloque credenciais, arquivos de estado, `tfvars` reais ou dados pessoais no Git. Não aplique infraestrutura nem faça chamadas a contas reais sem autorização do usuário.
 - Dados financeiros, e-mails e notas exigem isolamento por usuário, privilégio mínimo, criptografia, retenção e exportação verificável. MCP deve expor ferramentas restritas e somente dados autorizados.
+- Logs devem ser descritivos: todo erro (inclusive 500) registra operação, módulo/serviço envolvido (ex.: Google Calendar), causa original e contexto útil (status do provedor, ids de requisição), sem tokens, segredos ou conteúdo pessoal. Nunca engula exceção nem devolva 500 sem log. Preferência do proprietário registrada em 2026-10-27.
 - Antes de implementar: procure código existente. Faça o menor diff legível, teste comportamento relevante e relate exatamente o que foi verificado.
 
 ## Navegação e segurança do repositório
