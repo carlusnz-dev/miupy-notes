@@ -17,7 +17,7 @@ const failed = () => new ConditionalCheckFailedException({ message: "test", $met
 const event = { habitId: id, date: "2026-10-26", type: "completion" as const, points: 10, createdAt: now, revokedAt: null };
 
 test("DynamoDB: cadastro com chaves por proprietário, criação e CAS condicionais, sem Scan", async () => {
-  const { client, sent } = fake(command => command.constructor.name === "GetCommand" ? { Item: { pk: "USER#alice", sk: `HABIT#${id}`, ownerId: "alice", ...habit } } : {});
+  const { client, sent } = fake(command => command.constructor.name === "GetCommand" ? { Item: { pk: "USER#alice", sk: `HABIT#${id}`, ...habit } } : {});
   const repo = new DynamoHabitsRepository(client, "t");
   await repo.create(habit); assert.match(String(sent[0].input.ConditionExpression), /attribute_not_exists/);
   assert.equal((await repo.findById("alice", id))?.title, "Ler"); assert.equal(sent[1].input.ConsistentRead, true);
