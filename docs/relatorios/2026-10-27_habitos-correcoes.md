@@ -30,8 +30,16 @@ Data: 2026-10-27. Branch `feat/habits-mvp` (worktree `habits-mvp`), Claude Sonne
 
 ## Não executado / pendente
 
-- Transações do DynamoDB só com cliente falso: sem DynamoDB Local (Docker indisponível) nem AWS; semântica real de `TransactWriteItems`, cancelamento por conflito e condições não foi exercitada.
-- Painel "Hábitos do dia" da Agenda não renderizado (o harness só monta Hábitos/Notas); coberto pelo helper compartilhado e `tsc`.
+- Transações no DynamoDB da AWS: não exercitadas (só DynamoDB Local; veja a seção abaixo).
 - Limite de 300 sem serialização entre `POST`/`restore` simultâneos.
 - Ocorrências de eventos de XP sem a execução (estado legado deixado pela falha antiga) não são reconciliadas por migração; desmarcar e marcar de novo a ocorrência corrige.
 - `arquitetura.json` não alterado (sem estado novo comprovado em AWS).
+
+## Validação com DynamoDB Local
+
+Container próprio `miupy-dynamo-habits` (`amazon/dynamodb-local`, `-inMemory -sharedDb`, `127.0.0.1:8100`), parado ao final. Nenhuma chamada à AWS.
+
+- **Suíte completa com `DYNAMODB_TEST_ENDPOINT=http://127.0.0.1:8100`:** 270 aprovados, 0 falhas, 0 ignorados (os 10 testes de integração antes ignorados rodaram, mais 4 novos). Sem a variável: 256 aprovados, 14 ignorados.
+- **Novo `dynamo-habits.integration.test.ts`** (tabela sintética própria, criada e removida): concluir duas vezes = 10 XP e um só evento; desmarcar revoga (`revokedAt`) e é idempotente; remarcar reativa o mesmo evento; desmarcar sem conclusão prévia não cria evento; pontos preservados e isolamento por proprietário; 30 rodadas de concluir/desmarcar concorrentes (90 operações, 2 respostas 409) terminam sempre com execução e XP coerentes. Nomes, aliases e condições da transação funcionam no DynamoDB real; uma mutação deliberada da expressão (alias não definido) faz os testes falharem com `ValidationException`. Nenhum bug novo apareceu no repositório.
+- **Agenda (Playwright headless, 1440 e 390, API local sobre DynamoDB Local, auth e Tauri simulados no navegador, Google desligado):** o painel aparece; marcar/desmarcar atualiza o contador (0/3 → 1/3 → 0/3) e o XP (+5/−5 por hábito de prioridade baixa); com 503 ao avançar de dia, 0 checkboxes e 0 PUT; após voltar e avançar, o PUT vai para o dia visível (`2026-10-28`); erro de leitura inicial mostra o alerta e nenhum checkbox. Capturas em `../.briefs-validacao-2026-10-27/habits-shots/agenda/`.
+- **Observações de baixa severidade (não corrigidas):** o painel não mostra XP (só contador n/m); estados vazio e carregando não têm indicação (o painel não é renderizado); no erro de leitura aparece "0/0" e a mensagem, sem botão para tentar de novo.
