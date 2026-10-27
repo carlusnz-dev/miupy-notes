@@ -15,9 +15,17 @@ infra/
 
 [Decisão](../docs/decisoes/2026-10-24_infra-aws-base.md), [relatório e verificações](../docs/relatorios/2026-10-24_infra-aws.md), [prefixos/retenção S3](../docs/arquitetura/armazenamento-s3.md), [matriz e primeiro acesso IAM](modules/iam/README.md), [bootstrap/recuperação](bootstrap/README.md) e [alarmes](modules/observability/README.md).
 
+## Runtime HTTP preparado em 2026-10-26
+
+`npm run bundle:lambda --workspace @miupy-notes/api` gera `apps/api/dist/lambda.js` localmente; o provider `archive` monta o ZIP no `plan`, sem upload pelo script. A função usa Node.js 22, `serverless-http` e evento HTTP API v2. `GET /health` é público; `/v1/{proxy+}` exige JWT Google com issuer `https://accounts.google.com` e audience `google_client_id`, depois confere o `sub` na API. Tokens com o issuer alternativo `accounts.google.com`, aceito pela API local, exigem avaliação antes de uso em produção. Origens CORS são exatas em `cors_allowed_origins`.
+
+Preencher `allowed_subs_secret_arn` com ARN exato de segredo **já existente**, cujo `SecretString` contém apenas os `sub` Google autorizados separados por vírgula. O conteúdo nunca entra em tfvars, ambiente Lambda ou estado Terraform. A role só recebe `secretsmanager:GetSecretValue` nesse ARN; a configuração atual pressupõe criptografia do segredo com a chave gerenciada `aws/secretsmanager`. Uma chave de cliente exigiria permissão KMS específica antes de implantar. A allowlist é carregada na inicialização e revalidada a cada 60 segundos por ambiente de execução; falha na atualização nega as requisições privadas. A revogação pode levar até 60 segundos para valer em instâncias quentes.
+
+A tabela única usa `pk`/`sk`, PAY_PER_REQUEST, PITR, proteção de exclusão e chave KMS dedicada. Não há índice, fila nem acesso S3 na role HTTP. CloudWatch Logs recebe JSON sem corpo, token ou identidade e usa os grupos cifrados com retenção do módulo de observabilidade. A validação local não confirma permissões reais, conexão Google, acesso ao segredo, funcionamento do CORS no Tauri nem custos.
+
 ## Limites e pré-requisitos
 
-Antes de qualquer chamada real, o proprietário deve aprovar conta, região, orçamento, destinatário, prefixo, retenções e custo. `us-east-1`, `miupy-dev`, US$ 10/mês e retenções dos exemplos são **propostas**, sem aprovação implícita. `alert_email` e `monthly_budget_usd` não têm default; o exemplo contém somente `voce@example.com`. Não versionar tfvars reais, backend local, estado, planos, credenciais ou conteúdo pessoal. Não há Lambda, API Gateway, tabela DynamoDB, SQS, Secrets Manager ou EventBridge criados por esta base.
+Antes de qualquer chamada real, o proprietário deve aprovar conta, região, orçamento, destinatário, prefixo, retenções e custo. `us-east-1`, `miupy-dev`, US$ 10/mês e retenções dos exemplos são **propostas**, sem aprovação implícita. `alert_email` e `monthly_budget_usd` não têm default; o exemplo contém somente `voce@example.com`. Não versionar tfvars reais, backend local, estado, planos, credenciais ou conteúdo pessoal. O código agora declara Lambda, HTTP API e tabela DynamoDB em dev, mas nenhum deles foi implantado; SQS e EventBridge seguem adiados. O segredo de allowlist deve existir fora do Terraform.
 
 1. Preparar identidade externa administrativa com MFA e sessão temporária, permissões revisadas de bootstrap e IAM/KMS. Informar seu ARN IAM estável em `initial_provisioner_arn`; ARN STS de sessão não serve. Ela precisa constar nas allowlists para conseguir criar e manter os recursos sem lockout. Não usar root na rotina.
 2. Criar bootstrap com identidade externa e depois migrar seu estado. O provisionador do app não recebe administração do backend; as permissões opcionais são somente para o estado dev e seu lock.
@@ -57,6 +65,7 @@ cp infra/environments/dev/backend.hcl.example infra/environments/dev/backend.hcl
 # Preencher valores aprovados; manter key dev/terraform.tfstate, distinta do bootstrap.
 terraform -chdir=infra/environments/dev init -backend-config=backend.hcl
 terraform -chdir=infra/environments/dev validate
+npm run bundle:lambda --workspace @miupy-notes/api
 terraform -chdir=infra/environments/dev plan -out=dev.tfplan
 # Revisar plano privado e obter autorização antes de aplicar.
 terraform -chdir=infra/environments/dev apply dev.tfplan
@@ -68,9 +77,9 @@ Se dev já tiver estado local, usar `init -migrate-state`; `-reconfigure` não c
 
 A raiz calcula ARNs de roles/buckets/log groups de forma determinística, evitando ciclos. KMS usa a conta em Principal e `aws:PrincipalArn` exato para delegar a roles presentes/futuras, exigindo também policy IAM; não dá Allow direto a uma sessão STS. A identidade externa inicial é preservada no perímetro. Logs/SNS têm chave própria, objetos têm outra, e bootstrap tem chave exclusiva; outra região acrescenta uma chave billing. O bucket de logs S3 usa SSE-S3 por exigência do serviço de server access logging.
 
-`enable_api_role=false`: informar tabela futura `<prefix>-data` em `api_table_arn` e habilitar a flag somente junto à implantação aprovada. Não cria tabela/função. `api_s3_prefixes=[]` mantém runtime sem S3; autorizar prefixos só quando existir consumidor. Objetos têm estrutura preparada, sem funcionalidade HTTP de upload/exportação. IAM compartilhado não isola usuários HTTP: `sub` e chaves derivadas do proprietário continuam no backend.
+A raiz dev agora compõe tabela `<prefix>-data`, role e função Lambda, HTTP API v2 com JWT Google e log groups com retenção. `api_s3_prefixes=[]` mantém runtime sem S3; autorizar prefixos só quando existir consumidor. Objetos têm estrutura preparada, sem funcionalidade HTTP de upload/exportação. IAM compartilhado não isola usuários HTTP: `sub` e chaves derivadas do proprietário continuam no backend.
 
-HTTP API tem ApiId gerado: `api_id=null` prepara alarmes por logs; fornecer o ID depois ativa as três métricas nativas. Access logs futuros devem ser JSON com `status` e `responseLatency` numéricos, conforme README de observabilidade, sem corpo/token/identidade; Lambda deve usar `LOG_FORMAT=json`. Nomes de função/tabela/grupos devem coincidir com os outputs. Alarmes têm ações SNS ativas e `notBreaching` para dados ausentes; antes dos recursos/telemetria podem ficar em INSUFFICIENT_DATA/OK, sem provar que a aplicação está saudável.
+O ApiId gerado alimenta diretamente três alarmes nativos. Access logs são JSON com `status` e `responseLatency` numéricos, conforme README de observabilidade, sem corpo/token/identidade; Lambda deve usar `LOG_FORMAT=json`. Nomes de função/tabela/grupos devem coincidir com os outputs. Alarmes têm ações SNS ativas e `notBreaching` para dados ausentes; antes dos recursos/telemetria podem ficar em INSUFFICIENT_DATA/OK, sem provar que a aplicação está saudável.
 
 Request metrics S3 e seus alarmes compartilham a flag `enable_s3_request_metrics` e FilterId `EntireBucket`. CloudTrail completo não é criado; `enable_cloudtrail_alarms` só habilita filtros/alarmes e exige uma trilha externa entregando eventos de gerenciamento no grupo de auditoria. `enable_cost_anomaly_detection=false` evita conflito com monitor dimensional existente; revisar antes de ativar. OIDC está desligado e, mesmo ativado, cria só confiança exata sem permissões de deploy.
 
@@ -91,7 +100,7 @@ Sem créditos/free tier garantidos, impostos ou tráfego de saída. Rever preço
 | CloudTrail | Primeira cópia de gerenciamento gratuita no serviço; S3/logs custam. Trilha completa e eventos de dados não foram habilitados. |
 | Cost Anomaly Detection | Opção de monitoramento sem tarifa adicional do serviço; notificações/serviços associados podem cobrar; desligada. |
 
-Piso ilustrativo sem franquias: chaves+alarmes+métricas+dashboard ≈ US$ 10,30/mês, antes de ingestão/S3/SNS e futuras Lambda/API/DynamoDB; pode ultrapassar a proposta de orçamento de US$ 10. Com dashboard na franquia, esses itens seriam cerca de US$ 7,30. Aprovar orçamento/escopo após revisar o uso total da conta. [KMS](https://aws.amazon.com/kms/pricing/), [CloudWatch](https://aws.amazon.com/cloudwatch/pricing/), [S3](https://aws.amazon.com/s3/pricing/), [SNS](https://aws.amazon.com/sns/pricing/), [Budgets](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/), [CloudTrail](https://aws.amazon.com/cloudtrail/pricing/). Alertas financeiros atrasam horas e **não impõem teto rígido**.
+Piso histórico da base anterior sem franquias: chaves+alarmes+métricas+dashboard ≈ US$ 10,30/mês. A nova chave de dados, alarmes nativos, Lambda, HTTP API, DynamoDB, Secrets Manager e respectivas operações aumentam o custo; rever preços e volumes antes do primeiro plan real; pode ultrapassar a proposta de orçamento de US$ 10. Com dashboard na franquia, esses itens seriam cerca de US$ 7,30. Aprovar orçamento/escopo após revisar o uso total da conta. [KMS](https://aws.amazon.com/kms/pricing/), [CloudWatch](https://aws.amazon.com/cloudwatch/pricing/), [S3](https://aws.amazon.com/s3/pricing/), [SNS](https://aws.amazon.com/sns/pricing/), [Budgets](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/), [CloudTrail](https://aws.amazon.com/cloudtrail/pricing/). Alertas financeiros atrasam horas e **não impõem teto rígido**.
 
 ## Validação local segura
 
