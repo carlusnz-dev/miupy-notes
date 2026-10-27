@@ -18,6 +18,7 @@ const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
 const BanksPage = lazy(() => import("./finance/BanksPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
 const LibraryPage = lazy(() => import("./library/LibraryPage"));
+const HabitsPage = lazy(() => import("./habits/HabitsPage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
 import { usePageTitle } from "./lib/use-page-title";
@@ -30,6 +31,7 @@ const sections = [
   { path: "/agendas", label: "Agendas", description: "Compromissos e tempo com contexto." },
   { path: "/finance", label: "Finanças", description: "Movimentos e decisões com clareza." },
   { path: "/library", label: "Biblioteca", description: "Livros, filmes e músicas que ficaram." },
+  { path: "/habits", label: "Hábitos", description: "Pequenas repetições que sustentam o resto." },
 ] as const;
 
 const theme = {
@@ -121,6 +123,7 @@ function Shell() {
                 {/* Atalhos antigos (Sidebar e Início) apontavam para /events. */}
                 <Route path="/events" element={<Navigate to="/agendas" replace />} />
                 <Route path="/library" element={<Suspense fallback={<SkeletonBody label="Carregando biblioteca…" cards={4} />}><LibraryPage /></Suspense>} />
+                <Route path="/habits" element={<Suspense fallback={<SkeletonBody label="Carregando hábitos…" cards={3} />}><HabitsPage /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>

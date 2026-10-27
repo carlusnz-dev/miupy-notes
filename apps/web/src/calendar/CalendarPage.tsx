@@ -61,5 +61,5 @@ export default function CalendarPage() {
     );
   }
   if (!ownerId) return <section className="calendar-page"><p role="status">Preparando suas agendas…</p></section>;
-  return <CalendarWorkspace key={ownerId} ownerId={ownerId} store={store} remote={remote} loadNotes={loadNotes} google={google} tasksApi={tasksApi} isCurrent={() => isCurrentAuthSession(session)} />;
+  return <CalendarWorkspace key={ownerId} ownerId={ownerId} store={store} remote={remote} loadNotes={loadNotes} google={google} tasksApi={tasksApi} habits isCurrent={() => isCurrentAuthSession(session)} />;
 }

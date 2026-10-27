@@ -11,6 +11,7 @@ import GooglePanel from "./GooglePanel";
 import MonthView from "./MonthView";
 import QuickCreate, { type ItemKind, type MoreSeed } from "./QuickCreate";
 import TaskForm, { TaskFormBody, type TaskFields } from "./TaskForm";
+import HabitsAgendaPanel from "./HabitsAgendaPanel";
 import TasksPanel from "./TasksPanel";
 import TimeGrid, { type NewTimes, type Slot } from "./TimeGrid";
 import UpcomingList from "./UpcomingList";
@@ -44,7 +45,7 @@ const modes = [
 
 type Editing = { key: number; entry: DisplayEvent | null; day: CalendarDate; seed?: Partial<Fields> };
 
-export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, tasksApi, isCurrent }: {
+export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, tasksApi, habits, isCurrent }: {
   ownerId: string;
   store: CalendarStore;
   remote: RangeRemote;
@@ -52,6 +53,8 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   google: GoogleApi;
   /** Ausente = sem tarefas (o formulário não oferece "Tarefa"). */
   tasksApi?: TasksApi;
+  /** Mostra as ocorrências de hábitos do dia em foco; ausente = sem painel. */
+  habits?: boolean;
   isCurrent?: () => boolean;
 }) {
   const calendar = useCalendar({ ownerId, store, remote, isCurrent });
@@ -176,6 +179,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       <div className="calendar-layout" data-mode={mode}>
         <div className="calendar-top">
           <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} onCreate={() => openNew()} />
+          {habits && <HabitsAgendaPanel day={anchor} />}
           {tasksApi && tasks.state === "ready" && <TasksPanel pending={tasks.pending} overdue={tasks.overdue} onToggle={tasks.toggle} onOpen={openTask} error={tasks.error} onDismissError={tasks.dismissError} />}
         </div>
         <div className="calendar-view" ref={viewRef} aria-label={`Visualização por ${modes.find((item) => item.value === mode)?.label.toLowerCase()}`}>

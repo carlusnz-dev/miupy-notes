@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import gsap from "gsap";
 import { NavLink } from "react-router-dom";
-import { BookOpen, CalendarDays, CircleDollarSign, House, NotebookPen, PanelLeftClose, PanelLeftOpen, Settings, UserRound } from "lucide-react";
+import { BookOpen, CalendarDays, Repeat, CircleDollarSign, House, NotebookPen, PanelLeftClose, PanelLeftOpen, Settings, UserRound } from "lucide-react";
 import "./sidebar.css";
 
 const minWidth = 200;
@@ -12,6 +12,7 @@ const links = [
   { path: "/agendas", label: "Agenda", icon: CalendarDays },
   { path: "/finance", label: "Finanças", icon: CircleDollarSign },
   { path: "/library", label: "Biblioteca", icon: BookOpen },
+  { path: "/habits", label: "Hábitos", icon: Repeat },
 ];
 
 function Letters({ text }: { text: string }) {
