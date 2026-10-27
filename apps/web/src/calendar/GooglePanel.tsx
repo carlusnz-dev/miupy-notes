@@ -3,6 +3,7 @@ import Select from "../components/Select";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { RefreshCw } from "lucide-react";
 import type { GoogleStatusOutput, GoogleSyncOutput } from "../lib/calendar-api";
+import Button from "../components/Button";
 
 const stateText: Record<GoogleStatusOutput["state"], string> = {
   not_configured: "Não configurado neste servidor",
@@ -80,14 +81,14 @@ export default function GooglePanel({ status, error, onSync, onConnect, onDiscon
       {failure && <p className="calendar-error" role="alert">{failure}</p>}
       <div className="calendar-google-actions">
       {status && status.state !== "not_configured" && onConnect && <>
-        {status.state === "not_connected" && !scopesMissing && <button type="button" className="button button-secondary" onClick={() => void connect()} disabled={connecting || syncing || disconnecting}>{connecting ? "Ativando…" : "Ativar Google Calendar"}</button>}
+        {status.state === "not_connected" && !scopesMissing && <Button type="button" onClick={() => void connect()} disabled={connecting || syncing || disconnecting}>{connecting ? "Ativando…" : "Ativar Google Calendar"}</Button>}
         {(status.state !== "not_connected" || scopesMissing) && <>
           <Select label="Permissão do Google" value={mode} options={[{ value: "mirror", label: "Somente leitura" }, { value: "reflect", label: "Leitura e escrita" }]} onChange={(value) => setMode(value as "mirror" | "reflect")} disabled={connecting || syncing || disconnecting} />
-          <button type="button" className="button button-secondary" onClick={() => void connect(mode)} disabled={connecting || syncing || disconnecting}>{connecting ? "Aguardando o login do Google…" : status.state === "connected" ? "Alterar permissão" : "Conceder Calendar no login do Google"}</button>
+          <Button type="button" onClick={() => void connect(mode)} disabled={connecting || syncing || disconnecting}>{connecting ? "Aguardando o login do Google…" : status.state === "connected" ? "Alterar permissão" : "Conceder Calendar no login do Google"}</Button>
           <p className="calendar-note">{status.state === "connected" ? "Alterar a permissão refaz o login do Google uma vez, com a nova escolha." : "O Calendar não veio no seu login. Entre de novo no Google uma vez, concedendo o Calendar."}</p>
         </>}
       </>}
-      {status?.state === "connected" && <button type="button" className="button button-secondary" onClick={() => void sync()} disabled={syncing || connecting || disconnecting}><RefreshCw size={14} aria-hidden="true" />&nbsp;{syncing ? "Sincronizando…" : "Sincronizar agora"}</button>}
+      {status?.state === "connected" && <Button type="button" onClick={() => void sync()} disabled={syncing || connecting || disconnecting}><RefreshCw size={14} aria-hidden="true" />&nbsp;{syncing ? "Sincronizando…" : "Sincronizar agora"}</Button>}
       {onDisconnect && (status?.state === "connected" || status?.state === "needs_reauth") && <button type="button" className="calendar-link-button" disabled={connecting || syncing || disconnecting} onClick={() => setConfirmDisconnect(true)}>Desconectar</button>}
       </div>
       <ConfirmDialog open={confirmDisconnect} title="Desconectar Google Calendar?" confirmLabel="Desconectar" busyLabel="Desconectando…" cancelLabel="Manter conexão" busy={disconnecting} onCancel={() => setConfirmDisconnect(false)} onConfirm={() => void disconnect()}>

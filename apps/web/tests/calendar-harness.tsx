@@ -11,6 +11,7 @@ import type { TasksApi } from "../src/calendar/tasks";
 import "../src/fonts.css";
 import "../src/typography.css";
 import "../src/App.css";
+import "../src/components/touch.css";
 
 const theme = {
   "--color-background": tokens.colors.background, "--color-surface": tokens.colors.surface, "--color-surface-raised": tokens.colors.surfaceRaised,

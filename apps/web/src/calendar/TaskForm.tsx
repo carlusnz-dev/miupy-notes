@@ -4,6 +4,7 @@ import DatePicker from "../components/DatePicker";
 import Modal from "../components/Modal";
 import TimeField from "../components/TimeField";
 import type { TaskDraft, TaskOutput } from "../lib/calendar-api";
+import Button from "../components/Button";
 
 export type TaskFields = { title: string; description: string; dueDate: string; dueTime: string; completed: boolean };
 const validTime = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -69,9 +70,9 @@ export function TaskFormBody({ open, task, seed, onSubmit, onDelete, onClose, on
         {task && <label className="calendar-check"><input type="checkbox" checked={fields.completed} onChange={(e) => set("completed", e.target.checked)} /> Concluída</label>}
         {error && <p className="calendar-error" role="alert">{error}</p>}
         <div className="modal-actions">
-          {task && onDelete && <button type="button" className="button button-secondary calendar-delete" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</button>}
-          <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>Cancelar</button>
-          <button type="submit" className="button" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</button>
+          {task && onDelete && <Button variant="danger" className="calendar-delete" type="button" disabled={busy} onClick={() => setConfirmDelete(true)}>Excluir</Button>}
+          <Button type="button" disabled={busy} onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" type="submit" disabled={busy}>{busy ? "Guardando…" : "Salvar"}</Button>
         </div>
         <p className="calendar-note">Tarefas são salvas direto no servidor e exigem conexão.</p>
       </form>
