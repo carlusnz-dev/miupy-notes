@@ -7,5 +7,6 @@
 | [`relatorio`](relatorio/SKILL.md) | Ao encerrar sessão ou frente de trabalho. |
 | [`validar-design`](validar-design/SKILL.md) | Ao conferir telas em navegador com MCP disponível. |
 | [`revisar-pr`](revisar-pr/SKILL.md) | Ao revisar um diff ou PR antes de merge. |
+| [`miupy-mcp`](miupy-mcp/SKILL.md) | Ao implementar, revisar ou testar o servidor MCP (`apps/mcp`). |
 
 Estas instruções adaptam práticas gerais observadas no `miupy` ao escopo deste projeto. `.agents/skills/` é a fonte única; `.claude/skills/` e `.codex/skills/` apontam para estas pastas por links simbólicos.
