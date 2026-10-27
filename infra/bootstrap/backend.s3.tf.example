@@ -1,0 +1,4 @@
+# Copiar para backend_override.tf SOMENTE depois de criar o bucket com estado local.
+terraform {
+  backend "s3" {}
+}
