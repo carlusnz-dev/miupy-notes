@@ -138,7 +138,7 @@ test("níveis filtram debug e classificação trata causas cíclicas", async () 
   assert.deepEqual(lines.map((line) => JSON.parse(line).level), ["info", "warn", "error"]);
   const error = Object.assign(new Error("secret"), { cause: {} });
   error.cause = error;
-  assert.deepEqual(classifyError(error), { classification: "unknown_error", errorTypes: [] });
+  assert.deepEqual(classifyError(error), { classification: "unknown_error", errorTypes: [], service: undefined, operation: undefined, detail: undefined, providerStatus: undefined, errorChain: ["Error"], origin: classifyError(error).origin });
   assert.doesNotThrow(() => new Logger("info", () => { throw new Error("sink unavailable"); }).info("request.completed"));
 });
 
@@ -238,5 +238,43 @@ test("handler HTTP legível informa motivo, status e requestId sem expor requisi
     assert.ok(lines.some(line => line.includes("ERROR - GET /v1/notes/:id Não foi possível conectar") && line.includes(body.error.requestId)));
     assert.ok(lines.some(line => line.includes("WARN - POST [rota não identificada] JSON inválido")));
     assert.doesNotMatch(lines.join("\n"), /PRIVATE|\x1b/);
+  } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
+});
+
+test("500 registra operação, serviço, causa original e requestId sem dados sensíveis", async () => {
+  const { Router } = await import("express");
+  const { Logger } = await import("./core/logging/logger.js");
+  const { AppError, ServiceError } = await import("./core/domain/app-error.js");
+  const lines: string[] = [];
+  const log = new Logger("info", (line) => { lines.push(line); }, { format: "json" });
+  const router = Router();
+  const network = new TypeError("fetch failed https://oauth.example/token?code=TOKEN", { cause: Object.assign(new Error("connect secret@example.com"), { code: "ECONNREFUSED" }) });
+  router.get("/service", () => { throw new ServiceError({ service: "Google (chaves do login)", operation: "validar o ID token" }, network); });
+  router.get("/upstream", () => { throw new AppError(502, "UPSTREAM_UNAVAILABLE", "Indisponível.", undefined, { service: "Google Calendar", detail: "unavailable", providerStatus: 503 }, network); });
+  router.get("/plain", () => { throw new RangeError("private conteúdo da nota"); });
+  const local = createServer(createApp({ authenticate: (_req, _res, next) => next(), notesRouter: router }, log));
+  await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
+  const address = local.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    for (const [path, status] of [["/v1/notes/service", 500], ["/v1/notes/upstream", 502], ["/v1/notes/plain", 500]] as const) {
+      const response: Response = await fetch(`http://127.0.0.1:${address.port}${path}`);
+      assert.equal(response.status, status);
+      const id = response.headers.get("x-request-id");
+      const failed = lines.map((line) => JSON.parse(line)).find((entry) => entry.requestId === id && entry.event === "request.failed");
+      assert.equal(failed.level, "error");
+      assert.equal(failed.statusCode, status);
+      assert.equal(failed.route, path);
+      assert.match(failed.origin, /^src\/app\.test\.ts:\d+$/);
+      if (path.endsWith("service")) {
+        assert.equal(failed.service, "Google (chaves do login)");
+        assert.equal(failed.operation, "validar o ID token");
+        assert.deepEqual(failed.errorChain, ["TypeError", "Error(ECONNREFUSED)"]);
+        assert.match(failed.message, /^Falha em Google \(chaves do login\) ao validar o ID token\.$/);
+      }
+      if (path.endsWith("upstream")) assert.deepEqual([failed.service, failed.detail, failed.providerStatus], ["Google Calendar", "unavailable", 503]);
+      if (path.endsWith("plain")) assert.deepEqual(failed.errorChain, ["RangeError"]);
+    }
+    assert.doesNotMatch(lines.join("\n"), /TOKEN|secret@|private|oauth\.example|conteúdo/);
   } finally { await new Promise<void>((resolve) => local.close(() => resolve())); }
 });

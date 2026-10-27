@@ -97,7 +97,7 @@ Mensagem pública sem dados sensíveis; `requestId` presente em todos os erros, 
 | `409` | `CONFLICT` | `version` divergente |
 | `413` | `PAYLOAD_TOO_LARGE` | corpo acima de 256 kB |
 | `429` | `RATE_LIMITED` | limite do provedor Calendar; throttling do API Gateway depende de implantação |
-| `500` | `INTERNAL_ERROR` | falha não tratada |
+| `500` | `INTERNAL_ERROR` | falha não tratada, inclusive falha ao obter as chaves do Google para validar o ID token (timeout, rede ou resposta não-200 do JWKS); o motivo vai ao log, não à resposta |
 | `503` | `CREDENTIAL_STORE_UNAVAILABLE` | chaveiro do login indisponível para o Calendar local |
 
 ## Planejado
@@ -108,7 +108,7 @@ Mensagem pública sem dados sensíveis; `requestId` presente em todos os erros, 
 | `GET` | `/exports/{id}` | Consultar estado e obter acesso temporário ao arquivo. |
 | `GET` | `/integrations` | Listar integrações e estado, sem credenciais. |
 
-Pendente: idempotência de criação; política de exclusão; upload de anexos; falha ao obter o JWKS hoje responde `500 INTERNAL_ERROR` (sem código próprio).
+Pendente: idempotência de criação; política de exclusão; upload de anexos; falha ao obter o JWKS responde `500 INTERNAL_ERROR` (sem código próprio; resposta não-200 do JWKS deixou de virar `401`).
 
 ## Biblioteca
 

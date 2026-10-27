@@ -83,7 +83,7 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
         response = await this.doFetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
       } catch (error) {
         if (error instanceof GoogleApiError || error instanceof AppError) throw error;
-        if (attempt >= MAX_ATTEMPTS) throw new GoogleApiError("unavailable");
+        if (attempt >= MAX_ATTEMPTS) throw new GoogleApiError("unavailable", undefined, { cause: error });
         await this.sleep(this.delay(attempt));
         continue;
       }
@@ -100,7 +100,7 @@ export class HttpGoogleCalendarClient extends GoogleCalendarClient {
       const retryable = response.status === 429 || response.status >= 500 || (response.status === 403 && reason !== undefined && RETRYABLE_REASONS.has(reason));
       // Esperas longas voltam à API com o prazo intacto, sem prender a requisição HTTP ou antecipar o provedor.
       if (retryable && attempt < MAX_ATTEMPTS && (retryAfterMs ?? 0) <= MAX_DELAY_MS) { await this.sleep(retryAfterMs ?? this.delay(attempt)); continue; }
-      throw new GoogleApiError(this.kind(response.status, reason), retryAfterMs);
+      throw new GoogleApiError(this.kind(response.status, reason), retryAfterMs, { status: response.status });
     }
   }
 

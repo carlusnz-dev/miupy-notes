@@ -28,6 +28,8 @@ const versionConflict = () => new AppError(409, "CONFLICT", "O evento foi altera
 /** Escopos Calendar concedidos ao login; o de escrita vale também para leitura. */
 const calendarScopes = (granted: readonly string[]) => [SCOPE_REFLECT, SCOPE_MIRROR].filter((scope) => granted.includes(scope));
 const modeFor = (scopes: readonly string[]): GoogleMode => (scopes[0] === SCOPE_REFLECT ? "reflect" : "mirror");
+/** Contexto de log das falhas 5xx do provedor: só o tipo classificado e o status HTTP, nunca corpo ou texto do Google. */
+const upstream = (error: GoogleApiError) => ({ service: "Google Calendar", detail: error.kind, providerStatus: error.status });
 /** 404/410: o evento já não existe no Google. */
 const missing = (error: unknown) => error instanceof GoogleApiError && (error.kind === "not_found" || error.kind === "gone");
 
@@ -431,8 +433,8 @@ export class GoogleIntegrationServiceImpl extends GoogleIntegrationService {
       case "precondition_failed": return googleConflict();
       case "not_found": return new AppError(409, "GOOGLE_EVENT_MISSING", "O evento não existe mais no Google. Desfaça o envio e envie de novo.");
       case "conflict": return googleConflict();
-      case "unavailable": return new AppError(502, "UPSTREAM_UNAVAILABLE", "O Google Calendar está indisponível. Tente de novo.", error.retryAfterMs);
-      default: return new AppError(502, "UPSTREAM_REJECTED", "O Google recusou o pedido.");
+      case "unavailable": return new AppError(502, "UPSTREAM_UNAVAILABLE", "O Google Calendar está indisponível. Tente de novo.", error.retryAfterMs, upstream(error), error);
+      default: return new AppError(502, "UPSTREAM_REJECTED", "O Google recusou o pedido.", undefined, upstream(error), error);
     }
   }
 }

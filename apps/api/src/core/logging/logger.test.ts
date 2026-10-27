@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Logger, type LogLevel } from "./logger.js";
+import { ServiceError } from "../domain/app-error.js";
+import { classifyError, Logger, type LogLevel } from "./logger.js";
 
 function capture(color = false) {
   const lines: string[] = [];
@@ -85,4 +86,27 @@ test("JSON opcional mantém metadados, acrescenta mensagem e não contém ANSI",
   assert.equal(entry.message, "Requisição concluída com sucesso.");
   assert.equal(entry.route, "/health");
   assert.doesNotMatch(lines[0], /\x1b/);
+});
+
+test("falha de serviço traz serviço, operação, status e causa; texto livre é filtrado", () => {
+  const { log, lines } = capture();
+  log.error("request.failed", { method: "GET", route: "/v1/habits/occurrences", statusCode: 500, requestId: "r1", service: "Google Calendar", operation: "sincronizar", detail: "unavailable", providerStatus: 503, errorChain: ["TypeError", "Error(ECONNREFUSED)"], origin: "src/core/x.ts:12", ...{ message: "SECRET" } });
+  log.error("request.failed", { statusCode: 500, service: "x\nTOKEN=abc123 <script>", providerStatus: 99999 });
+  assert.match(lines[0], /ERROR - GET \/v1\/habits\/occurrences Falha em Google Calendar ao sincronizar\. \[HTTP 500 \| requestId=r1 \| detalhe=unavailable \| provedor=HTTP 503 \| causa=TypeError > Error\(ECONNREFUSED\) \| origem=src\/core\/x\.ts:12\]$/);
+  assert.equal(lines.length, 2);
+  assert.doesNotMatch(lines.join("\n"), /SECRET|<|=abc|99999/);
+  const json: string[] = [];
+  new Logger("info", line => { json.push(line); }, { format: "json" }).error("request.failed", { statusCode: 500, service: "Google Calendar", errorChain: ["Error"] });
+  assert.deepEqual([JSON.parse(json[0]).service, JSON.parse(json[0]).errorChain], ["Google Calendar", ["Error"]]);
+});
+
+test("classifyError extrai contexto, causas e origem sem mensagens", () => {
+  const root = Object.assign(new Error("private body"), { code: "ECONNREFUSED" });
+  const wrapped = new ServiceError({ service: "Google (chaves do login)", operation: "validar o ID token" }, new TypeError("private token", { cause: root }));
+  const info = classifyError(wrapped);
+  assert.deepEqual([info.service, info.operation, info.errorChain], ["Google (chaves do login)", "validar o ID token", ["TypeError", "Error(ECONNREFUSED)"]]);
+  assert.match(info.origin!, /^src\/core\/logging\/logger\.test\.ts:\d+$/);
+  assert.doesNotMatch(JSON.stringify(info), /private/);
+  const aws = classifyError(Object.assign(new Error("private"), { name: "ThrottlingException", $metadata: { httpStatusCode: 400 } }));
+  assert.deepEqual([aws.service, aws.providerStatus, aws.errorChain], ["DynamoDB", 400, ["ThrottlingException"]]);
 });

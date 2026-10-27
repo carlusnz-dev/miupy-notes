@@ -19,7 +19,7 @@ export function createErrorHandler(log: Logger = logger): ErrorRequestHandler {
     const bodyError = bodyErrorType(error);
     const statusCode = error instanceof ZodError || bodyError === "entity.parse.failed" ? 400 : error instanceof AppError ? error.status : bodyError === "entity.too.large" ? 413 : 500;
     const reason: LogFields["reason"] = bodyError === "entity.parse.failed" ? "invalid_json" : bodyError === "entity.too.large" ? "payload_too_large" : undefined;
-    const fields = { requestId: res.locals.requestId as string, method: requestMethod(req), statusCode, route: requestRoute(req, res), reason, ...classifyError(error), ...(expected ? { classification: "request_rejected" } : {}) };
+    const fields = { requestId: res.locals.requestId as string, method: requestMethod(req), statusCode, route: requestRoute(req, res), reason, ...classifyError(error), ...(expected ? { classification: "request_rejected", errorChain: undefined, origin: undefined } : {}) };
     if (expected) log.warn("request.failed", fields);
     else log.error("request.failed", fields);
     // Não delegar Error bruto ao handler padrão: ele imprime mensagem/stack em dev.
