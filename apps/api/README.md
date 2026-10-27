@@ -1,6 +1,6 @@
 # API — template
 
-Express + TypeScript para Lambda via `serverless-http`. O servidor local responde `GET /health` e monta `/v1/notes` (listar com cursor, criar, ler, atualizar com `version` e `409`, excluir) atrás da verificação do ID token do Google (`core/http/authenticate.ts`) e da lista `ALLOWED_SUBS`. Contrato em `docs/arquitetura/api.md`. Não há tabela, Lambda ou API Gateway implantados.
+Express + TypeScript para Lambda via `serverless-http`. O servidor local responde `GET /health` e monta `/v1/notes` (listar com cursor, criar, ler, atualizar com `version` e `409`, excluir) atrás da verificação do ID token do Google (`core/http/authenticate.ts`) e da lista `ALLOWED_SUBS`. Contrato em `docs/arquitetura/api.md`. No dev da AWS há tabela, Lambda e HTTP API aplicadas desde 2026-10-27 (ver "Lambda" abaixo).
 
 ```text
 src/
@@ -27,7 +27,7 @@ Classes concretas herdam contratos abstratos de `core/`. Outro módulo só impor
 
 Da raiz: `npm run dev:db` (DynamoDB Local em Docker, `127.0.0.1:8000`), `npm run db:create-table`, `npm run dev:api`, `npm run build:api`, `npm run test:api` e `npm run check:modules`. A porta local padrão é 4000 e o listener usa `127.0.0.1`. Variáveis: `apps/api/.env.development` (endpoint e tabela locais, versionado) e `.env.local` na raiz (ignorado): `GOOGLE_CLIENT_ID`, `ALLOWED_SUBS` (modelo em `.env.example`). `server.ts` recusa `DYNAMODB_ENDPOINT` fora de loopback e usa credenciais falsas.
 
-A Lambda troca a fonte de claims por `lambdaAuthorizerClaims` (`requestContext.authorizer.jwt.claims`), mantendo a mesma lista de `sub`. Nunca aceitar `ownerId` do corpo HTTP como autoridade. Variáveis da Lambda (todas obrigatórias; falta de qualquer uma impede a inicialização): `NOTES_TABLE_NAME`, `ALLOWED_SUBS_SECRET_ARN` e `ALLOWED_CIDRS`. `core/http/source-ip-guard.ts` aplica `ALLOWED_CIDRS` antes de qualquer rota, inclusive `/health`, com `403 ORIGIN_NOT_ALLOWED` (contrato em `docs/arquitetura/api.md`). O bundle sai de `npm run bundle:lambda`, consumido por `infra/environments/dev` (`data.archive_file`); nada foi implantado.
+A Lambda troca a fonte de claims por `lambdaAuthorizerClaims` (`requestContext.authorizer.jwt.claims`), mantendo a mesma lista de `sub`. Nunca aceitar `ownerId` do corpo HTTP como autoridade. Variáveis da Lambda (todas obrigatórias; falta de qualquer uma impede a inicialização): `NOTES_TABLE_NAME`, `ALLOWED_SUBS_SECRET_ARN` e `ALLOWED_CIDRS`. `core/http/source-ip-guard.ts` aplica `ALLOWED_CIDRS` antes de qualquer rota, inclusive `/health`, com `403 ORIGIN_NOT_ALLOWED` (contrato em `docs/arquitetura/api.md`). O bundle sai de `npm run bundle:lambda`, consumido por `infra/environments/dev` (`data.archive_file`). A Lambda está implantada no dev desde 2026-10-27 (verificada só por `curl`: `/health` 200 e `/v1` sem token 401). Em produção o SDK usa só os endpoints AWS padrão (HTTPS): a inicialização falha se houver qualquer variável `AWS_ENDPOINT_URL*`. Falha de inicialização reinicia o runtime na próxima invocação (`lambda.init_failed`); falha da própria requisição é aguardada, registrada (`lambda.invoke_failed`) e devolvida sem reiniciar.
 
 ## Logs e diagnóstico local
 

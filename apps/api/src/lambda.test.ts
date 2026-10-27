@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Router } from "express";
 import { createApp } from "./app.js";
-import { adaptApp, createAllowedSubsLoader, handler } from "./lambda.js";
+import { adaptApp, createAllowedSubsLoader, createLambdaHandler, handler } from "./lambda.js";
 import { Logger } from "./core/logging/logger.js";
 import { parseAllowedCidrs, sourceIpGuard } from "./core/http/source-ip-guard.js";
 import { authenticate, lambdaAuthorizerClaims } from "./core/http/authenticate.js";
@@ -141,4 +141,39 @@ test("falha inesperada registra módulo, operação, causa e frame sem mensagem 
   assert.deepEqual(failed.errorChain, ["DependencyFailure", "AccessDeniedException(providerStatus=400,providerRequestId=aws-req-1)"]);
   assert.ok(Array.isArray(failed.origin) && failed.origin.length > 0);
   assert.doesNotMatch(JSON.stringify(lines), /privado|token abc|\/home\//);
+});
+
+test("Lambda recusa subir com endpoint AWS redirecionado, inclusive HTTP", async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { NOTES_TABLE_NAME: "synthetic-table", ALLOWED_SUBS_SECRET_ARN: "arn:aws:secretsmanager:us-east-1:000000000000:secret:synthetic", ALLOWED_CIDRS: "203.0.113.0/24", AWS_ENDPOINT_URL_DYNAMODB: "http://127.0.0.1:8000" });
+  const stderr = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (() => true) as typeof process.stderr.write;
+  try {
+    await assert.rejects(handler(event("/health"), context), /AWS_ENDPOINT_URL_DYNAMODB/);
+  } finally {
+    process.stderr.write = stderr;
+    for (const key of ["NOTES_TABLE_NAME", "ALLOWED_SUBS_SECRET_ARN", "ALLOWED_CIDRS", "AWS_ENDPOINT_URL_DYNAMODB"]) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  }
+});
+
+test("falha da própria invocação é aguardada, registrada e não reinicia o runtime", async () => {
+  const written: string[] = [];
+  const stderr = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string) => { written.push(String(chunk)); return true; }) as typeof process.stderr.write;
+  let inits = 0;
+  const failing = createLambdaHandler(async () => { inits += 1; return async () => { throw Object.assign(new Error("conteúdo privado"), { name: "InvokeFailure" }); }; });
+  try {
+    await assert.rejects(failing(event("/v1/notes") as never, context as never), /conteúdo privado/);
+    await assert.rejects(failing(event("/v1/notes") as never, context as never), /conteúdo privado/);
+  } finally {
+    process.stderr.write = stderr;
+  }
+  assert.equal(inits, 1);
+  const lines = written.filter((entry) => entry.includes("Falha ao executar a requisição na Lambda"));
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /módulo=lambda \| operação=invoke \| causa=InvokeFailure/);
+  assert.doesNotMatch(written.join(""), /privado/);
 });

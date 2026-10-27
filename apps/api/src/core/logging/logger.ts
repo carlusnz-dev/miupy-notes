@@ -1,7 +1,7 @@
 import { AppError, ConfigurationError, DependencyError } from "../domain/app-error.js";
 
 export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
-export type LogEvent = "request.started" | "request.completed" | "request.aborted" | "request.failed" | "request.denied" | "server.listening" | "dependencies.configured" | "lambda.init_failed";
+export type LogEvent = "request.started" | "request.completed" | "request.aborted" | "request.failed" | "request.denied" | "server.listening" | "dependencies.configured" | "lambda.init_failed" | "lambda.invoke_failed";
 export type LogFields = {
   requestId?: string; method?: string; route?: string; statusCode?: number; durationMs?: number; classification?: string; errorTypes?: string[];
   reason?: "invalid_json" | "payload_too_large" | "source_ip_not_allowed" | "source_ip_invalid"; port?: number; dependency?: "dynamodb-local" | "dynamodb" | "secretsmanager" | "aws-sdk";
@@ -39,6 +39,7 @@ function messageFor(event: LogEvent, fields: LogFields): string {
       ? "Requisição bloqueada: o API Gateway não informou um IP de origem válido."
       : "Requisição bloqueada: o IP de origem não está em ALLOWED_CIDRS.";
     case "lambda.init_failed": return "Falha ao inicializar a Lambda; todas as requisições serão recusadas até a próxima inicialização.";
+    case "lambda.invoke_failed": return "Falha ao executar a requisição na Lambda; o erro foi devolvido ao API Gateway.";
     case "request.completed": return fields.statusCode && fields.statusCode >= 400 ? `Resposta enviada. ${statusReason(fields.statusCode)}` : "Requisição concluída com sucesso.";
     case "request.failed":
       if (fields.reason === "invalid_json") return "JSON inválido no corpo da requisição.";

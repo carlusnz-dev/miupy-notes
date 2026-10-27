@@ -42,7 +42,14 @@ export function createAllowedSubsLoader(read: () => Promise<string | undefined>,
   };
 }
 
+/** Em produção o SDK usa só os endpoints AWS padrão (HTTPS); variáveis que os redirecionam, inclusive para HTTP, são recusadas. */
+function assertDefaultAwsEndpoints() {
+  const override = Object.keys(process.env).find((name) => name.startsWith("AWS_ENDPOINT_URL"));
+  if (override) throw new ConfigurationError(override, `Remova ${override}: a Lambda só usa os endpoints AWS padrão.`);
+}
+
 async function createHandler() {
+  assertDefaultAwsEndpoints();
   const tableName = required("NOTES_TABLE_NAME");
   const secretArn = required("ALLOWED_SUBS_SECRET_ARN");
   const allowedCidrs = parseAllowedCidrs(required("ALLOWED_CIDRS"));
@@ -73,15 +80,29 @@ async function createHandler() {
   return adaptApp(app);
 }
 
-let runtime: ReturnType<typeof createHandler> | undefined;
-export async function handler(event: Parameters<Awaited<ReturnType<typeof createHandler>>>[0], context: Parameters<Awaited<ReturnType<typeof createHandler>>>[1]) {
-  runtime ??= createHandler();
-  try {
-    return (await runtime)(event, context);
-  } catch (error) {
-    // Falha de inicialização (configuração, segredo): registra a causa e tenta de novo na próxima invocação.
-    runtime = undefined;
-    logger.error("lambda.init_failed", { module: "lambda", ...describeError(error), operation: "createHandler" });
-    throw error;
-  }
+type LambdaRuntime = Awaited<ReturnType<typeof createHandler>>;
+
+/** Separa falha de inicialização (nova tentativa na próxima invocação) de falha da requisição (runtime preservado). */
+export function createLambdaHandler(init: () => Promise<LambdaRuntime>) {
+  let runtime: Promise<LambdaRuntime> | undefined;
+  return async (event: Parameters<LambdaRuntime>[0], context: Parameters<LambdaRuntime>[1]) => {
+    runtime ??= init();
+    let invoke: LambdaRuntime;
+    try {
+      invoke = await runtime;
+    } catch (error) {
+      // Falha de inicialização (configuração, segredo): registra a causa e tenta de novo na próxima invocação.
+      runtime = undefined;
+      logger.error("lambda.init_failed", { module: "lambda", ...describeError(error), operation: "createHandler" });
+      throw error;
+    }
+    try {
+      return await invoke(event, context);
+    } catch (error) {
+      logger.error("lambda.invoke_failed", { module: "lambda", ...describeError(error), operation: "invoke" });
+      throw error;
+    }
+  };
 }
+
+export const handler = createLambdaHandler(createHandler);
