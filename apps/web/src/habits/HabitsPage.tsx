@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import gsap from "gsap";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Button from "../components/Button";
 import ButtonGroup from "../components/ButtonGroup";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -9,6 +10,7 @@ import { addDays, fromIso, toDisplay, toIso, todayLocal } from "../lib/calendar-
 import { signIn, useAuth } from "../lib/auth";
 import { deleteHabit, getHabitsXp, listHabits, listOccurrences, restoreHabit, resumeHabit, setOccurrenceStatus, type Habit, type HabitsXp, type Occurrence } from "../lib/habits-api";
 import { usePageTitle } from "../lib/use-page-title";
+import { dayView, toggleRequest, type DayData } from "./day-data";
 import HabitForm from "./HabitForm";
 import { currentPause, kindLabel, priorityLabel, recurrenceLabel } from "./labels";
 import PauseDialog from "./PauseDialog";
@@ -33,7 +35,7 @@ export default function HabitsPage() {
 function HabitsWorkspace() {
   const [view, setView] = useState<View>("today");
   const [day, setDay] = useState(() => toIso(todayLocal()));
-  const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
+  const [loaded, setLoaded] = useState<DayData | null>(null), [readFailed, setReadFailed] = useState(false);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [xp, setXp] = useState<HabitsXp>();
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [revision, setRevision] = useState(0);
@@ -46,46 +48,66 @@ function HabitsWorkspace() {
 
   useEffect(() => {
     const abort = new AbortController(); setLoading(true); setError("");
-    const load = view === "today" ? listOccurrences(day, day, abort.signal).then(setOccurrences) : listHabits(view === "trash", abort.signal).then(setHabits);
+    const load = view === "today"
+      ? listOccurrences(day, day, abort.signal).then(items => { setLoaded({ day, items }); setReadFailed(false); }, e => { if (!abort.signal.aborted) setReadFailed(true); throw e; })
+      : listHabits(view === "trash", abort.signal).then(setHabits);
     Promise.all([load, getHabitsXp(abort.signal).then(setXp)])
       .catch(e => { if (!abort.signal.aborted) setError(message(e, "Não foi possível carregar os hábitos.")); })
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
   }, [view, day, revision]);
 
-  const shift = (delta: number) => { const date = fromIso(day); if (date) setDay(toIso(addDays(date, delta))); };
+  // Os dados do dia ficam ligados à chave com que foram lidos: outro dia ou leitura falha não deixa ações sobre o dia errado.
+  const current = view === "today" ? dayView(loaded, day, readFailed) : null;
+  // Troca de dia (ease-in-out, como a troca de período da Agenda): desliza no sentido da navegação; reduzido só aparece.
+  const bodyKey = current ? day : null;
+  const direction = useRef(0), labelRef = useRef<HTMLElement>(null), bodyRef = useRef<HTMLDivElement>(null);
+  const goTo = (next: string) => { direction.current = next > day ? 1 : -1; setDay(next); };
+  const shift = (delta: number) => { const date = fromIso(day); if (date) goTo(toIso(addDays(date, delta))); };
+  const slide = (element: HTMLElement | null, factor: number, duration: number) => {
+    if (!element) return;
+    const offset = direction.current * 28 * factor, media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => { gsap.fromTo(element, { opacity: 0, x: offset }, { opacity: 1, x: 0, duration, ease: "power2.inOut", clearProps: "opacity,transform" }); });
+    return () => media.revert();
+  };
+  useLayoutEffect(() => (view === "today" ? slide(labelRef.current, .5, .28) : undefined), [view, day]);
+  useLayoutEffect(() => (bodyKey ? slide(bodyRef.current, 1, .32) : undefined), [bodyKey]);
   async function run(action: () => Promise<unknown>, fallback: string) {
     setBusy(true); setError("");
     try { await action(); reload(); } catch (e) { setError(message(e, fallback)); } finally { setBusy(false); }
   }
-  const toggle = (item: Occurrence) => run(() => setOccurrenceStatus(item.habitId, item.date, item.status === "completed" ? "pending" : "completed"), "Não foi possível atualizar a ocorrência.");
+  const toggle = (item: Occurrence) => {
+    const request = toggleRequest(current, day, item);
+    return request ? run(() => setOccurrenceStatus(request.habitId, request.date, request.status), "Não foi possível atualizar a ocorrência.") : undefined;
+  };
   async function confirmDelete() {
     if (!deleting) return; setBusy(true); setDeleteError("");
     try { await deleteHabit(deleting.id); setDeleting(null); reload(); }
     catch (e) { setDeleteError(message(e, "Não foi possível excluir. Tente de novo.")); }
     finally { setBusy(false); }
   }
-  const done = occurrences.filter(item => item.status === "completed").length;
+  const done = current?.items.filter(item => item.status === "completed").length ?? 0;
 
   return <section className="habits-page" aria-labelledby="habits-title" aria-busy={busy}>
     <PageHeader id="habits-title" eyebrow="ROTINA" title="Hábitos" description="Pequenas repetições que sustentam o resto." actions={<Button variant="primary" onClick={() => setForm({})} disabled={busy}><Plus size={16} aria-hidden="true" />&nbsp;Novo hábito</Button>} />
     {xp && <XpSummary xp={xp} />}
     <div className="habits-toolbar"><ButtonGroup label="Visão" value={view} options={views} onChange={setView} /></div>
     {error && <div className="habits-error" role="alert">{error} <Button onClick={reload}>Tentar de novo</Button></div>}
-    {loading ? <SkeletonBody label="Carregando hábitos…" cards={3} columns={1} cardHeight={72} /> : view === "today" ? <>
+    {view === "today" ? <>
       <div className="habits-day">
         <Button size="sm" aria-label="Dia anterior" onClick={() => shift(-1)}><ChevronLeft size={16} aria-hidden="true" /></Button>
-        <strong aria-live="polite">{day === today ? "Hoje" : shown(day)}{day === today ? ` · ${shown(day)}` : ""}</strong>
+        <strong ref={labelRef} aria-live="polite">{day === today ? "Hoje" : shown(day)}{day === today ? ` · ${shown(day)}` : ""}</strong>
         <Button size="sm" aria-label="Próximo dia" onClick={() => shift(1)}><ChevronRight size={16} aria-hidden="true" /></Button>
-        {day !== today && <Button size="sm" variant="ghost" onClick={() => setDay(today)}>Voltar para hoje</Button>}
+        {day !== today && <Button size="sm" variant="ghost" onClick={() => goTo(today)}>Voltar para hoje</Button>}
       </div>
-      {occurrences.length === 0 ? <p className="habits-empty">Nenhuma ocorrência neste dia.</p> : <>
-        <p className="habits-count" role="status">{done} de {occurrences.length} concluídas</p>
-        <ul className="habits-list">{occurrences.map(item => <li key={item.habitId} data-done={item.status === "completed" || undefined}>
-          <input type="checkbox" checked={item.status === "completed"} disabled={busy} onChange={() => void toggle(item)} aria-label={`${item.status === "completed" ? "Marcar como pendente" : "Concluir"}: ${item.title}`} />
+      {current ? <div ref={bodyRef}>{current.items.length === 0 ? <p className="habits-empty">Nenhuma ocorrência neste dia.</p> : <>
+        <p className="habits-count" role="status">{done} de {current.items.length} concluídas</p>
+        <ul className="habits-list">{current.items.map(item => <li key={item.habitId} data-done={item.status === "completed" || undefined}>
+          <input type="checkbox" checked={item.status === "completed"} disabled={busy || !current.actionable} onChange={() => void toggle(item)} aria-label={`${item.status === "completed" ? "Marcar como pendente" : "Concluir"}: ${item.title}`} />
           <div><span className="habits-title">{item.title}</span><small>{[item.time, kindLabel(item.kind), `Prioridade ${priorityLabel(item.priority).toLowerCase()}`, `${item.points} XP`].filter(Boolean).join(" · ")}</small></div>
-        </li>)}</ul></>}
-    </> : view === "habits" ? (habits.length === 0 ? <p className="habits-empty">Nenhum hábito ainda. Crie o primeiro em “Novo hábito”.</p>
+        </li>)}</ul></>}</div>
+        : loading && <SkeletonBody label="Carregando hábitos…" cards={3} columns={1} cardHeight={72} />}
+    </> : loading ? <SkeletonBody label="Carregando hábitos…" cards={3} columns={1} cardHeight={72} /> : view === "habits" ? (habits.length === 0 ? <p className="habits-empty">Nenhum hábito ainda. Crie o primeiro em “Novo hábito”.</p>
       : <ul className="habits-list">{habits.map(habit => { const pause = currentPause(habit.pauses, today); return <li key={habit.id}>
         <div><span className="habits-title">{habit.title}</span><small>{[recurrenceLabel(habit.recurrence), habit.time, kindLabel(habit.kind), `Prioridade ${priorityLabel(habit.priority).toLowerCase()}`].filter(Boolean).join(" · ")}</small>
           {pause && <small className="habits-paused">Pausado desde {shown(pause.from)}{pause.until ? ` até ${shown(pause.until)}` : ""}</small>}</div>
