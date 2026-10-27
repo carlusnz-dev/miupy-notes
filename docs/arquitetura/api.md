@@ -113,3 +113,39 @@ Pendente: idempotência de criação; política de exclusão; upload de anexos; 
 ## Biblioteca
 
 CRUD autenticado `/v1/library`, com versão condicional, isolamento por proprietário, filtros combinados e paginação por cursor. Campos, limites, erros e páginas filtradas vazias estão em [api-library.md](api-library.md). Composto na API local e Lambda não implantada; testes sintéticos em memória e cliente DynamoDB falso, sem AWS; persistência em tabela DynamoDB Local sintética verificada.
+
+## Hábitos
+
+**Estado em 2026-10-26.** `/v1/habits`, mesma autenticação e isolamento de `/v1` (`ownerId` só do principal; corpos e queries com campo desconhecido → `400`; recurso de outro proprietário → `404`). Cliente: `apps/web/src/lib/habits-api.ts`, tipado por `apps/api/src/modules/habits/contract.ts`. Composto na API local e na Lambda (não implantada); testado só com repositório em memória e cliente DynamoDB falso, sem AWS.
+
+**Hábito × ocorrência.** O *hábito* é o cadastro (gravado). A *ocorrência* é um hábito numa data e **não é gravada**: a API a deriva da recorrência. Só a conclusão é gravada (uma execução por hábito+data); concluir uma ocorrência não altera as outras nem o cadastro.
+
+**Datas locais.** `startDate`, `endDate`, `date`, `from`, `to`, `until`, `on` são datas de calendário `AAAA-MM-DD` do usuário e `time` é relógio local `HH:MM`. O servidor não converte instantes nem usa fuso: a recorrência é aritmética de dias inteiros (vira mês, ano e bissexto corretamente; horário de verão não interfere). O cliente envia a data local que está vendo (`todayLocal()`). Ao concluir, o servidor só recusa datas além de UTC+1 dia (fuso mais adiantado, +14 h); datas passadas são aceitas.
+
+| Método | Caminho | Corpo / query | Sucesso | Erros |
+|---|---|---|---|---|
+| `GET` | `/habits` | `?trash=true\|false` (padrão `false`) | `200 { items }` por título | `400`, `401`, `403` |
+| `POST` | `/habits` | `{ title, recurrence, startDate, description?, kind?, priority?, endDate?, time? }` | `201` hábito | `400`, `401`, `403`, `413` |
+| `GET` | `/habits/{id}` | — | `200` hábito (inclui na lixeira) | `400`, `401`, `403`, `404` |
+| `PATCH` | `/habits/{id}` | `{ version, …campos }` (pelo menos um) | `200` com `version + 1` | `400`, `404`, `409` |
+| `POST` | `/habits/{id}/pause` | `{ version, from, until? }` | `200` hábito | `400`, `404`, `409` |
+| `POST` | `/habits/{id}/resume` | `{ version, on }` | `200` hábito | `400`, `404`, `409` |
+| `DELETE` | `/habits/{id}` | — | `200` hábito com `deletedAt`/`purgeAfter` | `400`, `404`, `409` |
+| `POST` | `/habits/{id}/restore` | — | `200` hábito | `400`, `404`, `409` |
+| `GET` | `/habits/occurrences` | `?from=&to=` (até 62 dias) | `200 { items }` | `400`, `401`, `403` |
+| `PUT` | `/habits/{id}/occurrences/{date}` | `{ status: "completed"\|"pending" }` | `200` ocorrência | `400`, `404`, `409` |
+| `GET` | `/habits/history` | `?from=&to=` (até 366 dias) | `200 { items }` | `400`, `401`, `403` |
+| `GET` | `/habits/xp` | — | `200` saldo | `401`, `403` |
+| `GET` | `/habits/settings` | — | `200` configuração | `401`, `403` |
+
+- **Hábito:** `{ id, title (1–200), description (≤1000, padrão ""), kind: health|study|work|personal|other (padrão other), priority: low|medium|high (padrão medium), recurrence, startDate, endDate|null, time|null, pauses, deletedAt|null, purgeAfter|null, createdAt, updatedAt, version }`. Até 300 hábitos fora da lixeira por proprietário.
+- **Recorrência** (união discriminada por `type`, extensível com novos tipos): `{type:"daily", every:1..365}` (a cada N dias desde `startDate`), `{type:"weekly", every:1..52}` (mesmo dia da semana de `startDate`, a cada N semanas), `{type:"weekdays", days:[0..6]}` (0 = domingo, sem repetição). Ocorre em `startDate ≤ data ≤ endDate` (`endDate` opcional) e fora das pausas.
+- **Pausa:** `pauses` é lista de janelas `{ from, until|null }` valendo em `[from, until)`; `until: null` = até retomar. `pause` acrescenta uma janela (`until` > `from`); `resume` com `on` fecha em `on` as janelas ainda vigentes e descarta as que começariam depois (`409` se não há pausa). Datas pausadas não geram ocorrência nem aceitam conclusão; conclusões já gravadas permanecem.
+- **Ocorrência:** `{ habitId, date, time, title, kind, priority, status: completed|pending, completedAt|null, points }`, ordenada por data, horário (sem horário por último) e título. `PUT` exige que o hábito tenha ocorrência naquela data (`400` caso contrário), é idempotente e `pending` desfaz a conclusão. Hábito na lixeira não aparece na listagem de ocorrências; `PUT`, `PATCH` e pausa respondem `409` (e `404` depois de vencido o prazo).
+- **Exclusão lógica:** `DELETE` grava `deletedAt` e `purgeAfter = deletedAt + 30 dias` (persistidos), sem apagar nada; `restore` limpa os dois. Passado `purgeAfter` o hábito deixa de existir para a API (`404`), mesmo antes do expurgo físico. A remoção física do cadastro é `HabitsService.purgeExpired(ownerId)`, **ainda sem agendador**: a rotina periódica (SQS/EventBridge) foi adiada com a infraestrutura AWS. Ela apaga só o item `HABIT#`; execuções e XP ficam.
+- **Histórico:** `GET /history` lista as execuções concluídas `{ habitId, date, completedAt, title, kind, priority }`, com retrato do hábito no momento da conclusão, e continua completo depois do expurgo do cadastro.
+- **XP (fundação):** cada conclusão cria um evento `(hábito, data, "completion")` com chave determinística e escrita condicional: repetir não duplica. Pontos pela prioridade: baixa 5, média 10, alta 15. Desmarcar preenche `revokedAt` no mesmo evento (compensação); marcar de novo o reativa. Sem penalidade. `GET /xp` devolve `{ totalXp, level, levelXp, nextLevelXp, completions, achievements: [{ id, title, unlocked }] }`: nível = `⌊XP/100⌋ + 1`, conquistas (`first_completion`, `ten_completions`, `level_5`) derivadas do saldo num registro extensível, nada gravado. Tudo no backend.
+- **Google Calendar:** `GET /settings` → `{ googleCalendar: { enabled, available } }`. `enabled` vem de `HABITS_GOOGLE_CALENDAR=true` (padrão desligado); `available` é sempre `false`: não existe adaptador e nenhuma chamada ao Google é feita.
+- **Agenda interna:** a página Agendas mostra as ocorrências do dia em foco (painel "Hábitos do dia") lendo `GET /habits/occurrences`; os hábitos não viram eventos do módulo de agenda.
+- **Armazenamento:** mesma tabela, sempre `pk = USER#<ownerId>`: `HABIT#<id>`, `HLOG#<data>#<hábito>` (intervalo por `BETWEEN`) e `HXP#<hábito>#<data>#completion`. Só `Query`, sem `Scan` nem índice novo.
+- **Limites conhecidos:** conclusão e XP são gravados em passos separados (sem transação): uma falha entre eles pode deixar o saldo defasado até a próxima marcação do mesmo dia; marcar e desmarcar a mesma ocorrência em paralelo não é serializado. Conclusões de datas passadas não têm limite. O campo `aiAssisted` das notas ficou **adiado** (tocaria entidade, repositório, DTOs e rascunho local das notas).
