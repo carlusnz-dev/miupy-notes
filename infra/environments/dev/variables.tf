@@ -58,6 +58,37 @@ variable "cors_allowed_origins" {
   }
 }
 
+variable "allowed_cidrs" {
+  description = "CIDRs IPv4/IPv6 com acesso à API (inclusive /health); a Lambda recusa qualquer outra origem com 403. Valor pessoal: só em tfvars local."
+  type        = list(string)
+  nullable    = false
+  sensitive   = true
+  validation {
+    condition     = length(var.allowed_cidrs) > 0 && alltrue([for cidr in var.allowed_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")])
+    error_message = "Informe ao menos um CIDR válido (ex.: 203.0.113.0/24 ou 2001:db8::/32); /0 não é aceito."
+  }
+}
+
+variable "api_throttling_rate_limit" {
+  description = "Requisições por segundo sustentadas aceitas pelo stage; excedentes recebem 429."
+  type        = number
+  default     = 5
+  validation {
+    condition     = var.api_throttling_rate_limit >= 1 && var.api_throttling_rate_limit <= 100
+    error_message = "Taxa deve estar entre 1 e 100 requisições por segundo."
+  }
+}
+
+variable "api_throttling_burst_limit" {
+  description = "Rajada máxima aceita pelo stage."
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.api_throttling_burst_limit >= 1 && var.api_throttling_burst_limit <= 200 && floor(var.api_throttling_burst_limit) == var.api_throttling_burst_limit
+    error_message = "Rajada deve ser inteira entre 1 e 200."
+  }
+}
+
 variable "lambda_memory_mb" {
   description = "Memória da função HTTP."
   type        = number
@@ -69,12 +100,12 @@ variable "lambda_memory_mb" {
 }
 
 variable "lambda_reserved_concurrency" {
-  description = "Limite inicial de invocações simultâneas da API."
+  description = "Teto de invocações simultâneas da API; limita o custo de tráfego negado, que ainda invoca a Lambda."
   type        = number
   default     = 5
   validation {
-    condition     = var.lambda_reserved_concurrency >= 1 && floor(var.lambda_reserved_concurrency) == var.lambda_reserved_concurrency
-    error_message = "Concorrência reservada deve ser inteira e positiva."
+    condition     = var.lambda_reserved_concurrency >= 1 && var.lambda_reserved_concurrency <= 20 && floor(var.lambda_reserved_concurrency) == var.lambda_reserved_concurrency
+    error_message = "Concorrência reservada deve ser inteira entre 1 e 20."
   }
 }
 

@@ -51,6 +51,7 @@ resource "aws_lambda_function" "api" {
     variables = {
       NOTES_TABLE_NAME        = aws_dynamodb_table.data.name
       ALLOWED_SUBS_SECRET_ARN = var.allowed_subs_secret_arn
+      ALLOWED_CIDRS           = join(",", var.allowed_cidrs)
       LOG_FORMAT              = "json"
     }
   }
@@ -112,7 +113,19 @@ resource "aws_apigatewayv2_stage" "default" {
 
   access_log_settings {
     destination_arn = module.observability.log_group_arns.api
-    format          = "{\"requestId\":\"$context.requestId\",\"route\":\"$context.routeKey\",\"status\":$context.status,\"responseLatency\":$context.responseLatency}"
+    # status e responseLatency são sempre numéricos (filtros de métrica); os demais campos vão entre aspas porque
+    # valem "-" quando não se aplicam (ex.: 401 do authorizer não chega à integração). Sem IP, token, corpo ou caminho.
+    format = join("", [
+      "{\"requestId\":\"$context.requestId\",\"route\":\"$context.routeKey\",\"status\":$context.status,\"responseLatency\":$context.responseLatency,",
+      "\"integrationStatus\":\"$context.integration.status\",\"integrationLatency\":\"$context.integration.latency\",\"integrationError\":\"$context.integrationErrorMessage\",",
+      "\"authorizerError\":\"$context.authorizer.error\",\"gatewayError\":\"$context.error.message\",\"gatewayErrorType\":\"$context.error.responseType\"}",
+    ])
+  }
+
+  # Limites do stage (e de todas as rotas): excedentes recebem 429 do API Gateway antes de invocar a Lambda.
+  default_route_settings {
+    throttling_burst_limit = var.api_throttling_burst_limit
+    throttling_rate_limit  = var.api_throttling_rate_limit
   }
 }
 

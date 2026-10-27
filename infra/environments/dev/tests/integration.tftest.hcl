@@ -35,6 +35,7 @@ variables {
   google_client_id        = "synthetic.apps.googleusercontent.com"
   allowed_subs_secret_arn = "arn:aws:secretsmanager:us-east-1:000000000000:secret:miupy-test/allowed-subs-synthetic"
   cors_allowed_origins    = ["http://tauri.localhost"]
+  allowed_cidrs           = ["203.0.113.0/24", "2001:db8::/32"]
 }
 run "default_region" {
   command = plan
@@ -58,6 +59,34 @@ run "default_region" {
     condition     = aws_apigatewayv2_route.authenticated.authorization_type == "JWT" && aws_apigatewayv2_integration.api.payload_format_version == "2.0"
     error_message = "Rotas privadas exigem JWT e evento HTTP API v2."
   }
+  assert {
+    condition     = aws_apigatewayv2_stage.default.default_route_settings[0].throttling_rate_limit == 5 && aws_apigatewayv2_stage.default.default_route_settings[0].throttling_burst_limit == 10
+    error_message = "O stage deve limitar taxa e rajada por padrão."
+  }
+  assert {
+    condition     = aws_lambda_function.api.reserved_concurrent_executions == 5 && aws_lambda_function.api.environment[0].variables["ALLOWED_CIDRS"] == "203.0.113.0/24,2001:db8::/32"
+    error_message = "A Lambda deve ter concorrência reservada baixa e receber a allow list de IP."
+  }
+  assert {
+    condition     = alltrue([for field in ["requestId", "route", "status", "responseLatency", "integrationError", "authorizerError", "gatewayError"] : strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "\"${field}\"")]) && !strcontains(aws_apigatewayv2_stage.default.access_log_settings[0].format, "sourceIp")
+    error_message = "O access log deve trazer requisição, rota, status, latência e erros, sem IP de origem."
+  }
+}
+
+run "rejects_open_cidrs" {
+  command = plan
+  variables {
+    allowed_cidrs = ["0.0.0.0/0"]
+  }
+  expect_failures = [var.allowed_cidrs]
+}
+
+run "rejects_empty_cidrs" {
+  command = plan
+  variables {
+    allowed_cidrs = []
+  }
+  expect_failures = [var.allowed_cidrs]
 }
 run "other_region_and_opt_ins" {
   command   = plan

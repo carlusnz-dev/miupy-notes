@@ -37,7 +37,7 @@ Nomes esperados pelas próximas entregas:
 
 HTTP API recebe um ID gerado pela AWS: nome não substitui a dimensão `ApiId`. Os sinais derivados de logs são preparados imediatamente; informar `api_id` depois habilita os três sinais nativos adicionais. A Lambda futura deve usar `LOG_FORMAT=json` para alimentar o filtro `level=error/ERROR`. O timeout também é detectado pela frase `Task timed out`.
 
-O access log da API futura deve ser JSON com `status` e `responseLatency` numéricos:
+O access log da API deve ser JSON com `status` e `responseLatency` numéricos (a raiz dev acrescenta `integrationStatus`, `integrationLatency`, `integrationError`, `authorizerError`, `gatewayError` e `gatewayErrorType`, como texto, pois valem `-` quando não se aplicam):
 
 ```json
 {"status":$context.status,"responseLatency":$context.responseLatency}
