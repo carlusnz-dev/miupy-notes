@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import gsap from "gsap";
-import { reducedMotion } from "./popover";
+import { reducedMotion } from "./popover-behavior";
 import "./primitives.css";
 
 export function Field({ id, label, hint, error, children }: { id: string; label?: string; hint?: string; error?: string; children: ReactNode }) {

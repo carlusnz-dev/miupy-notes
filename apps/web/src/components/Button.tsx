@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ButtonHTMLAttributes, type Ref } from "react";
 import gsap from "gsap";
 import { buttonClass, type ButtonSize, type ButtonVariant } from "./button-class";
-import { reducedMotion } from "./popover";
+import { reducedMotion } from "./popover-behavior";
 import "./primitives.css";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {

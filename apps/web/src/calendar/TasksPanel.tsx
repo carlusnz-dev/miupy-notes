@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import OverdueBeacon from "../components/OverdueBeacon";
-import { usePresence } from "../components/popover";
+import { usePresence } from "../components/popover-behavior";
 import { fromIso } from "../lib/calendar-date";
 import type { TaskOutput } from "../lib/calendar-api";
 import { relativeDay } from "./format";
