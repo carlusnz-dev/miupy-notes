@@ -18,8 +18,10 @@ const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
 const BanksPage = lazy(() => import("./finance/BanksPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
 const LibraryPage = lazy(() => import("./library/LibraryPage"));
+const HabitsPage = lazy(() => import("./habits/HabitsPage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
+const McpPage = lazy(() => import("./McpPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 import "./account-nav.css";
@@ -30,6 +32,7 @@ const sections = [
   { path: "/agendas", label: "Agendas", description: "Compromissos e tempo com contexto." },
   { path: "/finance", label: "Finanças", description: "Movimentos e decisões com clareza." },
   { path: "/library", label: "Biblioteca", description: "Livros, filmes e músicas que ficaram." },
+  { path: "/habits", label: "Hábitos", description: "Pequenas repetições que sustentam o resto." },
 ] as const;
 
 const theme = {
@@ -76,6 +79,8 @@ function Shell() {
         ? "Bancos e contas"
       : pathname.startsWith("/finance/")
         ? "Lançamento financeiro"
+      : pathname === "/mcp"
+        ? "MCP"
       : pathname === "/profile"
         ? "Perfil"
         : pathname === "/settings"
@@ -109,6 +114,7 @@ function Shell() {
                     <SettingsPage />
                   </Suspense>
                 } />
+                <Route path="/mcp" element={<Suspense fallback={<SkeletonBody label="Carregando MCP…" lines={4} cards={2} />}><McpPage /></Suspense>} />
                 <Route path="/profile" element={
                   <Suspense fallback={<SkeletonBody label="Carregando perfil…" cards={4} cardHeight={120} columns={2} />}>
                     <ProfilePage />
@@ -121,6 +127,7 @@ function Shell() {
                 {/* Atalhos antigos (Sidebar e Início) apontavam para /events. */}
                 <Route path="/events" element={<Navigate to="/agendas" replace />} />
                 <Route path="/library" element={<Suspense fallback={<SkeletonBody label="Carregando biblioteca…" cards={4} />}><LibraryPage /></Suspense>} />
+                <Route path="/habits" element={<Suspense fallback={<SkeletonBody label="Carregando hábitos…" cards={3} />}><HabitsPage /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>

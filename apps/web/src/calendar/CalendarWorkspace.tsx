@@ -11,6 +11,7 @@ import GooglePanel from "./GooglePanel";
 import MonthView from "./MonthView";
 import QuickCreate, { type ItemKind, type MoreSeed } from "./QuickCreate";
 import TaskForm, { TaskFormBody, type TaskFields } from "./TaskForm";
+import HabitsAgendaPanel from "./HabitsAgendaPanel";
 import TasksPanel from "./TasksPanel";
 import TimeGrid, { type NewTimes, type Slot } from "./TimeGrid";
 import UpcomingList from "./UpcomingList";
@@ -44,14 +45,16 @@ const modes = [
 
 type Editing = { key: number; entry: DisplayEvent | null; day: CalendarDate; seed?: Partial<Fields> };
 
-export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, tasksApi, isCurrent }: {
+export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, google, tasksApi, habits, isCurrent }: {
   ownerId: string;
   store: CalendarStore;
   remote: RangeRemote;
-  loadNotes: () => Promise<NoteChoice[]>;
+  loadNotes: (signal?: AbortSignal) => Promise<NoteChoice[]>;
   google: GoogleApi;
   /** Ausente = sem tarefas (o formulário não oferece "Tarefa"). */
   tasksApi?: TasksApi;
+  /** Mostra as ocorrências de hábitos do dia em foco; ausente = sem painel. */
+  habits?: boolean;
   isCurrent?: () => boolean;
 }) {
   const calendar = useCalendar({ ownerId, store, remote, isCurrent });
@@ -70,7 +73,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
   const [notes, setNotes] = useState<NoteChoice[]>(() => calendarFetchCache.recall<NoteChoice[]>(ownerId, "notes") ?? []);
   const [notesState, setNotesState] = useState<"loading" | "ready" | "unavailable">(() => (calendarFetchCache.recall(ownerId, "notes") ? "ready" : "loading"));
   const [status, setStatusState] = useState<GoogleStatusOutput | null>(() => calendarFetchCache.recall<GoogleStatusOutput>(ownerId, "googleStatus") ?? null);
-  const setStatus = useCallback((value: GoogleStatusOutput) => { calendarFetchCache.remember(ownerId, "googleStatus", value); setStatusState(value); }, [ownerId]);
+  const setStatus = useCallback((value: GoogleStatusOutput) => { if (isCurrent?.() === false) return; calendarFetchCache.remember(ownerId, "googleStatus", value); setStatusState(value); }, [ownerId, isCurrent]);
   const [statusError, setStatusError] = useState<string | null>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const counter = useRef(0);
@@ -84,10 +87,10 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
     const abort = new AbortController();
     if (!calendarFetchCache.recall(ownerId, "notes")) {
       setNotesState("loading");
-      loadNotes().then((items) => { if (!abort.signal.aborted) { calendarFetchCache.remember(ownerId, "notes", items); setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted) setNotesState("unavailable"); });
+      loadNotes(abort.signal).then((items) => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) { calendarFetchCache.remember(ownerId, "notes", items); setNotes(items); setNotesState("ready"); } }).catch(() => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) setNotesState("unavailable"); });
     }
     if (reconnected || !calendarFetchCache.recall(ownerId, "googleStatus")) {
-      google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
+      google.getStatus(abort.signal).then((value) => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) { setStatus(value); setStatusError(null); } }).catch(() => { if (!abort.signal.aborted && (isCurrent?.() ?? true)) setStatusError("Status indisponível agora (sem conexão ou sem acesso)."); });
     }
     return () => abort.abort();
   }, [loadNotes, google, ownerId, calendar.connectivity, setStatus]);
@@ -176,6 +179,7 @@ export default function CalendarWorkspace({ ownerId, store, remote, loadNotes, g
       <div className="calendar-layout" data-mode={mode}>
         <div className="calendar-top">
           <UpcomingList events={calendar.upcoming} statusOf={calendar.statusOf} onOpen={open} onCreate={() => openNew()} />
+          {habits && <HabitsAgendaPanel day={anchor} />}
           {tasksApi && tasks.state === "ready" && <TasksPanel pending={tasks.pending} overdue={tasks.overdue} onToggle={tasks.toggle} onOpen={openTask} error={tasks.error} onDismissError={tasks.dismissError} />}
         </div>
         <div className="calendar-view" ref={viewRef} aria-label={`Visualização por ${modes.find((item) => item.value === mode)?.label.toLowerCase()}`}>

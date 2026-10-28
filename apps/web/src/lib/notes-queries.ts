@@ -24,11 +24,11 @@ export function useNotesList(enabled = true) {
   });
 }
 
-/** Metadados para árvore (até o teto). `truncated` indica que o teto foi atingido. */
-export function useAllNotes(enabled = true) {
-  return useQuery({
+/** Metadados compartilhados entre árvore e seleção de vínculos da Agenda. */
+export function allNotesOptions() {
+  return {
     queryKey: noteKeys.everything(),
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const items: NoteMetadataOutput[] = [];
       let cursor: string | undefined;
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -39,8 +39,20 @@ export function useAllNotes(enabled = true) {
       }
       return { items, truncated: true };
     },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  };
+}
+export function useAllNotes(enabled = true) {
+  return useQuery({ ...allNotesOptions(), enabled: useSignedIn() && enabled });
+}
+
+/** Uma página, sem percorrer o acervo. Ordem por ID: só há garantia de mais recente se couber na página. */
+export function useRecentNoteCandidates(enabled = true) {
+  return useQuery({
+    queryKey: [...noteKeys.all, "recent-candidates"],
+    queryFn: ({ signal }) => listNotesMetadata({ limit: PAGE_LIMIT, signal }),
     enabled: useSignedIn() && enabled,
-    // A consulta pode fazer até 50 requisições sequenciais; evite refazê-la a cada foco.
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   });

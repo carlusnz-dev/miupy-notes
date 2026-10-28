@@ -76,7 +76,9 @@ test("esgotadas as tentativas o erro é rate_limited; 5xx vira unavailable; erro
   const down = await make([json(503, {}), json(503, {}), json(503, {}), json(503, {})]);
   await assert.rejects(down.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.kind === "unavailable");
   const net = await make([new Error("rede"), new Error("rede"), new Error("rede"), new Error("rede")]);
-  await assert.rejects(net.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.kind === "unavailable");
+  await assert.rejects(net.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.kind === "unavailable" && error.cause instanceof Error && error.cause.message === "rede");
+  const rejected = await make([json(400, {})]);
+  await assert.rejects(rejected.client.listEvents("alice", "primary", {}), (error) => error instanceof GoogleApiError && error.status === 400);
 });
 
 test("403 insufficientPermissions vira insufficient_scope e os demais 403 forbidden, sem repetir", async () => {

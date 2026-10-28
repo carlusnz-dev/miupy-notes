@@ -261,3 +261,5 @@ button.calendar-day-link:hover { background: var(--color-surface-raised); }
   .calendar-more { flex: 1 0 100%; padding: 0; text-align: center; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .calendar-page *, .calendar-modal * { scroll-behavior: auto; animation: none; transition: none; } }
+.calendar-habits li[data-done] span { text-decoration: line-through; color: var(--color-muted); }
+.calendar-habits .calendar-tasks-list li { display: flex; align-items: center; gap: 8px; min-height: 32px; }

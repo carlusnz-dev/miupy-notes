@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { NavLink, useLocation } from "react-router-dom";
-import { BookOpen, CalendarDays, CircleDollarSign, Ellipsis, House, NotebookPen, Settings, UserRound } from "lucide-react";
+import { BookOpen, CalendarDays, Repeat, CircleDollarSign, Ellipsis, House, NotebookPen, PlugZap, Settings, UserRound } from "lucide-react";
 import Modal from "./Modal";
 import { useKeyboardOpen } from "./keyboard-open";
 import "./bottom-nav.css";
@@ -13,7 +13,9 @@ const primary = [
   { path: "/library", label: "Biblioteca", icon: BookOpen },
 ];
 const more = [
+  { path: "/habits", label: "Hábitos", icon: Repeat },
   { path: "/finance", label: "Finanças", icon: CircleDollarSign },
+  { path: "/mcp", label: "MCP", icon: PlugZap },
   { path: "/profile", label: "Perfil", icon: UserRound },
   { path: "/settings", label: "Configurações", icon: Settings },
 ];

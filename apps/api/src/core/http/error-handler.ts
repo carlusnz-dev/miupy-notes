@@ -28,7 +28,8 @@ export function createErrorHandler(log: Logger = logger): ErrorRequestHandler {
     const route = requestRoute(req, res);
     // Rejeições esperadas dispensam a cadeia de causas; falhas inesperadas registram módulo, operação e causa.
     const diagnosis = expected ? {} : describeError(error);
-    const fields = { requestId: res.locals.requestId as string, method, statusCode, route, module: routeModule(route), ...diagnosis, operation: diagnosis.operation ?? `${method} ${route}`, reason, ...classifyError(error), ...(expected ? { classification: "request_rejected" } : {}) };
+    const classified = classifyError(error);
+    const fields = { requestId: res.locals.requestId as string, method, statusCode, route, module: routeModule(route), ...diagnosis, ...classified, operation: classified.operation ?? diagnosis.operation ?? `${method} ${route}`, reason, ...(expected ? { classification: "request_rejected" } : {}) };
     if (expected) log.warn("request.failed", fields);
     else log.error("request.failed", fields);
     // Não delegar Error bruto ao handler padrão: ele imprime mensagem/stack em dev.

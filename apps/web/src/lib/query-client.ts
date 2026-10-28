@@ -1,22 +1,16 @@
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { ApiError } from "./api-client";
-import { expireSession, subscribeAuth } from "./auth";
-
-function onError(error: unknown) {
-  if (error instanceof ApiError && error.code === "UNAUTHORIZED") expireSession();
-}
+import { subscribeAuth } from "./auth";
 
 // Cache só em memória: notas são dados pessoais e não vão para localStorage.
 // Dado "velho" aparece na hora e é revalidado em segundo plano (stale-while-revalidate).
 export const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError }),
-  mutationCache: new MutationCache({ onError }),
   defaultOptions: {
     queries: {
       staleTime: 60_000,
       gcTime: 15 * 60_000,
       refetchOnWindowFocus: true,
-      // Erros com status (4xx/5xx da API) não se resolvem repetindo; rede sim, uma vez.
+      // O cliente HTTP já esgota o orçamento de GET em 429/5xx; aqui só há uma repetição de rede.
       retry: (failureCount, error) => !(error instanceof ApiError && error.status) && failureCount < 1,
     },
   },

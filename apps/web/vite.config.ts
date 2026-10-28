@@ -25,7 +25,7 @@ export default defineConfig(({ isPreview }) => ({
         }
       : undefined,
     // Só no dev server (`vite preview` herdaria server.proxy): a baseURL relativa chega à API local.
-    proxy: isPreview ? undefined : { "/v1": "http://127.0.0.1:4000" },
+    proxy: isPreview ? undefined : { "/v1": "http://127.0.0.1:4000", "/health": "http://127.0.0.1:4000" },
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**", "**/apps/api/**"],

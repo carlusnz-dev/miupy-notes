@@ -3,9 +3,8 @@ import { captureErrorRoute, requestLogger } from "./core/http/request-logger.js"
 import { logger, type Logger } from "./core/logging/logger.js";
 import { createErrorHandler } from "./core/http/error-handler.js";
 
-/** Rotas pessoais só existem com autenticação: sem ela, `/v1` responde 404. */
-/** `sourceGuard`, quando presente, roda antes de tudo (inclusive `/health`); só a Lambda o usa. */
-export type ApiRoutes = { sourceGuard?: RequestHandler; authenticate: RequestHandler; notesRouter: Router; foldersRouter?: Router; financeRouter?: Router; calendarRouter?: Router; libraryRouter?: Router };
+/** Rotas pessoais só existem com autenticação: sem ela, `/v1` responde 404. `sourceGuard`, quando presente, roda antes de tudo (inclusive `/health`); só a Lambda o usa. */
+export type ApiRoutes = { sourceGuard?: RequestHandler; authenticate: RequestHandler; notesRouter: Router; foldersRouter?: Router; financeRouter?: Router; calendarRouter?: Router; libraryRouter?: Router; habitsRouter?: Router };
 
 export function createApp(api?: ApiRoutes, log: Logger = logger) {
   const app = express();
@@ -23,6 +22,7 @@ export function createApp(api?: ApiRoutes, log: Logger = logger) {
     if (api.foldersRouter) app.use("/v1/folders", api.foldersRouter, captureErrorRoute("/v1/folders"));
     if (api.financeRouter) app.use("/v1/finance", api.financeRouter, captureErrorRoute("/v1/finance"));
     if (api.libraryRouter) app.use("/v1/library", api.libraryRouter, captureErrorRoute("/v1/library"));
+    if (api.habitsRouter) app.use("/v1/habits", api.habitsRouter, captureErrorRoute("/v1/habits"));
     if (api.calendarRouter) app.use("/v1/calendar", api.calendarRouter, captureErrorRoute("/v1/calendar"));
   }
   app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Rota não encontrada.", requestId: res.locals.requestId } }));

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Logger } from "../../../core/logging/logger.js";
 import { CalendarTask } from "../domain/calendar-task.js";
 import { MemoryTaskRepository } from "../repository/memory-task.repository.js";
 import { TaskGoogleSync } from "../services/task-google-sync.js";
@@ -76,6 +77,28 @@ test("cliente HTTP: monta URL, cabeçalho e corpo; classifica erros sem vazar o 
   assert.equal(seen[2].method, "DELETE");
   for (const [code, kind] of [[401, "unauthorized"], [404, "not_found"], [429, "rate_limited"], [503, "unavailable"], [400, "invalid"]] as const) {
     status = code;
-    await assert.rejects(client.updateTask("alice", "@default", "t1", body), { message: `google-tasks:${kind}` });
+    await assert.rejects(client.updateTask("alice", "@default", "t1", body), { message: `google-tasks:${kind}`, status: code });
   }
+});
+
+test("falhas do Google são registradas com operação, tipo e status, sem título nem token; not_found na exclusão não é falha", async () => {
+  const lines: string[] = [];
+  const client = new FakeGoogleTasksClient();
+  const sync = new TaskGoogleSync(new MemoryTaskRepository(), client, { enabled: true, log: new Logger("debug", line => lines.push(line), { format: "json" }) });
+  const local = task();
+  client.nextError = "unavailable";
+  assert.equal((await sync.afterSave(local)).outcome, "failed");
+  const linked = new CalendarTask(local.id, local.ownerId, local.title, local.description, local.dueDate, local.dueTime, local.status, local.completedAt,
+    { provider: "google", taskListId: "@default", taskId: "t1", syncedAt: now }, local.createdAt, local.updatedAt, local.version);
+  client.nextError = "rate_limited";
+  assert.equal((await sync.afterSave(linked)).outcome, "failed");
+  client.nextError = "unauthorized";
+  assert.equal(await sync.afterDelete(linked), "failed");
+  client.nextError = "not_found";
+  assert.equal(await sync.afterDelete(linked), "synced");
+  const entries = lines.map(line => JSON.parse(line) as Record<string, unknown>);
+  assert.deepEqual(entries.map(e => [e.level, e.service, e.operation, e.detail]), [
+    ["warn", "Google Tasks", "criar tarefa", "unavailable"], ["warn", "Google Tasks", "atualizar tarefa", "rate_limited"], ["warn", "Google Tasks", "excluir tarefa", "unauthorized"],
+  ]);
+  assert.equal(lines.join("").includes(local.title), false);
 });

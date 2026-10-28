@@ -11,7 +11,7 @@ locals {
   runtime_statements = concat(
     var.api_table_arn == null ? [] : [{
       Sid      = "ApplicationItems", Effect = "Allow",
-      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
+      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:ConditionCheckItem", "dynamodb:Query"],
       Resource = [var.api_table_arn]
     }],
     var.api_allowed_subs_secret_arn == null ? [] : [{

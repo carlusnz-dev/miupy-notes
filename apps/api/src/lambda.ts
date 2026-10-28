@@ -66,7 +66,7 @@ async function createHandler() {
     } catch (error) { next(error); }
   };
 
-  const { notes, folders, finance, calendar, library } = createDataModules(createDynamoClient(), tableName);
+  const { notes, folders, finance, calendar, library, habits } = createDataModules(createDynamoClient(), tableName, null, { googleCalendarEnabled: process.env.HABITS_GOOGLE_CALENDAR === "true" });
   const app = createApp({
     sourceGuard: sourceIpGuard(allowedCidrs),
     authenticate: authorize,
@@ -75,6 +75,7 @@ async function createHandler() {
     financeRouter: finance.router,
     calendarRouter: calendar.router,
     libraryRouter: library.router,
+    habitsRouter: habits.router,
   });
   logger.info("dependencies.configured", { dependency: "dynamodb" });
   return adaptApp(app);
