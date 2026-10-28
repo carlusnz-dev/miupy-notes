@@ -61,3 +61,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-28 | Release — segurança | [relatório](2026-10-28_release-seguranca.md) |
 | 2026-10-27 | Frontend — sessão, rede e validação antes da AWS | [relatório](2026-10-27_web-pre-aws.md) |
 | 2026-10-28 | Release — sessão e rede web | [relatório](2026-10-28_release-web-pre-aws.md) |
+| 2026-10-28 | Release — MCP | [relatório](2026-10-28_release-mcp.md) |

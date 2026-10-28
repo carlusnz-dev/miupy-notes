@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import gsap from "gsap";
 import { NavLink } from "react-router-dom";
-import { BookOpen, CalendarDays, Repeat, CircleDollarSign, House, NotebookPen, PanelLeftClose, PanelLeftOpen, Settings, UserRound } from "lucide-react";
+import { BookOpen, CalendarDays, Repeat, CircleDollarSign, House, NotebookPen, PanelLeftClose, PanelLeftOpen, PlugZap, Settings, UserRound } from "lucide-react";
 import "./sidebar.css";
 
 const minWidth = 200;
@@ -81,6 +81,7 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="sidebar-footer">
+        <NavLink to="/mcp" aria-label="MCP" title={collapsed ? "MCP" : undefined}><PlugZap size={18} aria-hidden="true" /><Letters text="MCP" /></NavLink>
         <NavLink to="/profile" aria-label="Perfil" title={collapsed ? "Perfil" : undefined}><UserRound size={18} aria-hidden="true" /><Letters text="Perfil" /></NavLink>
         <NavLink to="/settings" aria-label="Configurações" title={collapsed ? "Configurações" : undefined}><Settings size={18} aria-hidden="true" /><Letters text="Configurações" /></NavLink>
       </div>

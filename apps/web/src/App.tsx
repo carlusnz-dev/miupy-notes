@@ -21,6 +21,7 @@ const LibraryPage = lazy(() => import("./library/LibraryPage"));
 const HabitsPage = lazy(() => import("./habits/HabitsPage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
+const McpPage = lazy(() => import("./McpPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 import "./account-nav.css";
@@ -78,6 +79,8 @@ function Shell() {
         ? "Bancos e contas"
       : pathname.startsWith("/finance/")
         ? "Lançamento financeiro"
+      : pathname === "/mcp"
+        ? "MCP"
       : pathname === "/profile"
         ? "Perfil"
         : pathname === "/settings"
@@ -111,6 +114,7 @@ function Shell() {
                     <SettingsPage />
                   </Suspense>
                 } />
+                <Route path="/mcp" element={<Suspense fallback={<SkeletonBody label="Carregando MCP…" lines={4} cards={2} />}><McpPage /></Suspense>} />
                 <Route path="/profile" element={
                   <Suspense fallback={<SkeletonBody label="Carregando perfil…" cards={4} cardHeight={120} columns={2} />}>
                     <ProfilePage />
