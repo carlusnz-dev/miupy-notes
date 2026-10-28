@@ -4,3 +4,4 @@ Questões ainda sem resposta estão em [`pendencias.md`](pendencias.md). Ao deci
 
 - [Calendar local: reutilizar o cliente OAuth Desktop](2026-10-22_calendar-oauth-client-reuse.md) (superada).
 - [Calendar local: login Google único](2026-10-22_calendar-login-unico.md).
+- [Worktrees e workers com o Orca IDE](2026-10-24_worktrees-orca.md).

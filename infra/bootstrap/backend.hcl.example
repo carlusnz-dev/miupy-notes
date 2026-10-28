@@ -1,0 +1,7 @@
+# Preencher localmente após autorização e criação do bootstrap; sem credenciais.
+bucket               = "SUBSTITUA-PELO-BUCKET-CRIADO"
+key                  = "bootstrap/terraform.tfstate"
+region               = "us-east-1" # PROPOSTA, ainda não aprovada.
+encrypt              = true
+use_lockfile         = true
+allowed_account_ids  = ["SUBSTITUA-PELA-CONTA-APROVADA"]
