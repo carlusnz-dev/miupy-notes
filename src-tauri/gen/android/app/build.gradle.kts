@@ -7,6 +7,13 @@ plugins {
     id("rust")
 }
 
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
 val tauriProperties = Properties().apply {
     val propFile = file("tauri.properties")
     if (propFile.exists()) {
@@ -25,6 +32,16 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        if (!keystoreProperties.isEmpty) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -39,6 +56,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             optimization {
                enable = true
             }
