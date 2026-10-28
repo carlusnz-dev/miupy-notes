@@ -18,6 +18,7 @@ function bundleFiles(dir) {
   });
 }
 
+const bundlePaths = bundleFiles(bundle);
 const patterns = [
   ["chave privada", /-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/],
   ["chave de acesso AWS", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
@@ -27,8 +28,8 @@ const patterns = [
 ];
 const textExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".json", ".html", ".css", ".svg", ".mjs", ".tf"]);
 const findings = [];
-for (const path of [...sourcePaths, ...bundleFiles(bundle)]) {
-  if (!textExtensions.has(extname(path)) || path.includes("/node_modules/") || path.includes("/dist/") || statSync(path).size > 10_000_000) continue;
+for (const path of [...new Set([...sourcePaths, ...bundlePaths])]) {
+  if (!textExtensions.has(extname(path)) || path.includes("/node_modules/") || statSync(path).size > 10_000_000) continue;
   const content = readFileSync(path, "utf8");
   for (const [name, pattern] of patterns) {
     if (name === "segredo de provedor no frontend" && !path.startsWith(resolve(root, "apps/web") + "/")) continue;
@@ -39,4 +40,4 @@ if (findings.length) {
   console.error(`Possíveis segredos encontrados (${findings.length}):\n${findings.join("\n")}`);
   process.exit(1);
 }
-console.log(`Varredura concluída: ${sourcePaths.length} arquivos de código e ${bundleFiles(bundle).length} arquivos do bundle, sem padrões de segredo detectados.`);
+console.log(`Varredura concluída: ${sourcePaths.length} arquivos de código e ${bundlePaths.length} arquivos do bundle, sem padrões de segredo detectados.`);
