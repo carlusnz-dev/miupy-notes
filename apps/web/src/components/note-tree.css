@@ -13,12 +13,14 @@
 .tree-main:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-small); }
 .tree-chevron { flex: none; color: var(--color-muted); transition: transform var(--duration); }
 .tree-chevron.is-open { transform: rotate(90deg); }
-.tree-count { flex: none; padding: 0 7px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-muted); font-size: 11px; line-height: 18px; }
+.tree-count { flex: none; padding: 0 7px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-muted); font-size: 12px; line-height: 18px; }
 .tree-meta { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; color: var(--color-muted); font-size: 12px; }
 .tree-actions { display: flex; flex: none; align-items: center; gap: 2px; opacity: 0; transition: opacity var(--duration); }
 .tree-row:hover .tree-actions, .tree-row:focus-within .tree-actions { opacity: 1; }
 .tree-action { min-width: 30px; min-height: 30px; }
-.tree-rename, .tree-move { min-width: 0; padding: 5px 8px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); color: var(--color-text); background: var(--color-background); font: inherit; }
+.tree-move { flex: 1 1 200px; min-width: 0; }
+.tree-move .select-trigger { min-height: 32px; padding-block: 4px; }
+.tree-rename { min-width: 0; padding: 5px 8px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); color: var(--color-text); background: var(--color-background); font: inherit; }
 .tree-rename { flex: 1 1 auto; }
 .tree-empty { padding: 6px 10px; }
 .tree-drop-hint { margin: 0; text-align: center; }

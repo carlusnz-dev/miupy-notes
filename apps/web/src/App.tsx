@@ -1,7 +1,9 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import tokens from "../../../styles/tokens.json";
+import ScrollActivity from "./components/ScrollActivity";
 import Sidebar from "./components/Sidebar";
+import BottomNav from "./components/BottomNav";
 import NotesPage from "./NotesPage";
 import Home from "./Home";
 import ArrowIcon from "./components/ArrowIcon";
@@ -13,18 +15,24 @@ const NoteEditorPage = lazy(() => import("./NoteEditorPage"));
 // Perfil traz o Recharts; configurações só carregam quando abertas.
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const FinanceDetailPage = lazy(() => import("./finance/FinanceDetailPage"));
+const BanksPage = lazy(() => import("./finance/BanksPage"));
 const FinancePage = lazy(() => import("./finance/FinancePage"));
+const LibraryPage = lazy(() => import("./library/LibraryPage"));
+const HabitsPage = lazy(() => import("./habits/HabitsPage"));
 const CalendarPage = lazy(() => import("./calendar/CalendarPage"));
 const SettingsPage = lazy(() => import("./SettingsPage"));
+const McpPage = lazy(() => import("./McpPage"));
 import { usePageTitle } from "./lib/use-page-title";
 import "./App.css";
 import "./account-nav.css";
+import "./components/touch.css";
 
 const sections = [
   { path: "/notes", label: "Notas", description: "Ideias, páginas e conexões em um lugar." },
   { path: "/agendas", label: "Agendas", description: "Compromissos e tempo com contexto." },
   { path: "/finance", label: "Finanças", description: "Movimentos e decisões com clareza." },
   { path: "/library", label: "Biblioteca", description: "Livros, filmes e músicas que ficaram." },
+  { path: "/habits", label: "Hábitos", description: "Pequenas repetições que sustentam o resto." },
 ] as const;
 
 const theme = {
@@ -43,19 +51,6 @@ const theme = {
   "--duration": `${tokens.motion.defaultDurationMs}ms`,
 } as CSSProperties;
 
-function Feature({ label, description }: { label: string; description: string }) {
-  usePageTitle(label);
-  return (
-    <div className="feature-page">
-      <div className="eyebrow">EM PREPARAÇÃO</div>
-      <h1>{label}<em>.</em></h1>
-      <p className="lead">{description}</p>
-      <p className="muted">Este espaço ainda não armazena dados. O primeiro fluxo será conectado à API após definir a autenticação.</p>
-      <NavLink className="text-link" to="/">Voltar ao início <ArrowIcon /></NavLink>
-    </div>
-  );
-}
-
 function NotFound() {
   const { pathname } = useLocation();
   usePageTitle("Página não encontrada");
@@ -72,6 +67,7 @@ function NotFound() {
 function Shell() {
   const { pathname } = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [pathname]);
@@ -79,8 +75,12 @@ function Shell() {
     ? "Visão geral"
     : pathname.startsWith("/notes/")
       ? "Editor de notas"
+      : pathname === "/finance/banks"
+        ? "Bancos e contas"
       : pathname.startsWith("/finance/")
         ? "Lançamento financeiro"
+      : pathname === "/mcp"
+        ? "MCP"
       : pathname === "/profile"
         ? "Perfil"
         : pathname === "/settings"
@@ -90,11 +90,13 @@ function Shell() {
   return (
     <div className="app-shell" style={theme}>
       <div className="mesh" aria-hidden="true"><span /><span /></div>
+      {/* HashRouter usa o hash como rota: o link só move o foco, sem mudar a URL. */}
+      <a className="skip-link" href="#conteudo" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); }}>Pular para o conteúdo</a>
+      <ScrollActivity />
       <Sidebar />
-      <main className="main-content">
+      <main className="main-content" id="conteudo" ref={mainRef} tabIndex={-1}>
         <header className="topbar">
-          <span>miupy / notes</span>
-          <span>{pageName}</span>
+          <span>miupy / notes / <span className="topbar-page" aria-current="page">{pageName}</span></span>
         </header>
         <div className="page-scroll" ref={scrollRef}>
           <div className="page-content">
@@ -112,19 +114,20 @@ function Shell() {
                     <SettingsPage />
                   </Suspense>
                 } />
+                <Route path="/mcp" element={<Suspense fallback={<SkeletonBody label="Carregando MCP…" lines={4} cards={2} />}><McpPage /></Suspense>} />
                 <Route path="/profile" element={
                   <Suspense fallback={<SkeletonBody label="Carregando perfil…" cards={4} cardHeight={120} columns={2} />}>
                     <ProfilePage />
                   </Suspense>
                 } />
+                <Route path="/finance/banks" element={<Suspense fallback={<SkeletonBody label="Carregando bancos…" lines={4} />}><BanksPage /></Suspense>} />
                 <Route path="/finance/:id" element={<Suspense fallback={<SkeletonBody label="Carregando lançamento…" lines={4} />}><FinanceDetailPage /></Suspense>} />
                 <Route path="/finance" element={<Suspense fallback={<SkeletonBody label="Carregando finanças…" lines={4} />}><FinancePage /></Suspense>} />
                 <Route path="/agendas" element={<Suspense fallback={<SkeletonBody label="Carregando agendas…" lines={3} cards={1} cardHeight={320} />}><CalendarPage /></Suspense>} />
                 {/* Atalhos antigos (Sidebar e Início) apontavam para /events. */}
                 <Route path="/events" element={<Navigate to="/agendas" replace />} />
-                {sections.filter((section) => section.path !== "/notes" && section.path !== "/finance" && section.path !== "/agendas").map((section) => (
-                  <Route key={section.path} path={section.path} element={<Feature label={section.label} description={section.description} />} />
-                ))}
+                <Route path="/library" element={<Suspense fallback={<SkeletonBody label="Carregando biblioteca…" cards={4} />}><LibraryPage /></Suspense>} />
+                <Route path="/habits" element={<Suspense fallback={<SkeletonBody label="Carregando hábitos…" cards={3} />}><HabitsPage /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>
@@ -135,6 +138,7 @@ function Shell() {
           <span>Seu acervo, seu tempo.</span>
         </footer>
       </main>
+      <BottomNav />
     </div>
   );
 }

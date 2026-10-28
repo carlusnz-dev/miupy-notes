@@ -108,8 +108,8 @@ export async function flushOutbox(store: CalendarStore, remote: CalendarRemote, 
       if (saved !== "gone") await rebaseNewer(store, ownerId, op, saved);
       result.sent++;
     } catch (error) {
+      if (isApiError(error) && (error.code === "UNAUTHORIZED" || error.status === 401)) { result.stopped = "unauthorized"; break; }
       if (!isCurrent()) break;
-      if (isApiError(error) && error.code === "UNAUTHORIZED") { result.stopped = "unauthorized"; break; }
       const outcome = await classify(store, remote, op, error, now());
       result[{ retry: "failed", conflict: "conflicts", rejected: "rejected", done: "sent" }[outcome] as "failed" | "conflicts" | "rejected" | "sent"]++;
       if (isApiError(error) && error.code === "NETWORK_ERROR") { result.stopped = "offline"; break; }

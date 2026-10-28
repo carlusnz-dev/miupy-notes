@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import { errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
-import { AppError } from "../domain/app-error.js";
+import { AppError, ServiceError } from "../domain/app-error.js";
 import type { Principal } from "./principal.js";
 
 // O Google documenta as duas formas de `iss` para ID tokens.
@@ -15,14 +15,18 @@ const unauthorized = () => new AppError(401, "UNAUTHORIZED", "Autenticação nec
 /** API local: valida o ID token no próprio Express (assinatura RS256, `iss`, `aud`, `exp`). */
 export function bearerTokenClaims(keySet: JWTVerifyGetKey, audience: string): ClaimsSource {
   return async (req) => {
-    const [scheme, token] = (req.header("authorization") ?? "").split(" ");
-    if (scheme !== "Bearer" || !token) throw unauthorized();
+    const match = /^Bearer ([^\s]+)$/.exec(req.header("authorization") ?? "");
+    if (!match) throw unauthorized();
+    const token = match[1];
     try {
       const { payload } = await jwtVerify(token, keySet, { issuer: GOOGLE_ISSUERS, audience, algorithms: ["RS256"] });
       return payload;
     } catch (error) {
-      // Falha ao obter as chaves do Google é indisponibilidade nossa, não token inválido.
-      if (error instanceof errors.JWKSTimeout || error instanceof errors.JWKSInvalid || !(error instanceof errors.JOSEError)) throw error;
+      // Falha ao obter as chaves do Google é indisponibilidade nossa, não token inválido. Resposta não-200 ou JSON ilegível
+      // do JWKS chega como `JOSEError` genérico (a classe base, sem subclasse), por isso não pode virar 401.
+      if (error instanceof errors.JWKSTimeout || error instanceof errors.JWKSInvalid || !(error instanceof errors.JOSEError) || error.constructor === errors.JOSEError) {
+        throw new ServiceError({ service: "Google (chaves do login)", operation: "validar o ID token" }, error);
+      }
       throw unauthorized();
     }
   };

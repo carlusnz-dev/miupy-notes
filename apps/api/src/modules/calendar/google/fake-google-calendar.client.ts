@@ -23,8 +23,10 @@ export class FakeGoogleCalendarClient extends GoogleCalendarClient {
     return stored;
   }
 
-  remove(id: string) {
-    const gone = { ...this.events.get(id)!, status: "cancelled" as const };
+  /** `idOnly` imita o Google, que garante só `id` e `status` em itens cancelados na sincronização incremental. */
+  remove(id: string, options: { idOnly?: boolean } = {}) {
+    const found = this.events.get(id)!;
+    const gone = { ...(options.idOnly ? { id: found.id } : found), status: "cancelled" as const };
     this.events.delete(id);
     this.log.push(gone);
   }

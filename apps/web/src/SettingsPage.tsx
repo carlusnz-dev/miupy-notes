@@ -1,3 +1,6 @@
+import { useCallback, useRef, useState } from "react";
+import Button from "./components/Button";
+import Popover from "./components/Popover";
 import ReactMarkdown from "react-markdown";
 import { Link } from "react-router-dom";
 import { editorStyle, setEditorPreferences, useEditorPreferences, type EditorPreferences } from "./lib/editor-preferences";
@@ -5,12 +8,14 @@ import Select from "./components/Select";
 import { usePageTitle } from "./lib/use-page-title";
 import "./editor.css";
 import "./settings.css";
+import PageHeader from "./components/PageHeader";
 
 const choices = {
   width: [["narrow", "Estreita"], ["medium", "Média"], ["wide", "Larga"]],
   headingFont: [["serif", "Serif"], ["editorial", "Editorial"], ["sans", "Padrão"]],
   editorFont: [["mono", "Mono"], ["sans", "Sans"], ["serif", "Serif"]],
   colorTheme: [["mono", "Monocromático"], ["contrast", "Contraste"], ["soft", "Suave"]],
+  readingShortcut: [["Ctrl+E", "Ctrl+E"], ["Ctrl+Shift+E", "Ctrl+Shift+E"], ["Alt+R", "Alt+R"]],
   chipStyle: [["outline", "Contorno"], ["filled", "Preenchido"]],
 } as const;
 function PreferenceSelect<K extends keyof typeof choices>({ field, label, value }: { field: K; label: string; value: EditorPreferences[K] }) {
@@ -20,9 +25,15 @@ function PreferenceSelect<K extends keyof typeof choices>({ field, label, value 
 export default function SettingsPage() {
   usePageTitle("Configurações");
   const p = useEditorPreferences();
+  const [shortcutHelp, setShortcutHelp] = useState(false);
+  const helpRef = useRef<HTMLButtonElement>(null);
+  const closeHelp = useCallback(() => setShortcutHelp(false), []);
   return <div className="settings-page" style={editorStyle(p)}>
-    <div className="eyebrow">PREFERÊNCIAS</div><h1>Configurações<em>.</em></h1><p className="lead">Ajuste a leitura e a escrita das suas notas.</p>
+    <PageHeader size="utility" eyebrow="PREFERÊNCIAS" title="Configurações" description="Ajuste a leitura e a escrita das suas notas." />
     <div className="settings-grid"><section className="settings-panel" aria-label="Preferências do editor">
+      <Button ref={helpRef} size="sm" aria-expanded={shortcutHelp} aria-haspopup="dialog" aria-controls={shortcutHelp ? "shortcut-help" : undefined} onClick={() => setShortcutHelp(value => !value)}>Sobre o modo leitura</Button>
+      <Popover id="shortcut-help" open={shortcutHelp} onClose={closeHelp} anchorRef={helpRef} label="Sobre o modo leitura"><p>O modo leitura mostra o texto formatado e bloqueia a edição. Use o botão de livro na nota ou o atalho escolhido abaixo para alternar.</p></Popover>
+      <PreferenceSelect field="readingShortcut" label="Atalho do modo leitura" value={p.readingShortcut} />
       <PreferenceSelect field="width" label="Largura do Markdown" value={p.width} />
       <label>Margem interna: {p.padding}px<input type="range" min="12" max="64" step="4" value={p.padding} onChange={(event) => setEditorPreferences({ padding: Number(event.target.value) })} /></label>
       <PreferenceSelect field="headingFont" label="Fonte dos títulos" value={p.headingFont} />

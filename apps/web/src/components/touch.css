@@ -1,0 +1,15 @@
+/* Alvos mínimos de toque. Fica no shell, depois dos CSS base; o prefixo :root vence os CSS das páginas, que carregam sob demanda. */
+:root { --hit-min: 32px; }
+@media (pointer: coarse) { :root { --hit-min: 44px; } }
+body { touch-action: manipulation; }
+
+:root :is(.button-group button, .event-carousel-arrow, .tool-button, .tree-action) { min-block-size: var(--hit-min); min-inline-size: var(--hit-min); }
+
+/* Itens menores que o alvo (caixa de seleção, remover tag, links sublinhados) ganham zona de toque invisível. */
+@media (pointer: coarse) {
+  :root :is(.ui-button-sm, .tree-main, .date-toggle, .calendar-link-button) { min-block-size: var(--hit-min); }
+  :root :is(input[type="checkbox"], .badge-remove, .text-link, .finance-page > a) { position: relative; }
+  :root :is(input[type="checkbox"], .badge-remove, .text-link, .finance-page > a)::after { content: ""; position: absolute; inset: min(0px, calc((100% - var(--hit-min)) / 2)); }
+  /* A faixa de tags rola na horizontal e por isso corta na vertical: precisa abrigar a zona de 44 px do botão de remover. */
+  :root .tag-input-control { height: calc(var(--hit-min) + 8px); }
+}

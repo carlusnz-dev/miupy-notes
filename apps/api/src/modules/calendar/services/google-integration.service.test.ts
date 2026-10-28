@@ -1,22 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AppError } from "../../../core/domain/app-error.js";
 import { createKit } from "../calendar.test-kit.js";
 import { GoogleApiError } from "../google/google-calendar.client.js";
 import { SCOPE_MIRROR, SCOPE_REFLECT } from "../google/google-oauth.js";
 import { mirrorId } from "../google/google-mapping.js";
 
 const owner = "alice";
-const challenge = "a".repeat(43);
-const verifier = "b".repeat(43);
-const redirectUri = "http://127.0.0.1:53682/callback";
 const at = (hour: number) => new Date(Date.UTC(2026, 9, 21, hour));
 
 const timedInput = { title: "Almoço", description: "", location: "", allDay: false, start: "2026-10-21T15:00:00.000Z", end: "2026-10-21T16:00:00.000Z", timeZone: "America/Sao_Paulo", links: [] as [] };
 
+/** O login já guardou o refresh token com estes escopos; conectar só confere o que o Google diz ter sido concedido. */
 async function connect(kit: ReturnType<typeof createKit>, mode: "mirror" | "reflect", scopes?: string[]) {
   kit.oauth.grantedScopes = scopes ?? [mode === "reflect" ? SCOPE_REFLECT : SCOPE_MIRROR];
-  const { state } = await kit.integration.authorize(owner, { mode, redirectUri, codeChallenge: challenge });
-  return kit.integration.connect(owner, { state, code: "code", codeVerifier: verifier, redirectUri });
+  await kit.credentials.put(owner, "login-refresh-secret");
+  return kit.integration.connect(owner);
 }
 
 const gEvent = (id: string, extra: object = {}) => ({ id, summary: id, start: { dateTime: "2026-10-22T10:00:00-03:00" }, end: { dateTime: "2026-10-22T11:00:00-03:00" }, ...extra });
@@ -24,7 +23,7 @@ const gEvent = (id: string, extra: object = {}) => ({ id, summary: id, start: { 
 test("sem cliente OAuth/cofre o status é não configurado e nada é chamado", async () => {
   const kit = createKit({ configured: false });
   assert.equal((await kit.integration.status(owner)).state, "not_configured");
-  await assert.rejects(kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge }), { code: "INTEGRATION_NOT_CONFIGURED" });
+  await assert.rejects(kit.integration.connect(owner), { code: "INTEGRATION_NOT_CONFIGURED" });
   await assert.rejects(kit.integration.sync(owner), { code: "INTEGRATION_NOT_CONFIGURED" });
   assert.deepEqual(kit.google.calls, []);
 });
@@ -36,45 +35,38 @@ test("configurado mas sem consentimento: não conectado, e sincronizar/enviar s�
   assert.deepEqual(kit.google.calls, []);
 });
 
-test("autorização pede só o escopo do modo, sem escopos de login, e guarda o token fora do cadastro", async () => {
+test("conectar usa o consentimento do login: sem tela do Google, só escopos Calendar no cadastro e nenhum token nele", async () => {
   const kit = createKit({ now: () => at(10) });
-  const { authorizationUrl } = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  const scope = new URL(authorizationUrl).searchParams.get("scope");
-  assert.equal(scope, SCOPE_MIRROR);
   const status = await connect(kit, "mirror");
   assert.deepEqual([status.state, status.mode, status.scopes], ["connected", "mirror", [SCOPE_MIRROR]]);
-  assert.equal(await kit.credentials.get(owner), "refresh-secret");
-  assert.equal(JSON.stringify(status).includes("refresh-secret"), false);
+  assert.equal(kit.oauth.refreshes, 1);
+  assert.equal(JSON.stringify(status).includes("login-refresh-secret"), false);
+  assert.equal(JSON.stringify(await kit.repository.getConnection(owner)).includes("login-refresh-secret"), false);
 });
 
-test("o state é de uso único, expira e deve casar com o redirectUri", async () => {
-  let clock = at(10);
-  const kit = createKit({ now: () => clock });
-  kit.oauth.grantedScopes = [SCOPE_MIRROR];
-  const first = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  await assert.rejects(kit.integration.connect(owner, { state: first.state.replace(/.$/, "x"), code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
-  // A tentativa errada consumiu a autorização pendente.
-  await assert.rejects(kit.integration.connect(owner, { state: first.state, code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
-
-  const second = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  await assert.rejects(kit.integration.connect(owner, { state: second.state, code: "c", codeVerifier: verifier, redirectUri: "http://127.0.0.1:1/outro" }), { status: 400 });
-
-  const third = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  clock = at(11);
-  await assert.rejects(kit.integration.connect(owner, { state: third.state, code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
-
-  const fourth = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  assert.equal((await kit.integration.connect(owner, { state: fourth.state, code: "c", codeVerifier: verifier, redirectUri })).state, "connected");
-  await assert.rejects(kit.integration.connect(owner, { state: fourth.state, code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
-  // Outro proprietário não consome o state de alice.
-  await assert.rejects(kit.integration.connect("bob", { state: fourth.state, code: "c", codeVerifier: verifier, redirectUri }), { status: 400 });
-});
-
-test("consentimento granular: sem o escopo pedido não conecta e revoga o token recebido", async () => {
+test("escopo de escrita concedido no login conecta em modo reflect; reconectar relê os escopos do Google", async () => {
   const kit = createKit();
-  await assert.rejects(connect(kit, "reflect", ["openid"]), { code: "SCOPE_NOT_GRANTED" });
-  assert.deepEqual(kit.oauth.revoked, ["refresh-secret"]);
-  assert.equal(await kit.credentials.get(owner), null);
+  assert.deepEqual((await connect(kit, "reflect", [SCOPE_REFLECT, SCOPE_MIRROR])).mode, "reflect");
+  // Novo login com menos escopos: a conexão seguinte não usa o cache do access token anterior.
+  const downgraded = await connect(kit, "mirror");
+  assert.deepEqual([downgraded.mode, downgraded.scopes], ["mirror", [SCOPE_MIRROR]]);
+});
+
+test("consentimento granular: login sem Calendar não conecta, não guarda cadastro e não revoga o token do login", async () => {
+  const kit = createKit();
+  await assert.rejects(connect(kit, "reflect", []), { status: 409, code: "SCOPE_NOT_GRANTED" });
+  assert.equal(await kit.repository.getConnection(owner), null);
+  assert.equal((await kit.integration.status(owner)).state, "not_connected");
+  assert.equal(await kit.credentials.get(owner), "login-refresh-secret");
+});
+
+test("sem login no chaveiro, ou com token de outra conta, pede novo login e não conecta", async () => {
+  const kit = createKit();
+  kit.oauth.grantedScopes = [SCOPE_MIRROR];
+  await assert.rejects(kit.integration.connect(owner), { code: "REAUTH_REQUIRED" });
+  await kit.credentials.put(owner, "login-refresh-secret");
+  kit.oauth.subject = "bob";
+  await assert.rejects(kit.integration.connect(owner), { code: "REAUTH_REQUIRED" });
   assert.equal((await kit.integration.status(owner)).state, "not_connected");
 });
 
@@ -250,7 +242,7 @@ test("excluir evento enviado exige remover o envio; desfazer apaga no Google com
   await kit.service.delete(owner, second.event.id, removed.version);
 });
 
-test("desconectar revoga o token, apaga credencial e espelhos e preserva eventos locais", async () => {
+test("desconectar apaga cadastro e espelhos, preserva eventos locais e não revoga nem apaga o token do login", async () => {
   const kit = createKit({ now: () => at(12) });
   const { event } = await kit.service.create(owner, timedInput);
   await connect(kit, "mirror");
@@ -258,8 +250,7 @@ test("desconectar revoga o token, apaga credencial e espelhos e preserva eventos
   await kit.integration.sync(owner);
   const status = await kit.integration.disconnect(owner);
   assert.equal(status.state, "not_connected");
-  assert.deepEqual(kit.oauth.revoked, ["refresh-secret"]);
-  assert.equal(await kit.credentials.get(owner), null);
+  assert.equal(await kit.credentials.get(owner), "login-refresh-secret");
   const items = (await kit.repository.list(owner, { limit: 100 })).items;
   assert.deepEqual(items.map((item) => item.id), [event.id]);
 });
@@ -366,17 +357,6 @@ test("regressão: insert 409 com conteúdo remoto divergente é conflito explíc
 });
 
 
-test("duas conclusões simultâneas consomem o state uma única vez", async () => {
-  const kit = createKit(); kit.oauth.grantedScopes = [SCOPE_MIRROR];
-  const { state } = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
-  let exchanges = 0;
-  const exchange = kit.oauth.exchangeCode.bind(kit.oauth);
-  kit.oauth.exchangeCode = async () => { exchanges++; return exchange(); };
-  const results = await Promise.allSettled([1, 2].map(() => kit.integration.connect(owner, { state, code: "c", codeVerifier: verifier, redirectUri })));
-  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
-  assert.equal(exchanges, 1);
-});
-
 test("janela inicial é estável entre páginas e incremental omite ambos limites", async () => {
   const kit = createKit({ now: () => at(12) }); await connect(kit, "mirror");
   ["a", "b", "c"].forEach((id) => kit.google.seed(gEvent(id)));
@@ -427,20 +407,19 @@ test("exclusão refletida conserva vínculo se edição local vencer após DELET
   assert.equal(await kit.repository.findById(owner, local.id), null);
 });
 
-test("desconectar durante a troca OAuth aguarda e remove o grant tardio no processo local", async () => {
+test("desconectar durante a conferência dos escopos aguarda e não deixa conexão para trás", async () => {
   const kit = createKit(); kit.oauth.grantedScopes = [SCOPE_MIRROR];
-  const { state } = await kit.integration.authorize(owner, { mode: "mirror", redirectUri, codeChallenge: challenge });
+  await kit.credentials.put(owner, "login-refresh-secret");
   let release!: () => void, started!: () => void;
   const entered = new Promise<void>((r) => { started = r; });
   const wait = new Promise<void>((r) => { release = r; });
-  kit.oauth.exchangeCode = async () => { started(); await wait; return { refreshToken: "late-synthetic", scopes: [SCOPE_MIRROR] }; };
-  const connecting = kit.integration.connect(owner, { state, code: "c", codeVerifier: verifier, redirectUri });
+  const refresh = kit.oauth.refreshAccessToken.bind(kit.oauth);
+  kit.oauth.refreshAccessToken = async () => { started(); await wait; return refresh(); };
+  const connecting = kit.integration.connect(owner);
   await entered;
   const disconnecting = kit.integration.disconnect(owner);
   release(); await connecting; await disconnecting;
-  assert.equal(await kit.credentials.get(owner), null);
   assert.equal((await kit.integration.status(owner)).state, "not_connected");
-  assert.deepEqual(kit.oauth.revoked, ["late-synthetic"]);
 });
 
 test("editar só título preserva descrição/local remotos maiores que o espelho", async () => {
@@ -452,4 +431,146 @@ test("editar só título preserva descrição/local remotos maiores que o espelh
   await kit.integration.updateMirror(owner, event.id, { version: event.version, title: "novo título", description: event.description, location: event.location });
   assert.equal(kit.google.events.get("long")?.description?.length, 9000);
   assert.equal(kit.google.events.get("long")?.location?.length, 400);
+});
+
+/** Novo login do Tauri: outro refresh token no chaveiro, com os escopos que esse login concedeu. */
+async function relogin(kit: ReturnType<typeof createKit>, scopes: string[]) {
+  kit.oauth.grantedScopes = scopes;
+  await kit.credentials.put(owner, `login-refresh-${scopes.length}-${kit.oauth.refreshes}`);
+}
+
+test("regressão: login refeito só com leitura rebaixa a conexão reflect antes de escrever, sem chamar o Google", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  await relogin(kit, [SCOPE_MIRROR]);
+  await assert.rejects(kit.integration.reflect(owner, event.id), { code: "REFLECTION_NOT_ENABLED" });
+  assert.deepEqual(kit.google.calls, []);
+  const status = await kit.integration.status(owner);
+  assert.deepEqual([status.state, status.mode, status.scopes], ["connected", "mirror", [SCOPE_MIRROR]]);
+  // Login com escrita de novo: o mesmo cadastro volta a refletir sem reconectar.
+  await relogin(kit, [SCOPE_REFLECT]);
+  assert.ok((await kit.integration.reflect(owner, event.id)).reflection);
+});
+
+test("regressão: login refeito sem Calendar marca reautorização e sincronizar responde SCOPE_NOT_GRANTED", async () => {
+  const kit = createKit();
+  await connect(kit, "reflect");
+  await relogin(kit, []);
+  await assert.rejects(kit.integration.sync(owner), { status: 409, code: "SCOPE_NOT_GRANTED" });
+  assert.deepEqual(kit.google.calls, []);
+  assert.deepEqual([(await kit.integration.status(owner)).state, (await kit.integration.status(owner)).lastError], ["needs_reauth", "SCOPE_NOT_GRANTED"]);
+});
+
+test("403 do Google não vira 5xx repetível: escopo insuficiente é 409 e reconfere o token; os demais são 403", async () => {
+  const kit = createKit({ now: () => at(12) });
+  const { event } = await kit.service.create(owner, timedInput);
+  await connect(kit, "reflect");
+  kit.google.failures.insert = [new GoogleApiError("insufficient_scope")];
+  const refreshes = kit.oauth.refreshes;
+  await assert.rejects(kit.integration.reflect(owner, event.id), { status: 409, code: "SCOPE_NOT_GRANTED" });
+  kit.google.failures.insert = [new GoogleApiError("forbidden")];
+  await assert.rejects(kit.integration.reflect(owner, event.id), { status: 403, code: "UPSTREAM_FORBIDDEN" });
+  assert.equal(kit.oauth.refreshes, refreshes + 1);
+  assert.equal((await kit.integration.status(owner)).state, "connected");
+});
+
+test("regressão: evento enviado e apagado no Google vira deleted_remote na sincronização, sem conflito", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  const reflected = await kit.integration.reflect(owner, local.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(local.id.replaceAll("-", ""));
+  await kit.integration.sync(owner);
+  const current = await kit.repository.findById(owner, local.id);
+  assert.equal(current?.reflection?.state, "deleted_remote");
+  assert.equal(current?.version, reflected.version);
+  // Salvar de novo grava só o local e não tenta reaparecer no Google nem vira GOOGLE_EVENT_MISSING.
+  const edited = await kit.service.update(owner, local.id, { version: current!.version, title: "Novo título" });
+  const after = await kit.integration.reflect(owner, edited.id);
+  assert.equal(after.reflection?.state, "deleted_remote");
+  assert.equal(after.title, "Novo título");
+  assert.equal(kit.google.events.size, 0);
+});
+
+test("regressão: cancelamento só com ID (sem extendedProperties) também marca o evento enviado", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(local.id.replaceAll("-", ""), { idOnly: true });
+  const result = await kit.integration.sync(owner);
+  assert.equal(result.deleted, 1);
+  assert.equal((await kit.repository.findById(owner, local.id))?.reflection?.state, "deleted_remote");
+});
+
+test("regressão: salvar evento enviado cuja cópia sumiu do Google (404) marca deleted_remote em vez de GOOGLE_EVENT_MISSING", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  kit.google.remove(local.id.replaceAll("-", ""));
+  const saved = await kit.integration.reflect(owner, local.id);
+  assert.equal(saved.reflection?.state, "deleted_remote");
+});
+
+for (const kind of ["not_found", "gone", "precondition_failed"] as const) {
+  test(`excluir evento enviado conclui a exclusão local quando o DELETE no Google responde ${kind}`, async () => {
+    const kit = createKit(); await connect(kit, "reflect");
+    const local = (await kit.service.create(owner, timedInput)).event;
+    const reflected = await kit.integration.reflect(owner, local.id);
+    // 412 com ETag velho num evento que já foi excluído no Google não pode deixar o item preso.
+    if (kind === "precondition_failed") kit.google.remove(local.id.replaceAll("-", ""));
+    kit.google.failures.delete = [new GoogleApiError(kind)];
+    await kit.integration.deleteReflected(owner, local.id, reflected.version);
+    assert.equal(await kit.repository.findById(owner, local.id), null);
+  });
+}
+
+test("evento deleted_remote: excluir não chama o Google e desvincular mantém o evento só local", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const first = (await kit.service.create(owner, timedInput)).event;
+  const second = (await kit.service.create(owner, { ...timedInput, title: "Outro" })).event;
+  await kit.integration.reflect(owner, first.id); await kit.integration.reflect(owner, second.id);
+  await kit.integration.sync(owner);
+  kit.google.remove(first.id.replaceAll("-", "")); kit.google.remove(second.id.replaceAll("-", ""));
+  await kit.integration.sync(owner);
+  kit.google.calls.length = 0;
+
+  const marked = (await kit.repository.findById(owner, first.id))!;
+  await kit.integration.deleteReflected(owner, first.id, marked.version);
+  assert.equal(await kit.repository.findById(owner, first.id), null);
+
+  const other = (await kit.repository.findById(owner, second.id))!;
+  const detached = await kit.integration.unreflect(owner, second.id, { keepRemote: false });
+  assert.equal(detached.reflection, null);
+  assert.equal(detached.title, other.title);
+  assert.deepEqual(kit.google.calls, []);
+  await kit.service.delete(owner, second.id, detached.version);
+});
+
+test("desvincular (apagar a cópia) com 410 do Google conclui sem erro", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  const local = (await kit.service.create(owner, timedInput)).event;
+  await kit.integration.reflect(owner, local.id);
+  kit.google.failures.delete = [new GoogleApiError("gone")];
+  assert.equal((await kit.integration.unreflect(owner, local.id, { keepRemote: false })).reflection, null);
+});
+
+test("espelho editado depois de apagado no Google (404) é removido localmente, sem conflito", async () => {
+  const kit = createKit(); await connect(kit, "reflect");
+  kit.google.seed(gEvent("a")); await kit.integration.sync(owner);
+  const event = (await kit.repository.list(owner, { limit: 10 })).items[0];
+  kit.google.remove("a");
+  await assert.rejects(kit.integration.updateMirror(owner, event.id, { version: event.version, title: "x" }), { code: "NOT_FOUND" });
+  assert.equal(await kit.repository.findById(owner, event.id), null);
+});
+
+test("falhas 5xx do Google levam serviço, tipo, status do provedor e causa original para o log", async () => {
+  const kit = createKit({ now: () => at(12) });
+  await connect(kit, "mirror");
+  const network = new TypeError("fetch failed");
+  kit.google.failures.list = [new GoogleApiError("unavailable", undefined, { cause: network }), new GoogleApiError("invalid", undefined, { status: 400 })];
+  await assert.rejects(kit.integration.sync(owner), (error: unknown) => error instanceof AppError && error.status === 502 && error.cause instanceof GoogleApiError && error.cause.cause === network
+    && error.context?.service === "Google Calendar" && error.context.detail === "unavailable");
+  await assert.rejects(kit.integration.sync(owner), (error: unknown) => error instanceof AppError && error.code === "UPSTREAM_REJECTED" && error.context?.providerStatus === 400);
 });

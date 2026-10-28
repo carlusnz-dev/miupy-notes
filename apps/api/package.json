@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env.development --env-file-if-exists=../../.env.local src/server.ts",
     "build": "tsc --noEmit",
+    "bundle:lambda": "node scripts/build-lambda.mjs",
     "check:modules": "node scripts/check-modules.mjs",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "check:secrets": "node scripts/check-secrets.mjs",
     "db:create-table": "node --env-file=.env.development --env-file-if-exists=../../.env.local scripts/create-local-table.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1152.0",
+    "@aws-sdk/client-secrets-manager": "^3.1157.0",
     "@aws-sdk/lib-dynamodb": "^3.1152.0",
     "express": "^5.3.0",
     "jose": "^6.2.12",
@@ -21,6 +24,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
+    "esbuild": "^0.25.12",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }

@@ -25,6 +25,7 @@ export function cacheSavedNote(client: QueryClient, note: NoteOutput) {
     ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map(patch) })),
   }));
   client.setQueriesData<{ items: NoteMetadataOutput[]; truncated: boolean }>({ queryKey: noteKeys.everything() }, (data) => data && ({ ...data, items: data.items.map(patch) }));
+  void client.invalidateQueries({ queryKey: [...noteKeys.all, "recent-candidates"] });
   // Movimentar pasta não altera métricas. O resumo não devolve a coleção nem os corpos.
   if (!previous || previous.body !== note.body || previous.title !== note.title || JSON.stringify(previous.tags) !== JSON.stringify(note.tags)) {
     void client.invalidateQueries({ queryKey: noteKeys.summaries() });
@@ -40,6 +41,7 @@ export function cacheCreatedNote(client: QueryClient, note: NoteOutput) {
 export function cacheDeletedNote(client: QueryClient, id: string) {
   const deleted = deletedNotes.get(client) ?? new Set<string>();
   deleted.add(id);
+  void client.invalidateQueries({ queryKey: [...noteKeys.all, "recent-candidates"] });
   deletedNotes.set(client, deleted);
   client.removeQueries({ queryKey: noteKeys.detail(id) });
   void client.invalidateQueries({ queryKey: noteKeys.list() });

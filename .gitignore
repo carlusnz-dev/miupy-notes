@@ -18,8 +18,17 @@ dist-ssr
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
+!*.tfvars.json.example
+*.tfplan
+*.tfbackend
+*.backend.hcl
+!*.tfbackend.example
+!*.backend.hcl.example
+backend.hcl
 crash.log
+crash.*.log
 override.tf
 override.tf.json
 *_override.tf

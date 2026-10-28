@@ -22,14 +22,19 @@ export type GoogleErrorKind =
   | "not_found"            // 404
   | "rate_limited"         // 429 ou 403 rateLimitExceeded/userRateLimitExceeded
   | "unauthorized"         // 401 ou refresh token recusado: precisa reautorizar
+  | "insufficient_scope"   // 403 insufficientPermissions: o token não tem o escopo (ex.: login refeito só com leitura)
+  | "forbidden"            // demais 403: recusa definitiva, não adianta repetir
   | "unavailable"          // 5xx ou falha de rede
   | "invalid";             // demais 4xx
 
 /** Erro do provedor reduzido a uma classificação; nunca carrega corpo, token ou texto do Google. */
 export class GoogleApiError extends Error {
-  constructor(public readonly kind: GoogleErrorKind, public readonly retryAfterMs?: number) {
-    super(`google:${kind}`);
+  constructor(public readonly kind: GoogleErrorKind, public readonly retryAfterMs?: number, options: { cause?: unknown; status?: number } = {}) {
+    super(`google:${kind}`, options.cause === undefined ? undefined : { cause: options.cause });
+    this.status = options.status;
   }
+  /** Status HTTP devolvido pelo Google, quando houve resposta. */
+  readonly status?: number;
 }
 
 /** Fronteira com a Calendar API. `ownerId` escolhe as credenciais; a implementação real é HTTP, os testes usam fake. */

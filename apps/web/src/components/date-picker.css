@@ -3,20 +3,20 @@
 .date-control { display: flex; align-items: center; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-small); background: var(--color-background); }
 .date-control:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .date-control[data-invalid="true"] { border-color: var(--color-text); }
-.date-picker .date-control input { flex: 1; width: 100%; min-width: 0; padding: 10px 12px; border: 0; outline: 0; color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; }
+.date-picker .date-control input, .date-picker .date-control input:focus-visible { flex: 1; width: 100%; min-width: 0; padding: 10px 12px; border: 0; outline: 0; color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; }
 .date-picker button.date-toggle { flex: none; display: grid; place-items: center; width: 40px; height: 38px; padding: 0; border: 0; border-radius: 0 var(--radius-small) var(--radius-small) 0; color: var(--color-muted); background: transparent; cursor: pointer; }
 .date-picker button.date-toggle:hover:not(:disabled) { color: var(--color-text); background: var(--color-surface-raised); }
 .date-picker button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .date-error { margin: 0; color: var(--color-text); font-size: 13px; }
 .date-popover { position: fixed; z-index: 20; overflow-y: auto; box-sizing: border-box; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-medium); color: var(--color-text); background: var(--color-surface-raised); box-shadow: 0 12px 32px rgb(0 0 0 / .5); font-size: 13px; }
 .date-header { display: grid; grid-template-columns: auto minmax(0, 1fr) 84px auto; align-items: center; gap: 6px; }
-.date-header .select-field .select-control select { min-height: 34px; padding: 5px 24px 5px 8px; font-size: 13px; background-color: var(--color-surface); }
+.date-header .select-trigger { min-height: 34px; padding: 5px 24px 5px 8px; font-size: 13px; background: var(--color-surface); }
 .date-header .select-chevron { right: 8px; }
 .date-picker button.date-nav { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius-small); color: var(--color-text); background: transparent; cursor: pointer; }
 .date-picker button.date-nav:hover { background: var(--color-surface); }
 .date-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .date-row [role="gridcell"] { display: grid; }
-.date-weekday { padding: 4px 0; color: var(--color-muted); font-size: 11px; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
+.date-weekday { padding: 4px 0; color: var(--color-muted); font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .06em; }
 .date-picker button.date-day { min-height: 34px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-small); color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
 .date-picker button.date-day:hover { background: var(--color-surface); }
 .date-picker button.date-day[aria-current="date"] { border-color: var(--color-border-strong); }

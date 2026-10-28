@@ -2,7 +2,7 @@
 .modal::backdrop { background: rgb(0 0 0 / calc(.72 * var(--modal-fade, 1))); }
 .modal-panel { display: grid; gap: 16px; max-height: calc(100dvh - 112px); padding: 24px; overflow-y: auto; border: 1px solid var(--color-border-strong); border-radius: 32px; background: var(--color-surface); }
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.modal-header h2 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.modal-header h2 { margin: 0; font: 400 clamp(26px, 3vw, 32px)/1.05 var(--font-serif); letter-spacing: -.01em; overflow-wrap: anywhere; text-wrap: balance; }
 .modal-close { position: absolute; top: -48px; right: 0; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--color-border-strong); border-radius: 50%; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
 .modal-close:hover:not(:disabled) { background: var(--color-surface-raised); }
 .modal-close:disabled { opacity: .5; cursor: not-allowed; }
@@ -11,4 +11,16 @@
 .modal-body > p { margin: 0; color: var(--color-muted); }
 .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .modal-exit-backdrop { position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; background: rgb(0 0 0 / .72); }
-@media (max-width: 540px) { .modal-panel { padding: 20px; border-radius: 28px; } }
+/* Mobile: bottom sheet. Cabeçalho fixo, corpo rola sozinho e o rodapé de ações cola embaixo; o X fica dentro do painel. */
+@media (max-width: 760px) {
+  dialog.modal { position: fixed; inset: auto 0 0 0; width: 100%; max-width: 100%; max-height: 92dvh; margin: 0; }
+  .modal-panel { display: flex; flex-direction: column; gap: 0; max-height: 92dvh; padding: 0; overflow: hidden; border-width: 1px 0 0; border-radius: 28px 28px 0 0; }
+  .modal-header { flex: none; align-items: center; min-height: 64px; padding: 14px 68px 10px 20px; border-bottom: 1px solid var(--color-border); }
+  .modal-header h2 { font-size: 26px; }
+  .modal-close { top: 10px; right: 12px; z-index: 1; border-color: transparent; background: var(--color-surface-raised); }
+  .modal-body { flex: 1 1 auto; align-content: start; min-height: 0; padding: 16px 20px 0; overflow-y: auto; overscroll-behavior: contain; }
+  .modal-body :is(.modal-actions, footer) { position: sticky; bottom: 0; z-index: 1; margin: 4px -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: var(--color-surface); }
+  .modal-body > :last-child:not(.modal-actions, footer) { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+.confirm-dialog { width: min(440px, calc(100vw - 32px)); }
+.confirm-dialog .modal-body > p.confirm-error { color: var(--color-text); }

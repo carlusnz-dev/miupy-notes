@@ -1,0 +1,16 @@
+/* Checkbox e range sem a aparência do sistema (o WebKitGTK/Tauri desenhava os controles com o tema do GTK).
+   O elemento nativo continua no DOM: teclado, rótulo clicável, formulários e leitores de tela não mudam. */
+input[type="checkbox"] { flex: none; display: inline-grid; place-content: center; width: 18px; height: 18px; margin: 0; border: 1px solid var(--color-border-strong); border-radius: 5px; color: var(--color-accent-text); background: var(--color-background); cursor: pointer; appearance: none; -webkit-appearance: none; transition: background-color var(--duration), border-color var(--duration); }
+input[type="checkbox"]::before { content: ""; width: 10px; height: 10px; background: currentColor; clip-path: polygon(14% 44%, 0 59%, 40% 100%, 100% 22%, 86% 8%, 40% 71%); transform: scale(0); transition: transform var(--duration) cubic-bezier(.3, 1.6, .5, 1); }
+input[type="checkbox"]:checked { border-color: var(--color-accent); background: var(--color-accent); }
+input[type="checkbox"]:checked::before { transform: scale(1); }
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--color-text); }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+input[type="checkbox"]:disabled { opacity: .55; cursor: not-allowed; }
+
+input[type="range"] { height: 20px; margin: 0; background: transparent; cursor: pointer; appearance: none; -webkit-appearance: none; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-border-strong); }
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-border-strong); }
+input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -6px; border: 2px solid var(--color-background); border-radius: 50%; background: var(--color-text); appearance: none; -webkit-appearance: none; }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid var(--color-background); border-radius: 50%; background: var(--color-text); }
+input[type="range"]:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 4px; }

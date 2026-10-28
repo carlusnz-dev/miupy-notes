@@ -17,6 +17,8 @@ export function mirrorId(ownerId: string, calendarId: string, externalId: string
 
 /** ID de evento do Google derivado do UUID local: base32hex (0-9a-v) tem 32 chars, dentro do limite de 5–1024. */
 export const googleIdFor = (eventId: string) => eventId.replaceAll("-", "");
+/** Inverso de `googleIdFor`: itens cancelados da sincronização incremental só garantem o `id`. `null` se não for um UUID sem hífens. */
+export const eventIdFromGoogle = (googleId: string) => /^[0-9a-f]{32}$/.test(googleId) ? `${googleId.slice(0, 8)}-${googleId.slice(8, 12)}-${googleId.slice(12, 16)}-${googleId.slice(16, 20)}-${googleId.slice(20)}` : null;
 
 export function toGoogleBody(event: CalendarEvent): GoogleEventBody {
   const body: GoogleEventBody = {

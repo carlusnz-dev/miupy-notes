@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save, Trash2, Settings, Type } from "lucide-react";
-import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
+import { ArrowLeft, Save, Trash2, Settings, Type, BookOpen } from "lucide-react";
+import type { LiveMarkdownEditorHandle } from "./components/LiveMarkdownEditor";
+import Badge from "./components/Badge";
 import TagInput from "./components/TagInput";
-import Modal from "./components/Modal";
+import ConfirmDialog from "./components/ConfirmDialog";
 import { SkeletonBody } from "./components/Skeleton";
 import type { ApiError } from "./lib/api-client";
 import { getAuthSessionVersion, useAuth } from "./lib/auth";
@@ -17,6 +18,21 @@ import { isLocalReadFailure } from "./lib/notes-autosave";
 import { notesSaver, sessionIdle } from "./lib/notes-saver";
 import { usePageTitle } from "./lib/use-page-title";
 import "./editor.css";
+import Button from "./components/Button";
+import PageHeader from "./components/PageHeader";
+
+// CodeMirror e o Markdown da leitura vêm em chunks próprios: título, tags e estado abrem sem esperar por eles.
+const LiveMarkdownEditor = lazy(() => import("./components/LiveMarkdownEditor"));
+const NoteReading = lazy(() => import("./components/NoteReading"));
+
+/** Pausa na digitação depois da qual contagem e leitura recebem o texto novo (a fila já o recebeu na hora). */
+const BODY_RENDER_DELAY = 300;
+
+/** A tela só muda quando algo visível muda; o texto do rascunho muda a cada tecla e não aparece aqui. */
+function sameView(a: EntryView, b: EntryView) {
+  return a.base === b.base && !a.snapshot === !b.snapshot && a.status === b.status && a.localIssue === b.localIssue
+    && a.invalid === b.invalid && a.error === b.error && a.retrying === b.retrying;
+}
 
 const timeFormat = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" });
 const countFormat = new Intl.NumberFormat("pt-BR");
@@ -52,7 +68,6 @@ function NoteEditorSession() {
   const sample = useMemo(() => previewNote(searchParams.get("estado")), [searchParams]);
   const editorRef = useRef<LiveMarkdownEditorHandle>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const noteQuery = useNote(id);
   const deleteMutation = useDeleteNote();
   const preferences = useEditorPreferences();
@@ -67,13 +82,19 @@ function NoteEditorSession() {
   const ignoreLocal = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [source, setSource] = useState(false);
+  const [reading, setReading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const initializedId = useRef("");
   const eol = useRef<Eol>("\n");
+  // Texto digitado que a tela ainda não renderizou (ver `edit`); `latest` sempre tem a versão mais nova.
+  const pendingDraft = useRef<Draft | null>(null);
+  const bodyTimer = useRef<number | undefined>(undefined);
   const latest = useRef({ note, draft });
-  latest.current = { note, draft };
+  latest.current = { note, draft: pendingDraft.current ?? draft };
+  // O editor não é controlado: trocar o texto por fora (recarregar do servidor) remonta-o com outra chave.
+  const [editorKey, setEditorKey] = useState(0);
   // Nota recém-criada: o foco vai para o título, não para o texto.
   // Valor fixo desde a abertura: mudar `autoFocus` depois faria o editor roubar o foco do título.
   const bodyAutoFocus = useRef(false);
@@ -85,6 +106,7 @@ function NoteEditorSession() {
   useEffect(() => {
     if (initializedId.current !== id) {
       initializedId.current = id;
+      dropPendingDraft();
       setNote(null);
       setDraft(null);
     }
@@ -102,6 +124,7 @@ function NoteEditorSession() {
       const restoredDraft = attached.restored ? attached.restored.draft : toDraft(attached.note);
       eol.current = attached.restored?.eol ?? detectEol(attached.note.body);
       bodyAutoFocus.current = !focusTitle.current && !attached.restored && !attached.note.body;
+      dropPendingDraft();
       latest.current = { note: attached.note, draft: restoredDraft };
       setNote(attached.note);
       setDraft(restoredDraft);
@@ -122,7 +145,7 @@ function NoteEditorSession() {
     const sync = () => {
       const current = notesSaver.view(id);
       if (!current) return;
-      setView(current);
+      setView((previous) => (previous && sameView(previous, current) ? previous : current));
       // Só a versão desta nota entra no estado: o resultado de outra nota nunca chega aqui.
       setNote((previous) => (previous && previous.id === current.base.id && previous.version !== current.base.version ? current.base : previous));
     };
@@ -139,12 +162,46 @@ function NoteEditorSession() {
     navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
   }, [ready, navigate, location.pathname, location.search]);
 
+  const flushPendingDraft = useCallback(() => {
+    window.clearTimeout(bodyTimer.current);
+    if (pendingDraft.current) setDraft(pendingDraft.current);
+    pendingDraft.current = null;
+  }, []);
+  function dropPendingDraft() {
+    window.clearTimeout(bodyTimer.current);
+    pendingDraft.current = null;
+  }
+  useEffect(() => () => window.clearTimeout(bodyTimer.current), []);
+  // Alternar a leitura esconde (inert) o editor, onde estava o foco: ele volta ao botão que alterna o modo.
+  const readingToggle = useRef<HTMLButtonElement>(null);
+  const readingToggled = useRef(false);
+  const toggleReading = useCallback(() => { flushPendingDraft(); readingToggled.current = true; setReading((value) => !value); }, [flushPendingDraft]);
+  useEffect(() => {
+    if (!readingToggled.current) return;
+    readingToggled.current = false;
+    readingToggle.current?.focus();
+  }, [reading]);
+
   /** "Salvar agora": a fila envia assim que o scheduler permitir; `true` quando a nota ficou sincronizada. */
   const persist = useCallback(async (): Promise<boolean> => {
     const { note: current } = latest.current;
     if (!current || sample) return false;
     return notesSaver.flush(current.id);
   }, [sample]);
+
+  useEffect(() => {
+    if (!ready) return;
+    function shortcut(event: KeyboardEvent) {
+      if (event.repeat || event.isComposing || document.querySelector("dialog[open]")) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "s") { event.preventDefault(); event.stopPropagation(); void persist(); return; }
+      const matches = preferences.readingShortcut === "Alt+R"
+        ? event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === "r"
+        : (event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey === (preferences.readingShortcut === "Ctrl+Shift+E") && event.key.toLowerCase() === "e";
+      if (matches) { event.preventDefault(); event.stopPropagation(); toggleReading(); }
+    }
+    window.addEventListener("keydown", shortcut, true);
+    return () => window.removeEventListener("keydown", shortcut, true);
+  }, [preferences.readingShortcut, ready, persist, toggleReading]);
 
   const save = describeSave(view, `Sincronizado às ${timeFormat.format(new Date(note?.updatedAt ?? 0))}`);
   const blocked = view?.status === "conflict";
@@ -153,14 +210,24 @@ function NoteEditorSession() {
   // Ao sair após excluir, não há o que gravar.
   const deletedRef = useRef(false);
 
-  /** Cada alteração vai à fila na hora (mesmo inválida); o envio à API fica a cargo do scheduler. */
+  /**
+   * Cada alteração vai à fila na hora (mesmo inválida); o envio à API fica a cargo do scheduler.
+   * Só o texto mudou: o editor já mostra a tecla, e a tela re-renderiza depois de uma pausa, não a cada tecla.
+   */
   function edit(next: Partial<Draft>) {
     const { note: current, draft: previous } = latest.current;
     if (!current || !previous) return;
     const updated = { ...previous, ...next };
     latest.current = { note: current, draft: updated };
-    setDraft(updated);
     if (!sample) notesSaver.edit(current.id, updated, eol.current);
+    if (Object.keys(next).length === 1 && "body" in next) {
+      pendingDraft.current = updated;
+      window.clearTimeout(bodyTimer.current);
+      bodyTimer.current = window.setTimeout(flushPendingDraft, BODY_RENDER_DELAY);
+      return;
+    }
+    dropPendingDraft();
+    setDraft(updated);
   }
 
   /** Escolha do usuário: troca o texto local pela versão do servidor (o texto guardado é descartado). */
@@ -169,8 +236,10 @@ function NoteEditorSession() {
       const fresh = await getNote(id);
       setNotice((await notesSaver.reset(fresh)) ? null : "Recarregado, mas o rascunho antigo não pôde ser removido deste computador; ele pode reaparecer depois.");
       eol.current = detectEol(fresh.body);
+      dropPendingDraft();
       setNote(fresh);
       setDraft(toDraft(fresh));
+      setEditorKey((key) => key + 1);
       setRecovered(false);
     } catch {
       // A tela continua em conflito; o usuário pode tentar de novo.
@@ -207,9 +276,7 @@ function NoteEditorSession() {
   if (auth.status !== "signed-in" && !sample) {
     return (
       <div className="feature-page">
-        <div className="eyebrow">EDITOR</div>
-        <h1>Editor<em>.</em></h1>
-        <p className="lead">Entre com sua conta Google na tela de notas para editar.</p>
+        <PageHeader eyebrow="EDITOR" title="Editor" description="Entre com sua conta Google na tela de notas para editar." />
         <Link className="text-link" to="/notes">Ir para Notas</Link>
       </div>
     );
@@ -223,8 +290,8 @@ function NoteEditorSession() {
           <div className="state-panel" role="alert">
             <strong>{attachError.local ? "Rascunho local ilegível" : "Não foi possível abrir a nota"}</strong>
             <p>{attachError.message}</p>
-            <button type="button" className="button button-secondary" onClick={() => { ignoreLocal.current = false; setAttachError(null); setAttachTry((n) => n + 1); }}>Tentar de novo</button>
-            {attachError.local && <button type="button" className="button button-secondary" onClick={() => { ignoreLocal.current = true; setAttachError(null); setAttachTry((n) => n + 1); }}>Abrir sem o rascunho local</button>}
+            <Button type="button" onClick={() => { ignoreLocal.current = false; setAttachError(null); setAttachTry((n) => n + 1); }}>Tentar de novo</Button>
+            {attachError.local && <Button type="button" onClick={() => { ignoreLocal.current = true; setAttachError(null); setAttachTry((n) => n + 1); }}>Abrir sem o rascunho local</Button>}
             <Link className="text-link" to="/notes">Voltar para Notas</Link>
           </div>
         </div>
@@ -257,20 +324,16 @@ function NoteEditorSession() {
         <span className={`save-status${save.alert ? " save-status-alert" : ""}`} role="status" aria-live="polite">{save.text}</span>
         <div className="editor-actions" role="group" aria-label="Ações da nota">
           <button type="button" className="tool-button" aria-label="Salvar" title="Salvar (Ctrl+S)" onClick={() => void persist()} disabled={!dirty || busy || blocked}><Save size={18} /></button>
-          <button type="button" className="tool-button" aria-label="Alternar fonte dos títulos" title="Alternar fonte dos títulos" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
+          <button ref={readingToggle} type="button" className="tool-button" aria-label="Modo leitura" aria-pressed={reading} title={`Modo leitura (${preferences.readingShortcut})`} onClick={toggleReading}><BookOpen size={18} /></button>
+          <button type="button" className="tool-button" aria-label="Títulos em serifa" aria-pressed={preferences.headingFont !== "sans"} title="Alternar fonte dos títulos (serifa ou sans)" onClick={() => setEditorPreferences({ headingFont: preferences.headingFont === "serif" ? "sans" : "serif" })}><Type size={18} /></button>
           <button type="button" className="tool-button" aria-label="Configurações" title="Configurações" onClick={() => navigate("/settings")}><Settings size={18} /></button>
           <button type="button" className="tool-button" aria-label="Excluir nota" title="Excluir nota" onClick={() => setConfirmDelete(true)} disabled={deleting}><Trash2 size={18} /></button>
         </div>
       </div>
 
-      <Modal open={confirmDelete} title="Excluir esta nota?" onClose={() => setConfirmDelete(false)} busy={deleting} initialFocusRef={cancelDeleteRef}>
+      <ConfirmDialog open={confirmDelete} title="Excluir esta nota?" confirmLabel="Excluir definitivamente" busyLabel="Excluindo…" busy={deleting} error={deleteError} onConfirm={() => void remove()} onCancel={() => setConfirmDelete(false)}>
         <p>A exclusão é definitiva: ainda não há lixeira.</p>
-        {deleteError && <p role="alert">{deleteError}</p>}
-        <div className="modal-actions">
-          <button ref={cancelDeleteRef} type="button" className="button button-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancelar</button>
-          <button type="button" className="button" onClick={() => void remove()} disabled={deleting}>{deleting ? "Excluindo…" : "Excluir definitivamente"}</button>
-        </div>
-      </Modal>
+      </ConfirmDialog>
 
       {recovered && (dirty || (view && view.status !== "synced")) && (
         <div className="state-panel editor-banner" role="status">
@@ -285,12 +348,12 @@ function NoteEditorSession() {
         <div className="state-panel editor-banner" role="alert">
           <strong>Esta nota foi alterada em outro lugar</strong>
           <p>O salvamento automático parou para não sobrescrever a outra versão. Seu texto continua guardado neste computador, mesmo se você sair; copie o que precisar antes de recarregar, pois recarregar o descarta.</p>
-          <button type="button" className="button button-secondary" onClick={() => void reloadSaved()}>Recarregar a versão salva</button>
+          <Button type="button" onClick={() => void reloadSaved()}>Recarregar a versão salva</Button>
         </div>
       )}
 
       <label className="visually-hidden" htmlFor="editor-title">Título</label>
-      <input
+      {reading ? <h1 className="editor-title">{draft.title || "Sem título"}</h1> : <input
         ref={titleRef}
         id="editor-title"
         className="editor-title"
@@ -300,26 +363,34 @@ function NoteEditorSession() {
         maxLength={MAX_TITLE}
         placeholder="Título"
         autoComplete="off"
-      />
-      {preferences.showTags && (
+      />}
+      {preferences.showTags && !reading && (
         <div className="editor-meta">
           <TagInput value={draft.tags} onChange={(tags) => edit({ tags })} maxTags={MAX_TAGS} maxLength={MAX_TAG} />
         </div>
       )}
+      {preferences.showTags && reading && draft.tags.length > 0 && (
+        <ul className="editor-meta editor-tags-read" aria-label="Tags">
+          {draft.tags.map((tag) => <li key={tag}><Badge>{tag}</Badge></li>)}
+        </ul>
+      )}
 
-      <LiveMarkdownEditor
+      {reading && <Suspense fallback={<SkeletonBody label="Preparando leitura" lines={6} />}><NoteReading body={draft.body} /></Suspense>}
+      {/* Manter o editor montado preserva seleção e histórico de desfazer durante a leitura. */}
+      <div className="note-writing" hidden={reading} inert={reading}><Suspense fallback={<SkeletonBody label="Carregando editor" lines={6} />}><LiveMarkdownEditor
+        key={editorKey}
         ref={editorRef}
-        value={draft.body}
+        defaultValue={draft.body}
         onChange={(body) => edit({ body })}
         onSave={() => void persist()}
         source={source}
         onSourceChange={setSource}
         autoFocus={bodyAutoFocus.current}
-      />
+      /></Suspense></div>
 
       <div className="editor-footer muted-small">
         <span>{countFormat.format(words)} {words === 1 ? "palavra" : "palavras"} · {countFormat.format(draft.body.length)} / {countFormat.format(MAX_BODY)} caracteres</span>
-        <span>Ctrl+S salva · Ctrl+Enter alterna tarefa · versão {note.version}</span>
+        <span>{/* Sem teclado físico a dica não serve. */}<span className="editor-shortcuts">{preferences.readingShortcut} alterna leitura · Ctrl+S salva · {!reading && "Ctrl+Enter alterna tarefa · "}</span>versão {note.version}</span>
       </div>
     </div>
   );

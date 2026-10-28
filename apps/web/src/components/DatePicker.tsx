@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import gsap from "gsap";
+import { useCallback, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { addDays, addMonths, compare, daysInMonth, fromDisplay, fromIso, maskDisplay, monthNames, toDisplay, toIso, todayLocal, weekday, weekdayNames, type CalendarDate } from "../lib/calendar-date";
 import Select from "./Select";
+import { useAnchoredPosition, useDismiss, usePresence } from "./popover";
 import "./date-picker.css";
 
-const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 const monthOptions = monthNames.map((name, index) => ({ value: String(index + 1), label: capitalize(name) }));
 
@@ -20,14 +19,13 @@ export default function DatePicker({ label, value, onChange, required = false, d
   const id = useId();
   const popoverId = `${id}-calendar`;
   const wrapper = useRef<HTMLDivElement>(null);
+  const control = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   const grid = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(() => { const date = fromIso(value); return date ? toDisplay(date) : ""; });
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [placement, setPlacement] = useState<CSSProperties>({ top: 0, left: 0 });
   const [cursor, setCursor] = useState<CalendarDate>(() => fromIso(value) ?? todayLocal());
   const focusDay = useRef(false);
   const selected = fromDisplay(text);
@@ -40,34 +38,14 @@ export default function DatePicker({ label, value, onChange, required = false, d
     setText(date ? toDisplay(date) : "");
     if (date) setCursor(date);
   }
-  if (open && !mounted) setMounted(true);
+  const mounted = usePresence(open, popover);
 
   useLayoutEffect(() => {
     input.current?.setCustomValidity(text && !selected ? "Informe uma data válida (dd/mm/aaaa)." : "");
   }, [text, selected]);
 
   // O popover é `position: fixed` (não é cortado pelo overflow do painel do modal) e escolhe o lado com mais espaço.
-  useLayoutEffect(() => {
-    if (!mounted) return;
-    function place() {
-      const field = wrapper.current?.querySelector(".date-control")?.getBoundingClientRect();
-      const element = popover.current;
-      if (!field || !element) return;
-      const width = Math.min(304, window.innerWidth - 16);
-      const left = Math.min(Math.max(8, field.right - width), window.innerWidth - width - 8);
-      const below = window.innerHeight - field.bottom - 14;
-      const above = field.top - 14;
-      const natural = element.scrollHeight;
-      const useBelow = natural <= below || below >= above;
-      const maxHeight = Math.max(160, useBelow ? below : above);
-      const height = Math.min(natural, maxHeight);
-      setPlacement({ left, width, maxHeight, top: useBelow ? field.bottom + 6 : field.top - 6 - height });
-    }
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
-  }, [mounted, cursor.year, cursor.month]);
+  const placement = useAnchoredPosition(mounted, control, popover, 304, [cursor.year, cursor.month]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
@@ -86,20 +64,6 @@ export default function DatePicker({ label, value, onChange, required = false, d
     setOpen(true);
   }
 
-  // Entrada e saída do popover (GSAP); movimento reduzido: instantâneo.
-  useEffect(() => {
-    const element = popover.current;
-    if (!mounted || !element) return;
-    if (open) {
-      if (reducedMotion()) return;
-      const context = gsap.context(() => { gsap.fromTo(element, { opacity: 0, y: -6 }, { opacity: 1, y: 0, duration: .18, ease: "power2.out", clearProps: "opacity,transform" }); }, element);
-      return () => context.revert();
-    }
-    if (reducedMotion()) { setMounted(false); return; }
-    const context = gsap.context(() => { gsap.to(element, { opacity: 0, y: -4, duration: .12, ease: "power1.in", onComplete: () => setMounted(false) }); }, element);
-    return () => context.revert();
-  }, [open, mounted]);
-
   // Foco no dia do cursor ao abrir e a cada movimento por teclado.
   useLayoutEffect(() => {
     if (!open || !focusDay.current) return;
@@ -107,14 +71,7 @@ export default function DatePicker({ label, value, onChange, required = false, d
     focusDay.current = false;
   });
 
-  useEffect(() => {
-    if (!open) return;
-    function outside(event: PointerEvent) {
-      if (!wrapper.current?.contains(event.target as Node)) close(false);
-    }
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
-  }, [open, close]);
+  useDismiss(open, wrapper, () => close(false));
 
   function moveCursor(next: CalendarDate) { focusDay.current = true; setCursor(next); }
   function gridKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -144,7 +101,7 @@ export default function DatePicker({ label, value, onChange, required = false, d
   return (
     <div className="date-picker" ref={wrapper} onKeyDown={wrapperKeyDown}>
       <label htmlFor={id}>{label}</label>
-      <div className="date-control" data-invalid={invalid ? "true" : undefined}>
+      <div ref={control} className="date-control" data-invalid={invalid ? "true" : undefined}>
         <input
           ref={input} id={id} type="text" inputMode="numeric" autoComplete="off" placeholder="dd/mm/aaaa" maxLength={10}
           value={text} required={required} disabled={disabled} aria-invalid={invalid ? true : undefined}

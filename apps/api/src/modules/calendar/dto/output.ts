@@ -16,8 +16,8 @@ export const calendarEventOutputSchema = z.object({
   /** Espelhos do Google são somente leitura no app. */
   readOnly: z.boolean(),
   external: z.object({ provider: z.literal("google"), calendarId: z.string(), syncedAt: z.iso.datetime() }).nullable(),
-  /** `inSync` é falso quando o evento local mudou depois do último envio ao Google. */
-  reflection: z.object({ reflectedAt: z.iso.datetime(), reflectedVersion: z.int().positive(), inSync: z.boolean() }).nullable(),
+  /** `inSync` é falso quando o evento local mudou depois do último envio ao Google; `state: "deleted_remote"` = a cópia foi excluída no Google. */
+  reflection: z.object({ reflectedAt: z.iso.datetime(), reflectedVersion: z.int().positive(), inSync: z.boolean(), state: z.enum(["linked", "deleted_remote"]) }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   version: z.int().positive(),
@@ -29,7 +29,7 @@ export const calendarEventListOutputSchema = z.object({
 });
 
 export const googleStatusOutputSchema = z.object({
-  /** `not_configured`: este servidor não tem cliente OAuth nem cofre de credenciais; nenhuma conexão real é possível. */
+  /** `not_configured`: este servidor não tem o cofre do login configurado; nenhuma conexão real é possível. */
   state: z.enum(["not_configured", "not_connected", "connected", "needs_reauth"]),
   mode: z.enum(["mirror", "reflect"]).nullable(),
   scopes: z.array(z.string()),
@@ -39,8 +39,6 @@ export const googleStatusOutputSchema = z.object({
   lastError: z.string().nullable(),
   hasSyncCursor: z.boolean(),
 });
-
-export const googleAuthorizationOutputSchema = z.object({ authorizationUrl: z.url(), state: z.string(), expiresAt: z.iso.datetime() });
 
 export const googleSyncOutputSchema = z.object({
   kind: z.enum(["full", "incremental"]),
@@ -55,5 +53,4 @@ export const googleSyncOutputSchema = z.object({
 export type CalendarEventOutput = z.infer<typeof calendarEventOutputSchema>;
 export type CalendarEventListOutput = z.infer<typeof calendarEventListOutputSchema>;
 export type GoogleStatusOutput = z.infer<typeof googleStatusOutputSchema>;
-export type GoogleAuthorizationOutput = z.infer<typeof googleAuthorizationOutputSchema>;
 export type GoogleSyncOutput = z.infer<typeof googleSyncOutputSchema>;

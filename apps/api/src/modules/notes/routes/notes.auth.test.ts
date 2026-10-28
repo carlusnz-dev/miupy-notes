@@ -4,6 +4,7 @@ import { after, before, test } from "node:test";
 import { Router } from "express";
 import { createLocalJWKSet, errors, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWTPayload } from "jose";
 import { createApp } from "../../../app.js";
+import { ServiceError } from "../../../core/domain/app-error.js";
 import { authenticate, bearerTokenClaims, lambdaAuthorizerClaims, parseAllowedSubs, principalFromClaims } from "../../../core/http/authenticate.js";
 import { NotesController } from "../controllers/notes.controller.js";
 import { MemoryNotesRepository } from "../repository/memory-notes.repository.js";
@@ -118,9 +119,24 @@ test("lista vazia de sub nega todos", () => {
   assert.throws(() => principalFromClaims({ sub: "owner-sub" }, parseAllowedSubs(undefined)), { status: 403 });
 });
 
-test("falha ao obter as chaves do Google não vira 401", async () => {
-  const source = bearerTokenClaims(async () => { throw new errors.JWKSTimeout(); }, audience);
+test("falha ao obter as chaves do Google não vira 401 e preserva a causa para o log", async () => {
   const signed = await token();
   const request = { header: () => `Bearer ${signed}` } as never;
-  await assert.rejects(source(request), errors.JWKSTimeout);
+  const failures: Array<[string, unknown]> = [
+    ["timeout", new errors.JWKSTimeout()],
+    ["JWKS inválido", new errors.JWKSInvalid()],
+    ["resposta não-200 (JOSEError genérico)", new errors.JOSEError("Expected 200 OK from the JSON Web Key Set HTTP response")],
+    ["rede", new TypeError("fetch failed", { cause: Object.assign(new Error("connect"), { code: "ECONNREFUSED" }) })],
+  ];
+  for (const [label, failure] of failures) {
+    const source = bearerTokenClaims(async () => { throw failure; }, audience);
+    await assert.rejects(source(request), (error: unknown) => error instanceof ServiceError && error.cause === failure && error.context.service === "Google (chaves do login)", label);
+  }
+});
+
+test("token inválido continua 401 mesmo com a classe JOSE específica", async () => {
+  const source = bearerTokenClaims(async () => { throw new errors.JWKSNoMatchingKey(); }, audience);
+  const signed = await token();
+  const request = { header: () => `Bearer ${signed}` } as never;
+  await assert.rejects(source(request), { status: 401 });
 });

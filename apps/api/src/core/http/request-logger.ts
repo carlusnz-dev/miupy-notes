@@ -11,13 +11,13 @@ export function requestRoute(req: Request, res?: Response): string {
   const path: unknown = req.route?.path;
   // Só templates definidos pelo servidor; baseUrl arbitrária nunca entra no log.
   if (typeof path === "string" && /^\/[a-zA-Z0-9/:._-]*$/.test(path)) {
-    const base = ["/v1/notes", "/v1/folders", "/v1/finance", "/v1/calendar"].includes(req.baseUrl) ? req.baseUrl : "";
+    const base = ["/v1/notes", "/v1/folders", "/v1/finance", "/v1/calendar", "/v1/library", "/v1/habits"].includes(req.baseUrl) ? req.baseUrl : "";
     return `${base}${path}`;
   }
   return "unmatched";
 }
 // Captura antes que o Express restaure baseUrl ao sair do router em erro.
-export function captureErrorRoute(prefix: "/v1/notes" | "/v1/folders" | "/v1/finance" | "/v1/calendar"): ErrorRequestHandler {
+export function captureErrorRoute(prefix: "/v1/notes" | "/v1/folders" | "/v1/finance" | "/v1/calendar" | "/v1/library" | "/v1/habits"): ErrorRequestHandler {
   return (error: unknown, req, res, next) => {
     const path: unknown = req.route?.path;
     if (typeof path === "string" && /^\/[a-zA-Z0-9/:._-]*$/.test(path)) res.locals.logRoute = `${prefix}${path}`;

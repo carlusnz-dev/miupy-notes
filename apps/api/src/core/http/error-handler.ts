@@ -1,10 +1,10 @@
 import type { ErrorRequestHandler, Response } from "express";
-import { classifyError, logger, type Logger, type LogFields } from "../logging/logger.js";
+import { classifyError, describeError, logger, type Logger, type LogFields } from "../logging/logger.js";
 import { requestMethod, requestRoute } from "./request-logger.js";
 import { ZodError } from "zod";
 import { AppError } from "../domain/app-error.js";
 
-function sendError(res: Response, status: number, code: string, message: string) {
+export function sendError(res: Response, status: number, code: string, message: string) {
   res.status(status).json({ error: { code, message, requestId: res.locals.requestId } });
 }
 
@@ -13,13 +13,23 @@ function bodyErrorType(error: unknown): unknown {
   return typeof error === "object" && error !== null && "type" in error ? error.type : undefined;
 }
 
+/** `/v1/notes/:id` → `notes`; rotas não identificadas ficam sem módulo. */
+export function routeModule(route: string): string | undefined {
+  return /^\/(?:v1\/)?([a-z]+)/.exec(route)?.[1];
+}
+
 export function createErrorHandler(log: Logger = logger): ErrorRequestHandler {
   return (error: unknown, req, res, _next) => {
     const expected = error instanceof ZodError || (error instanceof AppError && error.status < 500) || bodyErrorType(error) === "entity.parse.failed" || bodyErrorType(error) === "entity.too.large";
     const bodyError = bodyErrorType(error);
     const statusCode = error instanceof ZodError || bodyError === "entity.parse.failed" ? 400 : error instanceof AppError ? error.status : bodyError === "entity.too.large" ? 413 : 500;
     const reason: LogFields["reason"] = bodyError === "entity.parse.failed" ? "invalid_json" : bodyError === "entity.too.large" ? "payload_too_large" : undefined;
-    const fields = { requestId: res.locals.requestId as string, method: requestMethod(req), statusCode, route: requestRoute(req, res), reason, ...classifyError(error), ...(expected ? { classification: "request_rejected" } : {}) };
+    const method = requestMethod(req);
+    const route = requestRoute(req, res);
+    // Rejeições esperadas dispensam a cadeia de causas; falhas inesperadas registram módulo, operação e causa.
+    const diagnosis = expected ? {} : describeError(error);
+    const classified = classifyError(error);
+    const fields = { requestId: res.locals.requestId as string, method, statusCode, route, module: routeModule(route), ...diagnosis, ...classified, operation: classified.operation ?? diagnosis.operation ?? `${method} ${route}`, reason, ...(expected ? { classification: "request_rejected" } : {}) };
     if (expected) log.warn("request.failed", fields);
     else log.error("request.failed", fields);
     // Não delegar Error bruto ao handler padrão: ele imprime mensagem/stack em dev.

@@ -77,14 +77,10 @@ test("espelho: não sobrescreve evento local; remoção em massa só atinge orig
   assert.equal(await repository!.findById("erin", mirror.id), null);
 });
 
-test("cadastro da integração e autorização pendente ficam isolados por dono", { skip }, async () => {
+test("cadastro da integração fica isolado por dono", { skip }, async () => {
   await repository!.saveConnection("frank", { connectionId: "c1", status: "connected", mode: "reflect", scopes: ["s"], calendarId: "primary", connectedAt: now, syncToken: "tok", lastSyncAt: now, lastError: null });
   assert.equal((await repository!.getConnection("frank"))?.syncToken, "tok");
   assert.equal(await repository!.getConnection("gina"), null);
-  await repository!.savePending("frank", { state: "s", mode: "reflect", redirectUri: "http://127.0.0.1/cb", expiresAt: now });
-  assert.equal((await repository!.getPending("frank"))?.state, "s");
-  await repository!.clearPending("frank");
-  assert.equal(await repository!.getPending("frank"), null);
   await repository!.deleteConnection("frank");
   assert.equal(await repository!.getConnection("frank"), null);
 });

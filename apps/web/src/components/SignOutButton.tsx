@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import Modal from "./Modal";
 import { signOut, type SignOutResult } from "../lib/auth";
+import Button from "./Button";
 
 const purgeWarning = "Você saiu, mas os rascunhos locais não puderam ser apagados deste computador. A limpeza será tentada no próximo login enquanto o app continuar aberto. Se você fechar o app antes, eles poderão reaparecer ao entrar nesta conta. Eles não aparecem para outras contas.";
 
@@ -14,7 +15,7 @@ export default function SignOutButton({ disabled = false }: { disabled?: boolean
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   function finish(result: SignOutResult) {
-    if (result.status === "signed-out" && !result.draftsPurged) window.alert(purgeWarning);
+    if (result.status === "signed-out" && result.cleanupErrors.length) window.alert(result.cleanupErrors.join(" ") + (!result.draftsPurged ? " " + purgeWarning : ""));
   }
 
   async function request() {
@@ -30,15 +31,15 @@ export default function SignOutButton({ disabled = false }: { disabled?: boolean
 
   return (
     <>
-      <button type="button" className="button button-secondary" onClick={() => void request()} disabled={disabled}>Sair</button>
+      <Button type="button" onClick={() => void request()} disabled={disabled}>Sair</Button>
       <Modal open={open} title="Sair com alterações não sincronizadas?" onClose={() => setOpen(false)} initialFocusRef={cancelRef}>
         <p>
-          {pending === null ? "Não foi possível verificar se há notas com alterações ainda não enviadas." : pending === 1 ? "Uma nota tem alterações que ainda não chegaram à nuvem." : `${pending} notas têm alterações que ainda não chegaram à nuvem.`}
-          {" "}Sair apaga os rascunhos locais desta conta.
+          {pending === null ? "Não foi possível verificar se há alterações de notas ou eventos ainda não enviadas." : pending === 1 ? "Uma alteração ainda não chegou à nuvem." : `${pending} alterações ainda não chegaram à nuvem.`}
+          {" "}Sair apaga os rascunhos de notas e os envios pendentes da agenda desta conta.
         </p>
         <div className="modal-actions">
-          <button ref={cancelRef} type="button" className="button button-secondary" onClick={() => setOpen(false)}>Continuar logado</button>
-          <button type="button" className="button" onClick={() => void discard()}>Sair e descartar</button>
+          <Button ref={cancelRef} type="button" onClick={() => setOpen(false)}>Continuar logado</Button>
+          <Button variant="primary" type="button" onClick={() => void discard()}>Sair e descartar</Button>
         </div>
       </Modal>
     </>

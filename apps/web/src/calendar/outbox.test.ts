@@ -425,7 +425,7 @@ for (const adapter of ["memory", "indexeddb"] as const) {
 test("replay não conclui conteúdo local igual enquanto a cópia Google está atrasada", async () => {
   for (const explicit of [false, true]) {
     const store = createMemoryCalendarStore();
-    const event = server({ version: 2, reflection: { reflectedAt: iso, inSync: false } });
+    const event = server({ version: 2, reflection: { reflectedAt: iso, inSync: false, state: "linked" } });
     const r = remote([event]);
     await enqueue(store, owner, { kind: "update", event: { ...event, version: 1 }, draft: draft({ ...(explicit ? { sendToGoogle: true } : {}) }) });
     r.failures.push(http(409, "INTEGRATION_NOT_CONNECTED"));
