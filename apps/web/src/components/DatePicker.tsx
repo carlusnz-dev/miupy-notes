@@ -1,7 +1,7 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { addDays, addMonths, compare, daysInMonth, fromDisplay, fromIso, maskDisplay, monthNames, toDisplay, toIso, todayLocal, weekday, weekdayNames, type CalendarDate } from "../lib/calendar-date";
 import Select from "./Select";
-import { useAnchoredPosition, useDismiss, usePresence } from "./popover";
+import { useAnchoredPosition, useDismiss, usePresence } from "./popover-behavior";
 import "./date-picker.css";
 
 const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);

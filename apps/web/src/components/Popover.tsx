@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
-import { useAnchoredPosition, useDismiss, usePresence } from "./popover";
+import { useAnchoredPosition, useDismiss, usePresence } from "./popover-behavior";
 import "./primitives.css";
 
 type Props = { open: boolean; onClose: () => void; anchorRef: RefObject<HTMLElement | null>; label: string; children: ReactNode; width?: number | "anchor"; id?: string };
