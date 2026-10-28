@@ -1,27 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { grantCalendar, signIn, useAuth, getOwnerId, getAuthSessionVersion, isCurrentAuthSession } from "../lib/auth";
 import { connectGoogle, disconnectGoogle, createCalendarEvent, createTask, deleteCalendarEvent, deleteTask, getCalendarEvent, getGoogleStatus, listEventsInRange, listTasks, reflectEvent, syncGoogle, unreflectEvent, updateCalendarEvent, updateTask } from "../lib/calendar-api";
-import { listNotesMetadata } from "../lib/notes-api";
+import { allNotesOptions } from "../lib/notes-queries";
+import { queryClient } from "../lib/query-client";
 import { usePageTitle } from "../lib/use-page-title";
 import CalendarWorkspace, { type GoogleApi } from "./CalendarWorkspace";
 import type { NoteChoice } from "./EventForm";
-import { createIndexedDbCalendarStore } from "./store";
+import { calendarStore } from "./session";
 import type { TasksApi } from "./tasks";
 import type { RangeRemote } from "./use-calendar";
 import Button from "../components/Button";
 import PageHeader from "../components/PageHeader";
 
-const MAX_NOTE_PAGES = 5;
-async function loadNotes(): Promise<NoteChoice[]> {
-  const notes: NoteChoice[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < MAX_NOTE_PAGES; page++) {
-    const result = await listNotesMetadata({ cursor, limit: 100 });
-    notes.push(...result.items.map((note) => ({ id: note.id, title: note.title })));
-    if (!result.nextCursor) break;
-    cursor = result.nextCursor;
-  }
-  return notes.sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+async function loadNotes(signal?: AbortSignal): Promise<NoteChoice[]> {
+  const options = allNotesOptions();
+  const result = await queryClient.fetchQuery({ ...options, queryFn: ({ signal: querySignal }) => options.queryFn({ signal: signal ?? querySignal }) });
+  return result.items.map(({ id, title }) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
 }
 
 const remote: RangeRemote = {
@@ -38,7 +32,7 @@ export default function CalendarPage() {
   usePageTitle("Agendas");
   const auth = useAuth();
   const [ownerId, setOwnerId] = useState<string | null>(null);
-  const store = useMemo(() => createIndexedDbCalendarStore(), []);
+  const store = calendarStore;
   // A sessão que abriu a página: respostas de uma sessão encerrada não gravam nada.
   const session = useMemo(() => getAuthSessionVersion(), [auth.status]); // eslint-disable-line react-hooks/exhaustive-deps
 

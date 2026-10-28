@@ -58,5 +58,6 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-24 | Continuidade — polimento de design e UX | [prompt](2026-10-24_prompt-polimento-design.md) |
 | 2026-10-24 | Design — polimento visual (A-01 a A-28) | [relatório](2026-10-24_design-polimento.md) |
 | 2026-10-24 | 21 — polimento visual com workers e regra de worktrees do Orca | [relatório](2026-10-24_sessao-21.md) |
-
 | 2026-10-28 | Release — segurança | [relatório](2026-10-28_release-seguranca.md) |
+| 2026-10-27 | Frontend — sessão, rede e validação antes da AWS | [relatório](2026-10-27_web-pre-aws.md) |
+| 2026-10-28 | Release — sessão e rede web | [relatório](2026-10-28_release-web-pre-aws.md) |

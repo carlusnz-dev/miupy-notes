@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { ApiError, setAccessTokenProvider } from "./api-client";
+import { ApiError, setAccessTokenProvider, setUnauthorizedHandler } from "./api-client";
 import { z } from "zod";
 import { decodeIdTokenPayload, ownerIdFromToken } from "./id-token";
 import { signOutNeedsConfirmation } from "./notes-session";
@@ -88,15 +88,20 @@ export async function grantCalendar(mode: "mirror" | "reflect") {
 }
 
 export type SignOutResult =
-  | { status: "signed-out"; draftsPurged: boolean }
-  /** Há rascunhos não sincronizados (`unsynced`; `null` = não foi possível verificar). Repita com `discardDrafts: true` após o usuário confirmar. */
+  | { status: "signed-out"; draftsPurged: boolean; cleanupErrors: string[] }
+  /** Há notas/eventos não sincronizados (`unsynced`; `null` = não foi possível verificar). Repita com `discardDrafts: true` após o usuário confirmar. */
   | { status: "needs-confirmation"; unsynced: number | null };
 
 /**
- * Único caminho de saída da conta. Se houver notas com texto não sincronizado, não sai sozinho: devolve
+ * Único caminho de saída da conta. Se houver notas ou eventos não sincronizados, não sai sozinho: devolve
  * `needs-confirmation`, e só `discardDrafts: true` (decisão explícita) apaga esses rascunhos locais.
  */
 export async function signOut(options: { discardDrafts?: boolean } = {}): Promise<SignOutResult> {
+  const { calendarStore, clearCalendarOwner } = await import("../calendar/session");
+  const cleanupErrors: string[] = [];
+  const ownerId = await getOwnerId().catch(() => null);
+  let calendarPending: number | null = null;
+  try { if (ownerId) calendarPending = (await calendarStore.listOps(ownerId)).length; } catch { /* confirmação obrigatória */ }
   let saver: typeof import("./notes-saver") | null = null;
   let check: Awaited<ReturnType<typeof import("./notes-saver")["draftSignOutCheck"]>> | null = null;
   try {
@@ -105,8 +110,9 @@ export async function signOut(options: { discardDrafts?: boolean } = {}): Promis
   } catch {
     check = null; // sem a fila não dá para verificar: tratado como "pode haver rascunhos"
   }
-  if (signOutNeedsConfirmation(check, options.discardDrafts === true)) {
-    return { status: "needs-confirmation", unsynced: check && !check.unknown ? check.unsynced : null };
+  const combined = check && calendarPending !== null ? { unsynced: check.unsynced + calendarPending, unknown: check.unknown } : null;
+  if (signOutNeedsConfirmation(combined, options.discardDrafts === true)) {
+    return { status: "needs-confirmation", unsynced: combined && !combined.unknown ? combined.unsynced : null };
   }
   update({ status: "signed-out", error: null });
   try {
@@ -115,13 +121,26 @@ export async function signOut(options: { discardDrafts?: boolean } = {}): Promis
     update({ error: messageFor(code) });
   }
   await saver?.sessionIdle();
-  return { status: "signed-out", draftsPurged: saver?.lastSignOutClose().purged ?? false };
+  if (!saver?.lastSignOutClose().purged) cleanupErrors.push("Não foi possível apagar os rascunhos de notas.");
+  if (ownerId) {
+    try { await clearCalendarOwner(ownerId); } catch { cleanupErrors.push("Não foi possível apagar os eventos e envios pendentes da agenda deste computador."); }
+  } else cleanupErrors.push("Não foi possível identificar a conta para limpar a agenda.");
+  try {
+    const { clearUserLocalStorage } = await import("./user-cache-cleanup");
+    clearUserLocalStorage();
+    const { resetEditorPreferences } = await import("./editor-preferences");
+    resetEditorPreferences();
+  } catch { cleanupErrors.push("Não foi possível limpar as preferências locais desta conta."); }
+  if (cleanupErrors.length) update({ error: cleanupErrors.join(" ") });
+  return { status: "signed-out", draftsPurged: saver?.lastSignOutClose().purged ?? false, cleanupErrors };
 }
 
 /** Volta para "signed-out" quando a API ou o Rust recusam a sessão (401 ou NOT_SIGNED_IN). */
 export function expireSession() {
   if (state.status === "signed-in") update({ status: "signed-out", error: errorMessages.NOT_SIGNED_IN });
 }
+
+setUnauthorizedHandler(expireSession);
 
 function subscribe(listener: () => void) {
   listeners.add(listener);

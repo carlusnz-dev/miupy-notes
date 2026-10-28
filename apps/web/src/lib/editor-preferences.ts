@@ -22,6 +22,10 @@ function read(): EditorPreferences {
   catch { return defaultEditorPreferences; }
 }
 let value = read();
+export function resetEditorPreferences() {
+  value = defaultEditorPreferences;
+  listeners.forEach((listener) => listener());
+}
 export function getEditorPreferences() { return value; }
 export function setEditorPreferences(patch: Partial<EditorPreferences>) {
   value = schema.parse({ ...value, ...patch });
