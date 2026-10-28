@@ -3,14 +3,15 @@ import { captureErrorRoute, requestLogger } from "./core/http/request-logger.js"
 import { logger, type Logger } from "./core/logging/logger.js";
 import { createErrorHandler } from "./core/http/error-handler.js";
 
-/** Rotas pessoais só existem com autenticação: sem ela, `/v1` responde 404. */
-export type ApiRoutes = { authenticate: RequestHandler; notesRouter: Router; foldersRouter?: Router; financeRouter?: Router; calendarRouter?: Router; libraryRouter?: Router; habitsRouter?: Router };
+/** Rotas pessoais só existem com autenticação: sem ela, `/v1` responde 404. `sourceGuard`, quando presente, roda antes de tudo (inclusive `/health`); só a Lambda o usa. */
+export type ApiRoutes = { sourceGuard?: RequestHandler; authenticate: RequestHandler; notesRouter: Router; foldersRouter?: Router; financeRouter?: Router; calendarRouter?: Router; libraryRouter?: Router; habitsRouter?: Router };
 
 export function createApp(api?: ApiRoutes, log: Logger = logger) {
   const app = express();
   app.disable("x-powered-by");
   // requestId antes do parser: erros de JSON também precisam dele na resposta.
   app.use(requestLogger(log));
+  if (api?.sourceGuard) app.use(api.sourceGuard);
   app.use(express.json({ limit: "256kb" }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));

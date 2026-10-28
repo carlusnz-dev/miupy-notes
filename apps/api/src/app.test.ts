@@ -138,7 +138,7 @@ test("níveis filtram debug e classificação trata causas cíclicas", async () 
   assert.deepEqual(lines.map((line) => JSON.parse(line).level), ["info", "warn", "error"]);
   const error = Object.assign(new Error("secret"), { cause: {} });
   error.cause = error;
-  assert.deepEqual(classifyError(error), { classification: "unknown_error", errorTypes: [], service: undefined, operation: undefined, detail: undefined, providerStatus: undefined, errorChain: ["Error"], origin: classifyError(error).origin });
+  assert.deepEqual(classifyError(error), { classification: "unknown_error", errorTypes: [], service: undefined, operation: undefined, detail: undefined, providerStatus: undefined });
   assert.doesNotThrow(() => new Logger("info", () => { throw new Error("sink unavailable"); }).info("request.completed"));
 });
 
@@ -265,11 +265,11 @@ test("500 registra operação, serviço, causa original e requestId sem dados se
       assert.equal(failed.level, "error");
       assert.equal(failed.statusCode, status);
       assert.equal(failed.route, path);
-      assert.match(failed.origin, /^src\/app\.test\.ts:\d+$/);
+      assert.match(failed.origin[0], /app\.test\.ts:\d+/);
       if (path.endsWith("service")) {
         assert.equal(failed.service, "Google (chaves do login)");
         assert.equal(failed.operation, "validar o ID token");
-        assert.deepEqual(failed.errorChain, ["TypeError", "Error(ECONNREFUSED)"]);
+        assert.deepEqual(failed.errorChain, ["ServiceError", "TypeError", "Error(code=ECONNREFUSED)"]);
         assert.match(failed.message, /^Falha em Google \(chaves do login\) ao validar o ID token\.$/);
       }
       if (path.endsWith("upstream")) assert.deepEqual([failed.service, failed.detail, failed.providerStatus], ["Google Calendar", "unavailable", 503]);

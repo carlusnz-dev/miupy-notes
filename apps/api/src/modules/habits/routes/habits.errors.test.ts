@@ -38,7 +38,7 @@ test("item armazenado inválido: 500 INTERNAL_ERROR com serviço, operação e o
   assert.equal(logs.length, 1);
   const [entry] = logs;
   assert.equal(entry.level, "error"); assert.equal(entry.statusCode, 500); assert.equal(entry.service, "DynamoDB (hábitos)"); assert.equal(entry.operation, "ler hábito armazenado");
-  assert.deepEqual(entry.errorChain, ["ZodError"]); assert.match(String(entry.origin), /^src\/modules\/habits\/repository\/dynamo-habits\.repository\.ts:\d+$/);
+  assert.deepEqual(entry.errorChain, ["ServiceError", "ZodError"]); assert.match(String((entry.origin as string[])[0]), /dynamo-habits\.repository\.ts:\d+/);
   assert.equal(JSON.stringify(entry).includes("conteudo-secreto"), false);
 });
 

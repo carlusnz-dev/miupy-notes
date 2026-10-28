@@ -17,6 +17,7 @@ export class AppError extends Error {
 
 /** Falha inesperada de um serviço externo: vira 500 e o log leva serviço, operação e causa original. */
 export class ServiceError extends Error {
+  override name = "ServiceError";
   constructor(public readonly context: FailureContext & { service: string; operation: string }, cause?: unknown) {
     super(`${context.service}: ${context.operation}`, cause === undefined ? undefined : { cause });
   }
@@ -34,5 +35,21 @@ export function parseInternal<T>(schema: ZodType<T>, value: unknown, context: Fa
     // Sem os quadros deste helper, a "origem" do log aponta o código que leu ou montou o dado.
     Error.captureStackTrace(failure, parseInternal);
     throw failure;
+  }
+}
+
+/** Configuração ausente ou inválida; `setting` e `message` nunca carregam valores sensíveis. */
+export class ConfigurationError extends Error {
+  override name = "ConfigurationError";
+  constructor(public readonly setting: string, message: string) {
+    super(message);
+  }
+}
+
+/** Falha em serviço externo, com serviço e operação para o log; a causa original fica em `cause`. */
+export class DependencyError extends Error {
+  override name = "DependencyError";
+  constructor(public readonly service: "secretsmanager", public readonly operation: string, cause: unknown) {
+    super(`Falha em ${service}:${operation}.`, { cause });
   }
 }
