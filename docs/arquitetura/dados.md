@@ -31,3 +31,7 @@ Projeção reduz tráfego, **não RCUs por si só**, pois a capacidade da tabela
 ## Biblioteca
 
 Obras `LIBRARY#<id>` em `USER#<ownerId>`, na mesma tabela. Campos, concorrência e consultas em [api-library.md](api-library.md); decisão em [Biblioteca](../decisoes/2026-10-23_biblioteca.md). Filtros são aplicados depois da página avaliada; avanço usa o último ID avaliado. Sem índice de busca, snapshot, exportação, restauração ou retenção definida. Adaptador testado com cliente falso e integração em tabela DynamoDB Local sintética, criada e excluída no teste.
+
+## Objetos preparados em 2026-10-24
+
+[Prefixos e retenções S3](armazenamento-s3.md) têm Terraform validado localmente, sem implantação, dados migrados ou novos endpoints. Corpo de nota continua no DynamoDB. Expiração em bucket versionado não implica remoção física imediata de versões: exportações, importações e temporários têm prazos correntes e não correntes separados. Recuperação e exclusão verificável ainda exigem implementação e ensaio autorizados.

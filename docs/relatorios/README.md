@@ -6,6 +6,11 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 
 | Data | Sessão | Arquivo |
 |---|---|---|
+| 2026-10-27 | Infra AWS — dev aplicado, logs descritivos e validação preparada | [relatório](2026-10-27_infra-aws-dev-apply.md) |
+| 2026-10-24 | Infra AWS — bootstrap aplicado e verificado em São Paulo | [relatório](2026-10-24_infra-aws-apply.md) |
+| 2026-10-24 | Infra AWS — primeiro plan real do bootstrap e estado das worktrees | [relatório](2026-10-24_infra-aws-plan.md) |
+| 2026-10-24 | Infra AWS — login IAM confirmado e continuidade do plan | [relatório](2026-10-24_infra-aws-login.md) |
+| 2026-10-24 | Infra AWS — Terraform integrado e validado localmente | [relatório](2026-10-24_infra-aws.md) |
 | 2026-10-18 | 01 — estrutura inicial | [relatório](2026-10-18_sessao-01.md) |
 | 2026-10-18 | 02 — workspaces, API e base visual | [relatório](2026-10-18_sessao-02.md) |
 | 2026-10-18 | 03 — dependências, verificação e refinamento visual | [relatório](2026-10-18_sessao-03.md) |
@@ -45,4 +50,11 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-22 | Design/UX — refresh da Agenda e controles próprios | [relatório](2026-10-22_design-ux-refresh.md) |
 | 2026-10-23 | Design — Agenda e tarefas | [relatório](2026-10-23_design-agenda.md) |
 | 2026-10-23 | Design — UI, notas e finanças | [relatório](2026-10-23_design-ui-codex.md) |
+| 2026-10-22 | 17 — Calendar API GCP e permissões gcloud | [relatório](2026-10-22_sessao-17.md) |
+| 2026-10-23 | 18 — revisões, design, Biblioteca e Calendar | [relatório](2026-10-23_sessao-18.md) |
+| 2026-10-23 | 19 — validação, integração do design, Google Tasks e editor | [relatório](2026-10-23_sessao-19.md) |
+| 2026-10-24 | 20 — higiene do repositório e validação de design ao vivo | [relatório](2026-10-24_sessao-20.md) |
+| 2026-10-24 | Design — revisão visual de develop (28 achados) | [relatório](2026-10-24_design-revisao.md) |
+| 2026-10-24 | Continuidade — polimento de design e UX | [prompt](2026-10-24_prompt-polimento-design.md) |
 | 2026-10-24 | Design — polimento visual (A-01 a A-28) | [relatório](2026-10-24_design-polimento.md) |
+| 2026-10-24 | 21 — polimento visual com workers e regra de worktrees do Orca | [relatório](2026-10-24_sessao-21.md) |
