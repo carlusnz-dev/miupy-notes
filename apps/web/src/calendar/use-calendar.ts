@@ -97,8 +97,8 @@ export function useCalendar({ ownerId, store, remote, isCurrent }: { ownerId: st
     flushing.current = true;
     try {
       const result = await trackCalendarWork(flushOutbox(store, remote, ownerId, { force, isCurrent: current }));
-      if (result.stopped === "unauthorized") { expireSession(); return result; }
       if (!current()) return result;
+      if (result.stopped === "unauthorized") { expireSession(); return result; }
       setLastFlush(result);
       if (result.stopped === "offline") setConnectivity("offline");
       await reload();
