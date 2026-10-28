@@ -1,0 +1,19 @@
+# Runtime HTTP Lambda inicial
+
+Data: 2026-10-26. Estado: composição e bundle validados localmente, sem plan contra conta, apply ou implantação. Esta decisão complementa a base Terraform de 2026-10-24; não altera o estado do bootstrap.
+
+## Escolhas
+
+- Reutilizar `apps/api/src/lambda.ts` e `serverless-http`, já dependência direta da API. O adaptador propaga `requestContext.authorizer.jwt.claims` ao middleware existente e Express produz o mesmo envelope de erros. A API local continua a criar o app sem `listen` no caminho Lambda; `server.ts` é o único listener. O bundle usa `esbuild` como dependência de desenvolvimento direta, gera um único arquivo CommonJS para Node.js 22 e é compactado pelo provider `archive` no plan. O script local não faz upload.
+- Usar HTTP API v2 com JWT authorizer Google: issuer `https://accounts.google.com`, audience `google_client_id`. Somente `GET /health` é público; `ANY /v1/{proxy+}` exige JWT. Além da validação no gateway, a API confere o `sub` na allowlist. O `iss` alternativo `accounts.google.com` aceito no ambiente local pode ser recusado pelo gateway; a sessão real anterior observou a forma HTTPS. Testar tokens reais antes de liberar a URL ao aplicativo.
+- Ler `ALLOWED_SUBS` de um segredo preexistente por ARN exato, com `GetSecretValue` limitado à role da função. O conteúdo não entra em Terraform, ZIP, variáveis de ambiente nem logs. Falta de tabela, ARN ou conteúdo autorizado falha na inicialização. A allowlist é recarregada no máximo a cada 60 segundos por ambiente de execução; falha de leitura após expirar o cache nega requisições privadas. A revogação pode levar até 60 segundos nas instâncias quentes. A configuração pressupõe a chave gerenciada `aws/secretsmanager`; segredo com CMK exigirá permissão KMS específica.
+- Usar a tabela única já prevista: `pk`/`sk`, PAY_PER_REQUEST, sem índice, PITR, deletion protection e `prevent_destroy`; a chave KMS dedicada à tabela reutiliza o módulo KMS. A role recebe somente Get/Put/Update/Delete/Query na tabela, ações KMS por DynamoDB, leitura do segredo e escrita de streams do log group precriado. A role continua sem S3, Scan, Lambda admin ou permissão de backend. KMS `CreateGrant` ocorre somente via DynamoDB na região. Esta policy ainda precisa de prova real de autorização antes de apply.
+- Reutilizar os log groups cifrados do módulo de observabilidade. API Gateway grava método/rota, status e latência sem cabeçalhos, tokens, IP ou identidade. A Lambda usa `LOG_FORMAT=json`, e timeout, memória e concorrência são variáveis. A flag explícita de alarmes nativos evita que um `ApiId` desconhecido no plan torne o `for_each` indeterminado.
+
+## Continuidade
+
+SQS fica adiado. Uma fila com consumidor Lambda separado, DLQ e idempotência por item/operação pode desacoplar o expurgo da lixeira de hábitos após 30 dias e exportações longas quando esses fluxos existirem; definir retenção, retry e custo após medir carga. O conector Google Calendar na Lambda segue desligado, sem cofre de refresh token nem coordenação distribuída.
+
+Antes de qualquer plan real: revisar região, orçamento e variáveis dev; criar o segredo por canal autorizado fora do Terraform; empacotar o código; preparar cópia cifrada e migrar o estado do bootstrap ao backend S3/lock conforme seu README, verificando restauração. Não executar a migração a partir desta decisão. Implantação e conta real requerem autorização separada.
+
+Referências: [JWT authorizer HTTP API](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html), [KMS para DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/encryption.usagenotes.html), [handler Node.js](https://docs.aws.amazon.com/lambda/latest/dg/nodejs-handler.html), [archive_file](https://registry.terraform.io/providers/hashicorp/archive/latest/docs/data-sources/file).

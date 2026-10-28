@@ -1,0 +1,22 @@
+# Frente AWS — runtime HTTP inicial
+
+Data: 2026-10-26/27. Branch `feat/infra-aws`. Execução local e estática, sem acesso a conta AWS. O brief comum restringiu esta frente a validação sem `terraform plan` real, apply, deploy ou migração de estado.
+
+## Entregue
+
+- Revistos os sete arquivos pendentes de 2026-10-24; sem credenciais, IDs reais de conta, nome real de bucket ou dados pessoais nos diffs. Commits `7a56de1` (key policy `kms:CreateAlias`) e `b1fa89d` (relatórios/estado histórico do bootstrap). `git merge --no-ff develop` concluiu sem conflitos e preservou ambos os lados.
+- `apps/api/src/lambda.ts` agora exige nome da tabela e ARN do segredo antes de iniciar, busca a allowlist de `sub` via Secrets Manager, revalida após 60 segundos e falha fechada se a leitura expirar. O handler existente mantém `serverless-http` e encaminha claims do JWT authorizer ao middleware. Dependência nova: `@aws-sdk/client-secrets-manager`, necessária para ler o segredo fora do bundle/estado. O script local usa `esbuild` (devDependency) para o bundle CommonJS de Node.js 22; `serverless-http` já existia.
+- Terraform dev declara tabela DynamoDB `pk`/`sk`, PAY_PER_REQUEST, PITR, SSE-KMS com chave dedicada e proteção de exclusão; Lambda com role IAM própria, limites de memória/timeout/concorrência, HTTP API v2, JWT Google em `/v1/{proxy+}`, `/health` público, CORS configurável e logs de acesso JSON nos grupos com retenção já existentes. IAM restringe tabela, chave via DynamoDB, segredo exato e streams de logs. O provider `archive` compacta o bundle localmente. `module.observability` recebeu flag explícita para alarmes nativos porque `ApiId` é desconhecido durante o plan.
+- A decisão de runtime e os READMEs registram configuração, riscos e SQS adiado. A fila futura faria sentido para expurgo da lixeira de hábitos após 30 dias ou exportações longas, com consumidor separado, DLQ e idempotência. `arquitetura.json` e o índice de relatórios ficaram sob responsabilidade do coordenador, conforme o brief.
+
+## Verificações reais
+
+- `npm ci --ignore-scripts`: sucesso. O primeiro audit mostrou uma vulnerabilidade alta transitiva em `body-parser@2.3.0`; `npm audit fix --package-lock-only` atualizou para `2.4.0`. Novo `npm ci --ignore-scripts` e `npm audit --omit=dev --json`: zero vulnerabilidades. A mudança de lockfile não adicionou dependência de runtime além do Secrets Manager.
+- `npm run build`: sucesso nos dois workspaces; Vite avisou sobre chunks acima de 500 kB, sem falha. `npm run check:modules`: cinco módulos válidos. Após o ajuste final, `npm run build:api` e `npm run bundle:lambda --workspace @miupy-notes/api`: sucesso; bundle cerca de 3,3 MB, `require` local exportou `handler`, ZIP contém somente `lambda.js`.
+- `env -u DYNAMODB_TEST_ENDPOINT -u DYNAMODB_FINANCE_TEST_ENDPOINT npm run test:api`: **218 aprovados, 0 falhas, 10 ignorados** por exigirem DynamoDB Local. Inclui três testes novos do handler/allowlist. O teste focado `node --import tsx --test apps/api/src/lambda.test.ts`: 3 aprovados.
+- `terraform fmt -check -recursive infra`: sucesso. `terraform -chdir=infra/bootstrap validate`, `infra/modules/iam validate`, `infra/modules/kms validate` e `infra/environments/dev validate`: sucesso. `terraform -chdir=infra/environments/dev test -no-color`: 2 aprovados; `infra/modules/iam test`: 7; `infra/modules/kms test`: 3. Todos os `test` usam providers AWS simulados; o `archive` gerou ZIP local.
+- `terraform -chdir=infra/modules/observability validate` isolado falhou porque recursos internos exigem o alias `aws.billing` fornecido pela raiz dev; a validação da raiz que instancia o módulo passou. `tfsec`, `checkov` e `tflint` não estavam instalados e não foram executados. Nenhum teste real de KMS, IAM, JWT Google, CORS Tauri, restore ou preço foi feito.
+
+## Riscos e próximo passo
+
+O segredo de allowlist precisa ser criado fora do Terraform, com chave gerenciada `aws/secretsmanager` ou IAM KMS adicional revisado. A policy KMS/DynamoDB e o JWT authorizer precisam ser confirmados com plan e teste em conta autorizada; tokens Google com `iss=accounts.google.com` podem ser rejeitados pelo issuer HTTPS exato do gateway. A revogação de `sub` pode levar até 60 segundos por instância. Não há Lambda, tabela ou API Gateway implantados; o bootstrap permanece aplicado com estado local. Amanhã, preparar cópia cifrada e migração/lock/restauração do estado antes de um plan dev real, com autorização específica do proprietário.

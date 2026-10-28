@@ -1,6 +1,12 @@
 # Contrato HTTP
 
-**Estado em 2026-10-18 (sessão 05):** `/v1/notes` está **montado atrás de autenticação** na API local (`apps/api/src/server.ts`, Express em `127.0.0.1:4000`, DynamoDB Local) e no handler Lambda (`src/lambda.ts`, não implantado). Sem configuração de identidade, `createApp()` não monta `/v1` (responde `404`). Verificado em testes (`notes.auth.test.ts`, chaves geradas no teste) e com o login Google real do proprietário pela janela Tauri: a nota foi criada pela API local. Não há tabela, Lambda nem API Gateway na AWS. Base: `/v1`. JSON UTF-8. Cliente: `apps/web/src/lib/api-client.ts` (só envia com provedor de token) e `apps/web/src/lib/notes-api.ts` (`listNotes`, `listNotesMetadata`, `getNotesSummary`, `createNote`, `getNote`, `updateNote`, `deleteNote`), tipado pelos schemas de `apps/api/src/modules/notes/contract.ts`.
+**Estado em 2026-10-18 (sessão 05):** `/v1/notes` está **montado atrás de autenticação** na API local (`apps/api/src/server.ts`, Express em `127.0.0.1:4000`, DynamoDB Local) e no handler Lambda (`src/lambda.ts`, implantado no dev). Sem configuração de identidade, `createApp()` não monta `/v1` (responde `404`). Verificado em testes (`notes.auth.test.ts`, chaves geradas no teste) e com o login Google real do proprietário pela janela Tauri: a nota foi criada pela API local. Estado de implantação em 2026-10-27: o ambiente dev está aplicado em sa-east-1 (HTTP API v2 com JWT Google, Lambda arm64, tabela DynamoDB, filtro de IP e throttling de 5 req/s; ver `docs/relatorios/2026-10-27_infra-aws-dev-apply.md`). **Verificado apenas por `curl`:** `GET /health` 200 e `/v1/notes` sem token ou com Bearer inválido 401. CRUD com token real, 403 por IP, 429 e CORS no Tauri ainda não foram exercitados (roteiro `docs/validacao/aws-dev.md`). O endpoint `execute-api` só atende HTTPS (política TLS padrão do serviço); o cliente recusa `VITE_API_BASE_URL` HTTP fora de loopback. Base: `/v1`. JSON UTF-8. Cliente: `apps/web/src/lib/api-client.ts` (só envia com provedor de token) e `apps/web/src/lib/notes-api.ts` (`listNotes`, `listNotesMetadata`, `getNotesSummary`, `createNote`, `getNote`, `updateNote`, `deleteNote`), tipado pelos schemas de `apps/api/src/modules/notes/contract.ts`.
+
+## Acesso por origem de rede (somente Lambda)
+
+Na AWS, a Lambda exige que `requestContext.http.sourceIp`, preenchido pelo API Gateway (cabeçalhos como `X-Forwarded-For` são ignorados), esteja em `ALLOWED_CIDRS` (IPv4/IPv6 separados por vírgula; IP sem prefixo vale `/32` ou `/128`; `/0` é recusado). A checagem é o primeiro middleware depois do `requestId`, portanto antecede `/health`, o JSON parser, a autenticação e a lista de `sub`: origem recusada recebe `403 ORIGIN_NOT_ALLOWED` no envelope padrão. Falha fechada: sem `ALLOWED_CIDRS` ou com entrada inválida a Lambda não inicializa e todas as requisições falham (o log `lambda.init_failed` traz a causa). O HTTP API não aceita WAF nem resource policy, então a requisição negada ainda invoca a Lambda; o custo é limitado pelo throttling do stage e pela concorrência reservada. O endpoint padrão do API Gateway é IPv4; CIDRs IPv6 só têm efeito se o endpoint for dual-stack. A API local (`server.ts`) não aplica este filtro.
+
+Log do bloqueio (`request.denied`, nível `warn`): `requestId`, método, `reason` (`source_ip_not_allowed` ou `source_ip_invalid`) e o IP **mascarado** (IPv4 `a.b.*.*`, IPv6 dois primeiros grupos), nunca o endereço completo nem a lista. Por isso o access log do API Gateway também omite o IP.
 
 ## Identidade
 
@@ -76,7 +82,7 @@ Finanças incluem `/finance/accounts` (listar/criar), `/finance/accounts/{id}` (
 
 Calendar inclui CRUD versionado em `/calendar/events`, criação idempotente por UUID enviado pelo cliente, eventos com hora/fuso ou dia inteiro e relações com notas/eventos. `/calendar/google` informa estado e as rotas de connection/sync/reflection ficam atrás de portas autorizadas. Na composição padrão e na Lambda, Google permanece **not_configured**. A API local Linux permite opt-in `login-keyring`: o login único do Tauri já pede o Calendar e a API lê o refresh token do login, sem segundo OAuth; não há conta/chaveiro/consentimento nativo real verificado. Modo de escrita consentida permite alterar/excluir espelhos com ETag/PATCH e enviar cópias locais. A carga inicial cobre 30 dias passados e 366 futuros, com sync incremental sob demanda. A serialização conectar/desconectar é somente por processo local; não há cofre AWS ou garantia distribuída. Tarefas (`/calendar/tasks`, título, descrição, prazo, pendente/concluída, CRUD versionado e criação idempotente) vivem no mesmo módulo; a cópia no Google Tasks existe só como porta testada com fakes e está desligada (exige escopo e API que o proprietário ainda não autorizou). Detalhes, payloads e limites no contrato dedicado.
 
-`429 RATE_LIMITED` e `502 UPSTREAM_UNAVAILABLE` podem incluir `Retry-After` em segundos (arredondamento para cima), exposto por `Access-Control-Expose-Headers`; o envelope JSON não muda. O prazo do Google não é reduzido ao teto do backoff; na outbox vale também para a revisão escrita durante o envio.
+`429 RATE_LIMITED` e `502 UPSTREAM_UNAVAILABLE` podem incluir `Retry-After` em segundos (arredondamento para cima), exposto por `Access-Control-Expose-Headers` (no Express e, na AWS, pelo CORS do HTTP API: `expose_headers = ["retry-after", "x-request-id"]`, que também cobre `GET /health` para as origens do app); o envelope JSON não muda. O prazo do Google não é reduzido ao teto do backoff; na outbox vale também para a revisão escrita durante o envio.
 
 ## Erros
 
@@ -93,10 +99,11 @@ Mensagem pública sem dados sensíveis; `requestId` presente em todos os erros, 
 | `400` | `VALIDATION_ERROR` | Zod, ID não-UUID, cursor inválido, campo desconhecido, JSON malformado |
 | `401` | `UNAUTHORIZED` | token ausente, malformado, de outra chave, sem assinatura, expirado, `aud` ou `iss` errados |
 | `403` | `FORBIDDEN` | `sub` fora de `ALLOWED_SUBS` (todas as rotas de `/v1`) |
+| `403` | `ORIGIN_NOT_ALLOWED` | só na Lambda: IP de origem (`requestContext.http.sourceIp`) fora de `ALLOWED_CIDRS`, ausente ou inválido; vale para **todas** as rotas, inclusive `/health`, e é avaliado antes de autenticação e `sub` |
 | `404` | `NOT_FOUND` | rota inexistente ou nota ausente/de outro proprietário |
 | `409` | `CONFLICT` | `version` divergente |
 | `413` | `PAYLOAD_TOO_LARGE` | corpo acima de 256 kB |
-| `429` | `RATE_LIMITED` | limite do provedor Calendar; throttling do API Gateway depende de implantação |
+| `429` | `RATE_LIMITED` | limite do provedor Calendar (envelope JSON acima) **ou** throttling do stage do API Gateway (`api_throttling_*`), que responde `{"message":"Too Many Requests"}` sem `requestId` nem envelope e sem invocar a Lambda |
 | `500` | `INTERNAL_ERROR` | falha não tratada |
 | `503` | `CREDENTIAL_STORE_UNAVAILABLE` | chaveiro do login indisponível para o Calendar local |
 
