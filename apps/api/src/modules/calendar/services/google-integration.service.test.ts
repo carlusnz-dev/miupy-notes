@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AppError } from "../../../core/domain/app-error.js";
 import { createKit } from "../calendar.test-kit.js";
 import { GoogleApiError } from "../google/google-calendar.client.js";
 import { SCOPE_MIRROR, SCOPE_REFLECT } from "../google/google-oauth.js";
@@ -562,4 +563,14 @@ test("espelho editado depois de apagado no Google (404) é removido localmente, 
   kit.google.remove("a");
   await assert.rejects(kit.integration.updateMirror(owner, event.id, { version: event.version, title: "x" }), { code: "NOT_FOUND" });
   assert.equal(await kit.repository.findById(owner, event.id), null);
+});
+
+test("falhas 5xx do Google levam serviço, tipo, status do provedor e causa original para o log", async () => {
+  const kit = createKit({ now: () => at(12) });
+  await connect(kit, "mirror");
+  const network = new TypeError("fetch failed");
+  kit.google.failures.list = [new GoogleApiError("unavailable", undefined, { cause: network }), new GoogleApiError("invalid", undefined, { status: 400 })];
+  await assert.rejects(kit.integration.sync(owner), (error: unknown) => error instanceof AppError && error.status === 502 && error.cause instanceof GoogleApiError && error.cause.cause === network
+    && error.context?.service === "Google Calendar" && error.context.detail === "unavailable");
+  await assert.rejects(kit.integration.sync(owner), (error: unknown) => error instanceof AppError && error.code === "UPSTREAM_REJECTED" && error.context?.providerStatus === 400);
 });

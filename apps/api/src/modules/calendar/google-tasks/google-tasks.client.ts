@@ -14,9 +14,9 @@ export type GoogleTaskBody = { title: string; notes: string; status: "needsActio
 
 export type GoogleTasksErrorKind = "not_found" | "rate_limited" | "unauthorized" | "unavailable" | "invalid";
 
-/** Erro do provedor reduzido a uma classificação; nunca carrega corpo, token ou texto do Google. */
+/** Erro do provedor reduzido a uma classificação e ao status HTTP, quando houve resposta; nunca carrega corpo, token ou texto do Google. */
 export class GoogleTasksApiError extends Error {
-  constructor(public readonly kind: GoogleTasksErrorKind) { super(`google-tasks:${kind}`); }
+  constructor(public readonly kind: GoogleTasksErrorKind, public readonly status?: number) { super(`google-tasks:${kind}`); }
 }
 
 /**

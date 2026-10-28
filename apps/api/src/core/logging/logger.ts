@@ -1,3 +1,4 @@
+import type { FailureContext } from "../domain/app-error.js";
 import { AppError, ConfigurationError, DependencyError } from "../domain/app-error.js";
 
 export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
@@ -6,7 +7,7 @@ export type LogFields = {
   requestId?: string; method?: string; route?: string; statusCode?: number; durationMs?: number; classification?: string; errorTypes?: string[];
   reason?: "invalid_json" | "payload_too_large" | "source_ip_not_allowed" | "source_ip_invalid"; port?: number; dependency?: "dynamodb-local" | "dynamodb" | "secretsmanager" | "aws-sdk";
   /** Módulo de negócio da rota (notes, folders...) ou `lambda`. */
-  module?: string; operation?: string; /** IP de origem já mascarado. */ source?: string;
+  module?: string; operation?: string; /** Rótulos escolhidos pelo código (`FailureContext`), nunca texto de exceção. */ service?: string; detail?: string; providerStatus?: number; /** IP de origem já mascarado. */ source?: string;
   /** Causa original: nome, código e ids do provedor de cada erro da cadeia, sem mensagens. */ errorChain?: string[]; /** Até três frames de pilha (função e arquivo:linha), sem a mensagem. */ origin?: string[];
 };
 export type LogSink = (line: string, level: LogLevel) => void;
@@ -44,12 +45,17 @@ function messageFor(event: LogEvent, fields: LogFields): string {
     case "request.failed":
       if (fields.reason === "invalid_json") return "JSON inválido no corpo da requisição.";
       if (fields.reason === "payload_too_large") return "Conteúdo maior que o permitido.";
+      if (fields.service) return `Falha em ${fields.service}${fields.operation ? ` ao ${fields.operation}` : ""}.${fields.classification === "dependency_resource_missing" ? " Recurso não encontrado; verifique a tabela configurada." : ""}`;
       if (fields.classification === "dependency_unreachable") return "Não foi possível conectar ao serviço de dados; verifique se ele está disponível.";
       if (fields.classification === "dependency_resource_missing") return "Recurso de dados não encontrado; verifique a tabela configurada.";
       if (fields.classification === "dependency_error") return "Falha ao acessar um serviço necessário; verifique os códigos de diagnóstico.";
       if (fields.statusCode && fields.statusCode >= 500) return `${statusReason(fields.statusCode)} Veja módulo, operação e causa nos metadados.`;
       return statusReason(fields.statusCode);
   }
+}
+
+function label(value: unknown, max = 80): string | undefined {
+  return typeof value === "string" ? value.replace(/[^\p{L}\p{N} _.:()/@-]/gu, "").slice(0, max) || undefined : undefined;
 }
 
 /** Somente metadados explícitos; nunca passar objetos de request, Error ou SDK. */
@@ -73,10 +79,13 @@ export class Logger {
     } else if (event === "request.aborted") level = "warn";
     if (levels[level] < this.threshold) return;
     // Cópia explícita impede campos extras em runtime (body, headers, cause, etc.).
-    const { requestId, method, route, statusCode, durationMs, classification, errorTypes, reason, port, dependency, module, operation, source, errorChain, origin } = fields;
+    const { requestId, method, route, statusCode, durationMs, classification, errorTypes, reason, port, dependency, module, source, errorChain, origin } = fields;
+    // Rótulos de diagnóstico passam por filtro: só identificadores curtos chegam ao log, nunca texto livre.
+    const service = label(fields.service), operation = label(fields.operation), detail = label(fields.detail);
+    const providerStatus = Number.isInteger(fields.providerStatus) && fields.providerStatus! >= 100 && fields.providerStatus! <= 599 ? fields.providerStatus : undefined;
     const timestamp = new Date().toISOString();
-    const message = messageFor(event, fields);
-    const metadata = { requestId, method, route, statusCode, durationMs, classification, errorTypes, reason, port, dependency, module, operation, source, errorChain, origin };
+    const message = messageFor(event, { ...fields, service, operation });
+    const metadata = { requestId, method, route, statusCode, durationMs, classification, errorTypes, reason, port, dependency, module, service, operation, detail, providerStatus, source, errorChain, origin };
     try {
       if (this.format === "json") {
         this.sink(JSON.stringify({ timestamp, level, event, message, ...metadata }), level);
@@ -85,7 +94,7 @@ export class Logger {
       const color = this.options.color ?? (process.env.NO_COLOR === undefined && process.env.TERM !== "dumb" && Boolean(level === "error" ? process.stderr.isTTY : process.stdout.isTTY));
       const label = color ? `\x1b[${colors[level]}m${level.toUpperCase()}\x1b[0m` : level.toUpperCase();
       const request = event.startsWith("request.");
-      const diagnostics = [module ? `módulo=${module}` : null, operation ? `operação=${operation}` : null, dependency && event !== "dependencies.configured" ? `serviço=${dependency}` : null, source ? `origem=${source}` : null, errorChain?.length ? `causa=${errorChain.join(" <- ")}` : null, origin?.length ? `em=${origin.join(" > ")}` : null].filter(Boolean);
+      const diagnostics = [module ? `módulo=${module}` : null, operation ? `operação=${operation}` : null, service ? `serviço=${service}` : dependency && event !== "dependencies.configured" ? `serviço=${dependency}` : null, detail ? `detalhe=${detail}` : null, providerStatus ? `provedor=HTTP ${providerStatus}` : null, source ? `origem=${source}` : null, errorChain?.length ? `causa=${errorChain.join(" <- ")}` : null, origin?.length ? `em=${origin.join(" > ")}` : null].filter(Boolean);
       const context = request ? `${method ?? "OTHER"} ${route === "unmatched" || !route ? "[rota não identificada]" : route} ` : "";
       const details = request ? [statusCode === undefined ? null : `HTTP ${statusCode}`, durationMs === undefined ? null : `${durationMs} ms`, requestId ? `requestId=${requestId}` : null, ...(errorTypes ?? []), ...diagnostics].filter(Boolean) : diagnostics;
       this.sink(`${timestamp} ${label} - ${context}${message}${details.length ? ` [${details.join(" | ")}]` : ""}`, level);
@@ -96,9 +105,12 @@ export class Logger {
 export const logger = new Logger();
 
 const errorTypes = new Set(["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "EHOSTUNREACH", "ResourceNotFoundException", "AccessDeniedException", "UnrecognizedClientException", "CredentialsProviderError", "ProvisionedThroughputExceededException", "ThrottlingException", "TimeoutError", "AbortError", "AggregateError"]);
-export function classifyError(error: unknown): Pick<LogFields, "classification" | "errorTypes"> {
+/** Classifica a falha e extrai o `FailureContext` (serviço/operação/detalhe) escolhido pelo código; causa e origem vêm de `describeError`. */
+export function classifyError(error: unknown): Pick<LogFields, "classification" | "errorTypes" | "service" | "operation" | "detail" | "providerStatus"> {
   const found = new Set<string>();
   const seen = new Set<unknown>();
+  let context: FailureContext | undefined;
+  let awsStatus: number | undefined;
   function visit(value: unknown, depth: number) {
     if (!value || typeof value !== "object" || seen.has(value) || depth > 5) return;
     seen.add(value);
@@ -106,13 +118,17 @@ export function classifyError(error: unknown): Pick<LogFields, "classification" 
       const name = (value as Record<string, unknown>)[key];
       if (typeof name === "string" && errorTypes.has(name)) found.add(name);
     }
+    const own = (value as { context?: unknown }).context;
+    if (!context && typeof own === "object" && own !== null) context = own as FailureContext;
+    const status = (value as { $metadata?: { httpStatusCode?: unknown } }).$metadata?.httpStatusCode;
+    if (awsStatus === undefined && typeof status === "number") awsStatus = status;
     visit((value as { cause?: unknown }).cause, depth + 1);
     const errors = (value as { errors?: unknown }).errors;
     if (Array.isArray(errors)) for (const nested of errors.slice(0, 10)) visit(nested, depth + 1);
   }
   visit(error, 0);
   const classification = found.has("ECONNREFUSED") ? "dependency_unreachable" : found.has("ResourceNotFoundException") ? "dependency_resource_missing" : found.size ? "dependency_error" : "unknown_error";
-  return { classification, errorTypes: [...found] };
+  return { classification, errorTypes: [...found], service: context?.service ?? (awsStatus === undefined ? undefined : "DynamoDB"), operation: context?.operation, detail: context?.detail, providerStatus: context?.providerStatus ?? awsStatus };
 }
 
 const safeToken = /^[A-Za-z0-9_.$-]{1,80}$/;

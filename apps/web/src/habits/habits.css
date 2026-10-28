@@ -1,0 +1,38 @@
+.habits-page { max-width: 880px; margin: 0 auto; padding-bottom: 32px; }
+.habits-xp { display: grid; gap: 8px; margin: 0 0 24px; padding: 16px 20px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.habits-xp > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.habits-xp strong { font: 400 24px/1.2 var(--font-serif); }
+.habits-xp span, .habits-xp small, .habits-hint, .habits-count { color: var(--color-muted); font-size: 13px; }
+.habits-xp-bar { height: 6px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
+.habits-xp-bar span { display: block; width: 0; height: 100%; background: var(--color-accent); }
+.habits-toolbar { margin-bottom: 20px; }
+.habits-day { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.habits-day strong { min-width: 150px; text-align: center; font-weight: 500; }
+.habits-count { margin: 0 0 12px; }
+.habits-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.habits-list li { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-height: 56px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
+.habits-list li > div:not(.habits-actions) { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.habits-list li[data-done] .habits-title { text-decoration: line-through; color: var(--color-muted); }
+.habits-list input[type="checkbox"] { width: 24px; height: 24px; flex: none; accent-color: var(--color-accent); cursor: pointer; }
+.habits-title { overflow-wrap: anywhere; }
+.habits-list small { color: var(--color-muted); font-size: 12px; }
+.habits-list .habits-paused { color: var(--color-text); }
+.habits-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.habits-empty { padding: 40px 20px; text-align: center; color: var(--color-muted); border: 1px dashed var(--color-border-strong); border-radius: 10px; }
+.habits-error { color: var(--color-text); border: 1px solid var(--color-border-strong); border-radius: 8px; padding: 10px 12px; margin: 0 0 16px; font-size: 14px; }
+.habits-form fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 16px; min-width: 0; }
+.habits-form footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.habits-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.habits-field { display: grid; gap: 8px; min-width: 0; }
+.habits-field > label, .habits-label { color: var(--color-muted); font-size: 14px; }
+.habits-field input, .habits-field textarea { width: 100%; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-surface); color: var(--color-text); padding: 11px 12px; font: inherit; font-size: 16px; }
+.habits-field-error { color: var(--color-text); font-size: 13px; }
+.habits-weekdays { display: flex; flex-wrap: wrap; gap: 8px; }
+.habits-weekdays button { min-width: 48px; min-height: 44px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font: inherit; cursor: pointer; }
+.habits-weekdays button[aria-pressed="true"] { background: var(--color-accent); color: var(--color-accent-text); border-color: var(--color-accent); }
+.habits-modal .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+@media (max-width: 760px) {
+  .habits-form-grid { grid-template-columns: 1fr; }
+  .habits-list li { flex-wrap: wrap; }
+  .habits-actions { width: 100%; justify-content: flex-start; }
+}

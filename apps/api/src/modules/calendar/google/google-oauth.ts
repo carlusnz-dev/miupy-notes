@@ -46,9 +46,9 @@ export class HttpGoogleOAuth extends GoogleOAuth {
         body: new URLSearchParams({ client_id: this.config.clientId, client_secret: this.config.clientSecret, grant_type: "refresh_token", refresh_token: refreshToken }),
         signal: AbortSignal.timeout(10_000),
       });
-    } catch { throw new GoogleApiError("unavailable"); }
+    } catch (error) { throw new GoogleApiError("unavailable", undefined, { cause: error }); }
     // `invalid_grant` (revogado ou expirado) e 400/401 exigem novo login; 5xx é transitório.
-    if (!response.ok) throw new GoogleApiError(response.status >= 500 ? "unavailable" : response.status === 429 ? "rate_limited" : "unauthorized");
+    if (!response.ok) throw new GoogleApiError(response.status >= 500 ? "unavailable" : response.status === 429 ? "rate_limited" : "unauthorized", undefined, { status: response.status });
     const body = await response.json() as Record<string, unknown>;
     const subject = idTokenSubject(body.id_token);
     if (typeof body.access_token !== "string" || typeof body.scope !== "string" || !subject) throw new GoogleApiError("invalid");
