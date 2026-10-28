@@ -35,11 +35,11 @@ test("API remota: /health responde ok sem token", { skip: skipRemote }, async ()
 test("API remota: sem token válido, a ferramenta devolve UNAUTHORIZED (401)", { skip: skipRemote }, async () => {
   const raw = await fetch(`${apiUrl}/v1/notes/metadata`);
   assert.equal(raw.status, 401);
-  const client = await mcpClient("token-invalido");
+  const client = await mcpClient("invalid-token");
   const result = parse(await client.callTool({ name: "folders_list", arguments: {} }));
   assert.equal(result.isError, true);
   assert.equal(result.data.error.code, "UNAUTHORIZED");
-  assert.doesNotMatch(JSON.stringify(result.data), /token-invalido/);
+  assert.doesNotMatch(JSON.stringify(result.data), /invalid-token/);
 });
 
 test("API remota: cria, lê, atualiza e busca uma nota", { skip: skipAuth }, async () => {
@@ -60,5 +60,5 @@ test("API remota: cria, lê, atualiza e busca uma nota", { skip: skipAuth }, asy
   assert.equal(stale.data.error.code, "CONFLICT");
 
   const found = parse(await client.callTool({ name: "notes_search", arguments: { query: marker } }));
-  assert.ok(found.data.notes.some((note: { id: string }) => note.id === id));
+  assert.ok(found.data.items.some((note: { id: string }) => note.id === id));
 });
