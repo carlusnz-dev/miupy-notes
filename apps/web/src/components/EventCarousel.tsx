@@ -1,7 +1,7 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import gsap from "gsap";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { reducedMotion } from "./popover";
+import { reducedMotion } from "./popover-behavior";
 import "./event-carousel.css";
 
 const GAP_PX = 12;

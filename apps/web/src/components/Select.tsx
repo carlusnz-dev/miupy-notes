@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useAnchoredPosition, useDismiss, useListNavigation, usePresence } from "./popover";
+import { useAnchoredPosition, useDismiss, useListNavigation, usePresence } from "./popover-behavior";
 import "./select.css";
 
 type Option<T extends string> = { value: T; label: string };

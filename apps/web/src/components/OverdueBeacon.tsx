@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import gsap from "gsap";
-import { useAnchoredPosition, useDismiss, usePresence } from "./popover";
+import { useAnchoredPosition, useDismiss, usePresence } from "./popover-behavior";
 import "./overdue-beacon.css";
 
 export type OverdueItem = { id: string; title: string; /** Texto do prazo, ex.: "venceu ontem, 09:00". */ when: string };

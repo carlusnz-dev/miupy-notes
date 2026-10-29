@@ -2,7 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import gsap from "gsap";
 import { monthNames, toIso, todayLocal, weekdayNames, type CalendarDate } from "../lib/calendar-date";
 import type { CalendarEventOutput, TaskOutput } from "../lib/calendar-api";
-import { reducedMotion } from "../components/popover";
+import { reducedMotion } from "../components/popover-behavior";
 import { DAY_MIN, instantAt, isDraggable, moveSpan, resizeSpan, SNAP_MIN, type Span } from "./drag";
 import EventStatus, { SourceMark } from "./EventStatus";
 import { timeRange } from "./format";
