@@ -3,7 +3,8 @@ name: Release
 # Publica uma versão a partir de uma tag `vX.Y.Z` (ou manualmente, informando a tag).
 # Gera instaladores Linux (deb, rpm, AppImage), Windows (exe NSIS e msi),
 # macOS (dmg Apple Silicon e Intel) e Android (apk), anexados a um rascunho
-# de release que só é publicado depois que todos os jobs terminam.
+# de release que só é publicado depois que todos os jobs terminam. Se algum
+# build falhar, o job `limpar` remove o rascunho e a tag.
 #
 # Configuração opcional no repositório:
 #   vars.VITE_API_BASE_URL         URL da API embutida no frontend
@@ -182,3 +183,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
+
+  # Trava: se algum build falhar ou for cancelado, nada fica para trás. O rascunho
+  # e a tag são removidos; para tentar de novo, recrie a tag no commit corrigido.
+  limpar:
+    name: Release / limpar
+    needs: [verificar, desktop, android]
+    if: failure() || cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remover rascunho e tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh release view "$RELEASE_TAG" --json isDraft -q .isDraft 2>/dev/null)" = "false" ]; then
+            echo "::error::$RELEASE_TAG já está publicada; nada foi removido."
+            exit 1
+          fi
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag 2>/dev/null ||
+            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$RELEASE_TAG"
+          echo "::error::Builds falharam: rascunho e tag $RELEASE_TAG removidos."
