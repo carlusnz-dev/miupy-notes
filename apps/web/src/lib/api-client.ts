@@ -1,9 +1,9 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
 import { requestBudget } from "./request-budget";
-import { apiBaseUrlSchema } from "./api-base-url";
+import { apiEnvSchema } from "./api-base-url";
 
-const env = z.object({ VITE_API_BASE_URL: apiBaseUrlSchema.optional() }).parse(import.meta.env ?? {});
+const env = apiEnvSchema.parse(import.meta.env ?? {});
 
 type AccessTokenProvider = () => Promise<string>;
 let accessTokenProvider: AccessTokenProvider | null = null;

@@ -97,7 +97,8 @@ a.note-row:hover { border-color: var(--color-border-strong); background: var(--c
   .app-shell { display: flex; flex-direction: column; }
   /* A navegação vira a barra inferior (BottomNav). */
   .sidebar { display: none; }
-  .main-content { flex: 1; }
+  /* No Android/iOS o WebView desenha sob a barra de status (viewport-fit=cover). */
+  .main-content { flex: 1; padding-top: env(safe-area-inset-top); }
   .topbar, .app-footer { display: none; }
   .page-content { padding: 22px 16px 28px; }
   .page-scroll:has(.page-fill) { overflow-y: auto; }
