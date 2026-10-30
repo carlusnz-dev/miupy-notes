@@ -52,7 +52,7 @@
       "id": "ci",
       "path": ".github/workflows/ci.yml",
       "status": "verified",
-      "role": "GitHub Actions: npm ci, checagem de módulos, testes API/web, build e artifact web por sete dias. Runs de PR aprovados em 2026-10-19. main/develop protegidas por PR e check CI / verificar estrito, inclusive admins. Sem deploy AWS nem release Tauri."
+      "role": "GitHub Actions: npm ci, checagem de módulos, testes API/web, build e artifact web por sete dias. Runs de PR aprovados em 2026-10-19. main/develop protegidas por PR e check CI / verificar estrito, inclusive admins. Sem deploy AWS. Release Tauri em .github/workflows/release.yml (tag vX.Y.Z): Linux, Windows, macOS arm64/x64 e APK Android assinado (segredos ANDROID_*); job limpar remove rascunho e tag se um build falhar. v0.1.1 publicada em 2026-10-29 com todos os jobs aprovados; vars.VITE_API_BASE_URL ainda não configurada."
     },
     {
       "id": "finance",
