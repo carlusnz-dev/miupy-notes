@@ -63,3 +63,4 @@ Um arquivo por sessão: `AAAA-MM-DD_sessao-NN.md`. O relatório deve registrar o
 | 2026-10-28 | Release — sessão e rede web | [relatório](2026-10-28_release-web-pre-aws.md) |
 | 2026-10-28 | Release — MCP | [relatório](2026-10-28_release-mcp.md) |
 | 2026-10-29 | Release v0.1.0 e v0.1.1 — builds, tela em branco e assinatura Android | [relatório](2026-10-29_release-builds.md) |
+| 2026-10-30 | AWS dev — migração de KMS, Lambda com Hábitos e URL da API | [relatório](2026-10-30_aws-migracao-kms.md) |
